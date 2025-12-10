@@ -1,15 +1,12 @@
-using HeatExchange
+using BiophysicalGeometry
 using SafeTestsets
 using Aqua
 
-Aqua.test_unbound_args(HeatExchange)
-Aqua.test_stale_deps(HeatExchange)
-Aqua.test_undefined_exports(HeatExchange)
-Aqua.test_project_extras(HeatExchange)
-Aqua.test_deps_compat(HeatExchange)
-Aqua.test_project_toml_formatting(HeatExchange)
+Aqua.test_unbound_args(BiophysicalGeometry)
+Aqua.test_stale_deps(BiophysicalGeometry)
+Aqua.test_undefined_exports(BiophysicalGeometry)
+Aqua.test_project_extras(BiophysicalGeometry)
+Aqua.test_deps_compat(BiophysicalGeometry)
+Aqua.test_project_toml_formatting(BiophysicalGeometry)
 
-@safetestset "biophysics" begin include("biophysics.jl") end
 @safetestset "geometry" begin include("geometry.jl") end
-@safetestset "environment" begin include("environment.jl") end
-@safetestset "organism" begin include("geometry.jl") end
