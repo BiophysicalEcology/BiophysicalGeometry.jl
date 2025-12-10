@@ -1,7 +1,6 @@
-using HeatExchange
+using BiophysicalGeometry
 using Unitful
 using Test
-using ModelParameters
 #using Plots
 
 density = 1000.0u"kg/m^3"
