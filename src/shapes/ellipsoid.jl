@@ -12,32 +12,32 @@ end
 
 function geometry(shape::Ellipsoid, ::Naked)
     volume = shape.mass / shape.density
-    b_semi_minor = ((3 / 4) * volume / (π * shape.b)) ^ (1 / 3)
-    c_semi_minor = b_semi_minor
-    a_semi_major = b_semi_minor * shape.b
-    e = ((ustrip(u"m", a_semi_major) ^ 2 - ustrip(u"m", c_semi_minor) ^ 2) ^ (1 / 2)) / ustrip(u"m", a_semi_major)
-    total = surface_area(shape, ustrip(u"m", a_semi_major), ustrip(u"m", b_semi_minor), ustrip(u"m", b_semi_minor), e)
-    characteristic_dimension = b_semi_minor * 2 #volume^(1 / 3)   
-    return Geometry(volume, characteristic_dimension, (; a_semi_major, b_semi_minor, c_semi_minor), (; total))
+    b_semi_minor_skin = ((3 / 4) * volume / (π * shape.b)) ^ (1 / 3)
+    c_semi_minor_skin = b_semi_minor_skin
+    a_semi_major_skin = b_semi_minor_skin * shape.b
+    e = ((ustrip(u"m", a_semi_major_skin) ^ 2 - ustrip(u"m", c_semi_minor_skin) ^ 2) ^ (1 / 2)) / ustrip(u"m", a_semi_major_skin)
+    total = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", b_semi_minor_skin), e)
+    characteristic_dimension = b_semi_minor_skin * 2 #volume^(1 / 3)   
+    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin), (; total))
 end
 
 function geometry(shape::Ellipsoid, fur::Fur)
     volume = shape.mass / shape.density
-    b_semi_minor = ((3 / 4) * volume / (π * shape.b)) ^ (1 / 3)
-    c_semi_minor = b_semi_minor
-    a_semi_major = b_semi_minor * shape.b
-    e = ((ustrip(u"m", a_semi_major) ^ 2 - ustrip(u"m", c_semi_minor) ^ 2) ^ (1 / 2)) / ustrip(u"m", a_semi_major)
-    a_semi_major_fur = a_semi_major + fur.thickness
-    b_semi_minor_fur = b_semi_minor + fur.thickness
-    c_semi_minor_fur = c_semi_minor + fur.thickness
-    e = ((a_semi_major ^ 2 - c_semi_minor ^ 2) ^ (1 / 2)) / a_semi_major
+    b_semi_minor_skin = ((3 / 4) * volume / (π * shape.b)) ^ (1 / 3)
+    c_semi_minor_skin = b_semi_minor_skin
+    a_semi_major_skin = b_semi_minor_skin * shape.b
+    e = ((ustrip(u"m", a_semi_major_skin) ^ 2 - ustrip(u"m", c_semi_minor_skin) ^ 2) ^ (1 / 2)) / ustrip(u"m", a_semi_major_skin)
+    a_semi_major_fur = a_semi_major_skin + fur.thickness
+    b_semi_minor_fur = b_semi_minor_skin + fur.thickness
+    c_semi_minor_fur = c_semi_minor_skin + fur.thickness
+    e = ((a_semi_major_skin ^ 2 - c_semi_minor_skin ^ 2) ^ (1 / 2)) / a_semi_major_skin
     e_fur = ((a_semi_major_fur ^ 2 - c_semi_minor_fur ^ 2) ^ (1 / 2)) / a_semi_major_fur
     total = surface_area(shape, ustrip(u"m", a_semi_major_fur),  ustrip(u"m", b_semi_minor_fur),  ustrip(u"m", c_semi_minor_fur),  e_fur)
-    skin = surface_area(shape, ustrip(u"m", a_semi_major), ustrip(u"m", b_semi_minor), ustrip(u"m", c_semi_minor), e)
+    skin = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
     area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair 
     characteristic_dimension = b_semi_minor_fur * 2 #volume^(1 / 3)
-    return Geometry(volume, characteristic_dimension, (; a_semi_major, b_semi_minor, c_semi_minor, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur), (; total, skin, convection))
+    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur), (; total, skin, convection))
 end
 
 function geometry(shape::Ellipsoid, fat::Fat)
@@ -54,13 +54,13 @@ function geometry(shape::Ellipsoid, fat::Fat)
         shape.b, 
         ustrip(u"m", b_flesh))
     characteristic_dimension = volume^(1 / 3)
-    a_semi_major = a_flesh + fat
-    b_semi_minor = b_flesh + fat
-    c_semi_minor = c_flesh + fat
-    e = ((a_semi_major ^ 2 - c_semi_minor ^ 2) ^ (1 / 2)) / a_semi_major
-    total = surface_area(shape, ustrip(u"m", a_semi_major), ustrip(u"m", b_semi_minor), ustrip(u"m", c_semi_minor), e)
-    characteristic_dimension = b_semi_minor * 2 #volume^(1 / 3)
-    return Geometry(volume, characteristic_dimension, (; a_semi_major, b_semi_minor, c_semi_minor, fat), (; total))
+    a_semi_major_skin = a_flesh + fat
+    b_semi_minor_skin = b_flesh + fat
+    c_semi_minor_skin = c_flesh + fat
+    e = ((a_semi_major_skin ^ 2 - c_semi_minor_skin ^ 2) ^ (1 / 2)) / a_semi_major_skin
+    total = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
+    characteristic_dimension = b_semi_minor_skin * 2 #volume^(1 / 3)
+    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat), (; total))
 end
 
 function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
@@ -76,21 +76,21 @@ function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
         ustrip(u"m^3", fat_volume), 
         shape.b, 
         ustrip(u"m", b_flesh))
-    a_semi_major = a_flesh + fat
-    b_semi_minor = b_flesh + fat
-    c_semi_minor = c_flesh + fat
-    e = ((a_semi_major ^ 2 - c_semi_minor ^ 2) ^ (1 / 2)) / a_semi_major
-    a_semi_major_fur = a_semi_major + fur.thickness
-    b_semi_minor_fur = b_semi_minor + fur.thickness
-    c_semi_minor_fur = c_semi_minor + fur.thickness
-    e = ((a_semi_major ^ 2 - c_semi_minor ^ 2) ^ (1 / 2)) / a_semi_major
+    a_semi_major_skin = a_flesh + fat
+    b_semi_minor_skin = b_flesh + fat
+    c_semi_minor_skin = c_flesh + fat
+    e = ((a_semi_major_skin ^ 2 - c_semi_minor_skin ^ 2) ^ (1 / 2)) / a_semi_major_skin
+    a_semi_major_fur = a_semi_major_skin + fur.thickness
+    b_semi_minor_fur = b_semi_minor_skin + fur.thickness
+    c_semi_minor_fur = c_semi_minor_skin + fur.thickness
+    e = ((a_semi_major_skin ^ 2 - c_semi_minor_skin ^ 2) ^ (1 / 2)) / a_semi_major_skin
     e_fur = ((a_semi_major_fur ^ 2 - c_semi_minor_fur ^ 2) ^ (1 / 2)) / a_semi_major_fur
     total = surface_area(shape, ustrip(u"m", a_semi_major_fur),  ustrip(u"m", b_semi_minor_fur),  ustrip(u"m", c_semi_minor_fur),  e_fur)
-    skin = surface_area(shape, ustrip(u"m", a_semi_major), ustrip(u"m", b_semi_minor), ustrip(u"m", c_semi_minor), e)
+    skin = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
     area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair 
     characteristic_dimension = b_semi_minor_fur * 2 #volume^(1 / 3)
-    return Geometry(volume, characteristic_dimension, (; a_semi_major, b_semi_minor, c_semi_minor, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat), (; total, skin, convection))
+    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat), (; total, skin, convection))
 end
 
 # fat thickness calculation
@@ -144,9 +144,9 @@ end
 # surface area functions
 
 function surface_area(shape::Ellipsoid, body::AbstractBody)
-    a = body.geometry.length.a_semi_major
-    b = body.geometry.length.b_semi_minor
-    c = body.geometry.length.c_semi_minor
+    a = body.geometry.length.a_semi_major_skin
+    b = body.geometry.length.b_semi_minor_skin
+    c = body.geometry.length.c_semi_minor_skin
     return surface_area(shape, a, b, c)
 end
 
@@ -183,9 +183,9 @@ function silhouette_area(shape::Ellipsoid, a, b, c, θ)
 end
 
 function silhouette_area(shape::Ellipsoid, insulation::Union{Naked,Fat}, body::AbstractBody)
-    a = body.geometry.length.a_semi_major
-    b = body.geometry.length.b_semi_minor
-    c = body.geometry.length.c_semi_minor
+    a = body.geometry.length.a_semi_major_skin
+    b = body.geometry.length.b_semi_minor_skin
+    c = body.geometry.length.c_semi_minor_skin
     normal = π * a * b
     parallel = π * b * c
     return (; normal, parallel)
@@ -201,9 +201,9 @@ function silhouette_area(shape::Ellipsoid, insulation::Union{Fur,CompositeInsula
 end
 
 function silhouette_area(shape::Ellipsoid, ::Naked, body::AbstractBody, θ)
-    a = body.geometry.length.a_semi_major
-    b = body.geometry.length.b_semi_minor
-    c = body.geometry.length.c_semi_minor
+    a = body.geometry.length.a_semi_major_skin
+    b = body.geometry.length.b_semi_minor_skin
+    c = body.geometry.length.c_semi_minor_skin
     return silhouette_area(shape, a, b, c, θ)
 end
 
@@ -215,9 +215,9 @@ function silhouette_area(shape::Ellipsoid, insulation::Fur, body::AbstractBody, 
 end
 
 function silhouette_area(shape::Ellipsoid, insulation::Fat, body::AbstractBody, θ)
-    a = body.geometry.length.a_semi_major
-    b = body.geometry.length.b_semi_minor
-    c = body.geometry.length.c_semi_minor
+    a = body.geometry.length.a_semi_major_skin
+    b = body.geometry.length.b_semi_minor_skin
+    c = body.geometry.length.c_semi_minor_skin
     return silhouette_area(shape, a, b, c, θ)
 end
 
@@ -235,33 +235,33 @@ total_area(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geome
 skin_area(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.area.total
 evaporation_area(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.area.total
 
-skin_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor
-insulation_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor
-flesh_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor
+skin_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
+insulation_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
+flesh_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
 
 # fur
 total_area(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.area.total
 skin_area(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.area.skin
 evaporation_area(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.area.convection
 
-skin_radius(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.length.b_semi_minor
+skin_radius(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
 insulation_radius(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.length.b_semi_minor_fur
-flesh_radius(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.length.b_semi_minor
+flesh_radius(shape::Ellipsoid, insulation::Fur, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
 
 # fat
 total_area(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.area.total
 skin_area(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.area.total
 evaporation_area(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.area.total
 
-skin_radius(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.length.b_semi_minor
-insulation_radius(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.length.b_semi_minor
-flesh_radius(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.length.b_semi_minor - body.geometry.length.fat
+skin_radius(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
+insulation_radius(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
+flesh_radius(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
 
 # fur and fat
 total_area(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.area.total
 skin_area(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.area.skin
 evaporation_area(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.area.convection
 
-skin_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor
+skin_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
 insulation_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_fur
-flesh_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor - body.geometry.length.fat
+flesh_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat

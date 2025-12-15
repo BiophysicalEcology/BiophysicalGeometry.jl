@@ -11,11 +11,11 @@ end
 
 function geometry(shape::Cylinder, ::Naked)
     volume = shape.mass / shape.density
-    radius = (volume / (shape.b * π * 2))^(1 / 3)
-    length = shape.b * radius * 2
-    total = surface_area(shape, radius, length)
-    characteristic_dimension = radius * 2 #volume^(1 / 3) 
-    return Geometry(volume, characteristic_dimension, (; length, radius), (; total))
+    radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
+    length_skin = shape.b * radius_skin * 2
+    total = surface_area(shape, radius_skin, length_skin)
+    characteristic_dimension = radius_skin * 2 #volume^(1 / 3) 
+    return Geometry(volume, characteristic_dimension, (; length_skin, radius_skin), (; total))
 end
 
 function geometry(shape::Cylinder, fur::Fur)
@@ -23,7 +23,7 @@ function geometry(shape::Cylinder, fur::Fur)
     radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
     radius_fur = radius_skin + fur.thickness
     length_skin = shape.b * radius_skin * 2
-    length_fur = 2 * radius_fur
+    length_fur = shape.b * radius_skin * 2 + fur.thickness * 2
     total = surface_area(shape, radius_fur, length_fur)
     skin = surface_area(shape, radius_skin, length_skin)
     area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
@@ -37,13 +37,13 @@ function geometry(shape::Cylinder, fat::Fat)
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    radius = (volume / (shape.b * π * 2))^(1 / 3)
-    length = shape.b * radius * 2
-    radius_flesh = (flesh_volume / (π * length))^(1 / 2)
-    fat = radius - radius_flesh
-    total = surface_area(shape, radius, length)
-    characteristic_dimension = radius * 2 #volume^(1 / 3) 
-    return Geometry(volume, characteristic_dimension, (; radius, length, fat), (; total))
+    radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
+    length_skin = shape.b * radius_skin * 2
+    radius_flesh = (flesh_volume / (π * length_skin))^(1 / 2)
+    fat = radius_skin - radius_flesh
+    total = surface_area(shape, radius_skin, length_skin)
+    characteristic_dimension = radius_skin * 2 #volume^(1 / 3) 
+    return Geometry(volume, characteristic_dimension, (; radius_skin, length_skin, fat), (; total))
 end
 
 function geometry(shape::Cylinder, fur::Fur, fat::Fat)
@@ -54,7 +54,7 @@ function geometry(shape::Cylinder, fur::Fur, fat::Fat)
     radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
     radius_fur = radius_skin + fur.thickness
     length_skin = shape.b * radius_skin * 2
-    length_fur = 2 * radius_fur
+    length_fur = shape.b * radius_skin * 2 + fur.thickness * 2
     radius_flesh = (flesh_volume / (π * length_skin))^(1 / 2)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_fur, length_fur)
@@ -75,14 +75,14 @@ surface_area(shape::Cylinder, r, l) = 2 * π * r * l + 2 * π * r^2
 # silhouette area functions
 
 function silhouette_area(shape::Cylinder, ::Naked, body::AbstractBody, θ)
-    r = body.geometry.length.radius
-    l = body.geometry.length.length
+    r = body.geometry.length.radius_skin
+    l = body.geometry.length.length_skin
     return silhouette_area(shape, r, l, θ)
 end
 
 function silhouette_area(shape::Cylinder, insulation::Fat, body::AbstractBody, θ)
-    r = body.geometry.length.radius
-    l = body.geometry.length.length
+    r = body.geometry.length.radius_skin
+    l = body.geometry.length.length_skin
     return silhouette_area(shape, r, l, θ)
 end
 
@@ -101,8 +101,8 @@ end
 silhouette_area(shape::Cylinder, r, l, θ) = 2 * r * l * sin(θ) + π * r^2 * cos(θ)
 
 function silhouette_area(shape::Cylinder, insulation::Union{Naked,Fat}, body::AbstractBody)
-    r = body.geometry.length.radius
-    l = body.geometry.length.length
+    r = body.geometry.length.radius_skin
+    l = body.geometry.length.length_skin
     normal = 2 * r * l
     parallel = π *r^2
     return (; normal, parallel)
@@ -123,9 +123,9 @@ total_area(shape::Cylinder, insulation::Naked, body) = body.geometry.area.total
 skin_area(shape::Cylinder, insulation::Naked, body) = body.geometry.area.total
 evaporation_area(shape::Cylinder, insulation::Naked, body) = body.geometry.area.total
 
-skin_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius
-insulation_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius
-flesh_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius
+skin_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius_skin
+insulation_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius_skin
+flesh_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius_skin
 
 # fur
 total_area(shape::Cylinder, insulation::Fur, body) = body.geometry.area.total
@@ -141,9 +141,9 @@ total_area(shape::Cylinder, insulation::Fat, body) = body.geometry.area.total
 skin_area(shape::Cylinder, insulation::Fat, body) = body.geometry.area.total
 evaporation_area(shape::Cylinder, insulation::Fat, body) = body.geometry.area.total
 
-skin_radius(shape::Cylinder, insulation::Fat, body) = body.geometry.length.radius
-insulation_radius(shape::Cylinder, insulation::Fat, body) = body.geometry.length.radius
-flesh_radius(shape::Cylinder, insulation::Fat, body) = body.geometry.length.radius - body.geometry.length.fat
+skin_radius(shape::Cylinder, insulation::Fat, body) = body.geometry.length.radius_skin
+insulation_radius(shape::Cylinder, insulation::Fat, body) = body.geometry.length.radius_skin
+flesh_radius(shape::Cylinder, insulation::Fat, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
 # fur and fat
 total_area(shape::Cylinder, insulation::CompositeInsulation, body) = body.geometry.area.total
