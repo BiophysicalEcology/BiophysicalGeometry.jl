@@ -12,19 +12,19 @@ end
 
 function geometry(shape::Plate, ::Naked)
     volume = shape.mass / shape.density
-    length_skin = (volume / (shape.b * shape.c))^(1 / 3)
-    width_skin = shape.b * length_skin
-    height_skin = shape.c * length_skin
+    length_skin = (volume * shape.b * shape.c)^(1 / 3)
+    width_skin = length_skin / shape.b
+    height_skin = length_skin / shape.c 
     total = surface_area(shape, length_skin, width_skin, height_skin)
-    characteristic_dimension = width_skin * 2 #volume^(1 / 3) 
+    characteristic_dimension = volume^(1 / 3) # width_skin * 2
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin), (; total))
 end
 
 function geometry(shape::Plate, fur::Fur)
     volume = shape.mass / shape.density
-    length_skin = (volume / (shape.b * shape.c))^(1 / 3)
-    width_skin = shape.b * length_skin
-    height_skin = shape.c * length_skin
+    length_skin = (volume * shape.b * shape.c)^(1 / 3)
+    width_skin = length_skin / shape.b
+    height_skin = length_skin / shape.c 
     length_fur = length_skin + fur.thickness * 2
     width_fur = width_skin + fur.thickness * 2
     height_fur = height_skin + fur.thickness * 2
@@ -33,43 +33,43 @@ function geometry(shape::Plate, fur::Fur)
     area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     fat = 0.0u"m"
-    characteristic_dimension = width_fur * 2 #volume^(1 / 3) 
+    characteristic_dimension = volume^(1 / 3) # width_fur * 2
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), (; total, skin, convection))
 end
 
 function geometry(shape::Plate, fat::Fat)
-    fat_mass = shape.mass * fat.fraction
     volume = shape.mass / shape.density
+    length_skin = (volume * shape.b * shape.c)^(1 / 3)
+    width_skin = length_skin / shape.b
+    height_skin = length_skin / shape.c 
+    fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    r_flesh = (flesh_volume / (shape.b * shape.c))^(1 / 3) / 2
-    length_skin = (volume / (shape.b * shape.c))^(1 / 3)
-    width_skin = shape.b * length_skin
-    height_skin = shape.c * length_skin
-    fat = length_skin - r_flesh
+    length_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3)
+    fat = (length_skin - length_flesh) / 2
     total = surface_area(shape, length_skin, width_skin, height_skin)
-    characteristic_dimension = width_skin * 2 #volume^(1 / 3) 
+    characteristic_dimension = volume^(1 / 3) # width_skin * 2 
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, fat), (; total))
 end
 
 function geometry(shape::Plate, fur::Fur, fat::Fat)
-    fat_mass = shape.mass * fat.fraction
     volume = shape.mass / shape.density
+    length_skin = (volume * shape.b * shape.c)^(1 / 3)
+    width_skin = length_skin / shape.b
+    height_skin = length_skin / shape.c
+    fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    r_flesh = (flesh_volume / (shape.b * shape.c))^(1 / 3) / 2
-    length_skin = (volume / (shape.b * shape.c))^(1 / 3)
-    width_skin = shape.b * length_skin
-    height_skin = shape.c * length_skin
+    length_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3)
+    fat = (length_skin - length_flesh) / 2
     length_fur = length_skin + fur.thickness * 2
     width_fur = width_skin + fur.thickness * 2
     height_fur = height_skin + fur.thickness * 2
-    fat = length_skin - r_flesh
     total = surface_area(shape, length_fur, width_fur, height_fur)
     skin = surface_area(shape, length_skin, width_skin, height_skin)
     area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
-    characteristic_dimension = width_fur * 2 #volume^(1 / 3) 
+    characteristic_dimension = volume^(1 / 3) #width_fur * 2 
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), (; total, skin, convection))
 end
 
