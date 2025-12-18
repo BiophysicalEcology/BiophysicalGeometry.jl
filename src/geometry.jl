@@ -153,6 +153,17 @@ outer_insulation(ins::CompositeInsulation) = begin
         ins.layers[end]
     end
 end
+inner_insulation(ins::AbstractInsulation) = ins
+inner_insulation(ins::CompositeInsulation) = begin
+    # find fur layer if present
+    fat_layer = findfirst(i -> i isa Fat, ins.layers)
+    if fat_layer !== nothing
+        ins.layers[fat_layer]
+    else
+        # otherwise the last layer
+        ins.layers[end]
+    end
+end
 
 total_area(shape, ins::CompositeInsulation, body) =
     total_area(shape, outer_insulation(ins), body)
