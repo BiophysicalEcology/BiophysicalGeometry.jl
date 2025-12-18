@@ -7,7 +7,7 @@ export Cylinder, Sphere, Ellipsoid, Plate, LeopardFrog, DesertIguana
 export CompositeInsulation, Naked, Fur, Fat
 export geometry, shape, insulation
 export bird_skin_area, bird_plumage_area, mammal_skin_area, mammal_fur_area
-export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius
+export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
 export surface_area, silhouette_area, SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 
 include("geometry.jl")

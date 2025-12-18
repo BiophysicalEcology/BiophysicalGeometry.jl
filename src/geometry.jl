@@ -171,6 +171,13 @@ skin_area(shape, ins::CompositeInsulation, body) =
     skin_area(shape, outer_insulation(ins), body)
 evaporation_area(shape, ins::CompositeInsulation, body) =
     evaporation_area(shape, outer_insulation(ins), body)
+flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
+flesh_volume(ins::Union{Fat, CompositeInsulation}, body) = begin
+    fat = inner_insulation(body.insulation)
+    body.geometry.volume - body.shape.mass * fat.fraction / fat.density
+end
+flesh_volume(ins::Fur, body) = body.geometry.volume
+flesh_volume(ins::Naked, body) = body.geometry.volume
 
 # functions to get the appropriate radii
 skin_radius(body::AbstractBody) = skin_radius(shape(body), insulation(body), body)

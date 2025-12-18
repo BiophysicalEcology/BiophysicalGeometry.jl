@@ -31,6 +31,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -49,6 +50,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -63,6 +65,7 @@ evaporation_area(body)
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -81,6 +84,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -102,6 +106,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -121,6 +126,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -140,6 +146,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -159,6 +166,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -179,6 +187,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -197,6 +206,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -215,6 +225,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -233,6 +244,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -254,6 +266,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -273,6 +286,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -292,6 +306,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -311,6 +326,7 @@ silhouette_area(body, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -329,6 +345,7 @@ silhouette_area(shape, 45.0u"°")
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
@@ -348,6 +365,7 @@ silhouette_area(shape, Intermediate())
 skin_radius(body)
 insulation_radius(body)
 flesh_radius(body)
+flesh_volume(body)
 
 body.geometry.area
 body.geometry.length
