@@ -45,8 +45,8 @@ function geometry(shape::Plate, fat::Fat)
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    length_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3)
-    fat = (length_skin - length_flesh) / 2
+    width_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3) / shape.b
+    fat = (width_skin - width_flesh) / 2
     total = surface_area(shape, length_skin, width_skin, height_skin)
     characteristic_dimension = volume^(1 / 3) # width_skin * 2 
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, fat), (; total))
@@ -60,8 +60,8 @@ function geometry(shape::Plate, fur::Fur, fat::Fat)
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    length_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3)
-    fat = (length_skin - length_flesh) / 2
+    width_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3) / shape.b
+    fat = (width_skin - width_flesh) / 2
     length_fur = length_skin + fur.thickness * 2
     width_fur = width_skin + fur.thickness * 2
     height_fur = height_skin + fur.thickness * 2

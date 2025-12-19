@@ -34,7 +34,7 @@ function geometry(shape::Sphere, fat::Fat)
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
     radius_skin = ((3 / 4) * volume / π) ^ (1 / 3)
-    radius_flesh = ((3 * flesh_volume) / (4 * π)) ^ (1 / 3)
+    radius_flesh = ((3 / 4) * flesh_volume / π) ^ (1 / 3)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin)
     characteristic_dimension = volume^(1 / 3) #radius_skin * 2 #
@@ -48,7 +48,7 @@ function geometry(shape::Sphere, fur::Fur, fat::Fat)
     flesh_volume = volume - fat_volume    
     radius_skin = ((3 / 4) * volume / π) ^ (1 / 3)
     radius_fur = radius_skin + fur.thickness
-    radius_flesh = ((3 * flesh_volume) / (4 * π)) ^ (1 / 3)
+    radius_flesh = ((3 / 4) * flesh_volume / π) ^ (1 / 3)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_fur)
     skin = surface_area(shape, radius_skin)
