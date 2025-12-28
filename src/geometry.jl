@@ -174,7 +174,7 @@ evaporation_area(shape, ins::CompositeInsulation, body) =
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
 flesh_volume(ins::Union{Fat, CompositeInsulation}, body) = begin
     fat = inner_insulation(body.insulation)
-    if fat > 0.0u"m"
+    if body.geometry.length.fat > 0.0u"m"
         body.geometry.volume - body.shape.mass * fat.fraction / fat.density
     else
         body.geometry.volume
