@@ -53,10 +53,15 @@ function geometry(shape::Ellipsoid, fat::Fat)
         ustrip(u"m^3", fat_volume), 
         shape.b, 
         ustrip(u"m", b_flesh))
-    characteristic_dimension = volume^(1 / 3)
-    a_semi_major_skin = a_flesh + fat
-    b_semi_minor_skin = b_flesh + fat
-    c_semi_minor_skin = c_flesh + fat
+    if fat <= 0.0u"m"
+        b_semi_minor_skin = (((3 / 4) * volume) / (π * shape.b)) ^ (1 / 3)
+        c_semi_minor_skin = b_semi_minor_skin # assuming c = b
+        a_semi_major_skin = shape.b * b_semi_minor_skin
+    else
+        a_semi_major_skin = a_flesh + fat
+        b_semi_minor_skin = b_flesh + fat
+        c_semi_minor_skin = c_flesh + fat
+    end
     e = ((a_semi_major_skin ^ 2 - c_semi_minor_skin ^ 2) ^ (1 / 2)) / a_semi_major_skin
     total = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
     characteristic_dimension = volume^(1 / 3) # b_semi_minor_skin * 2
@@ -76,9 +81,15 @@ function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
         ustrip(u"m^3", fat_volume), 
         shape.b, 
         ustrip(u"m", b_flesh))
-    a_semi_major_skin = a_flesh + fat
-    b_semi_minor_skin = b_flesh + fat
-    c_semi_minor_skin = c_flesh + fat
+    if fat <= 0.0u"m"
+        b_semi_minor_skin = (((3 / 4) * volume) / (π * shape.b)) ^ (1 / 3)
+        c_semi_minor_skin = b_semi_minor_skin # assuming c = b
+        a_semi_major_skin = shape.b * b_semi_minor_skin
+    else
+        a_semi_major_skin = a_flesh + fat
+        b_semi_minor_skin = b_flesh + fat
+        c_semi_minor_skin = c_flesh + fat
+    end
     e = ((a_semi_major_skin ^ 2 - c_semi_minor_skin ^ 2) ^ (1 / 2)) / a_semi_major_skin
     a_semi_major_fur = a_semi_major_skin + fur.thickness
     b_semi_minor_fur = b_semi_minor_skin + fur.thickness
