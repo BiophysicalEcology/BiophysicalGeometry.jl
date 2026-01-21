@@ -163,9 +163,9 @@ skin_area(body::AbstractBody) = skin_area(shape(body), insulation(body), body)
 evaporation_area(body::AbstractBody) = evaporation_area(shape(body), insulation(body), body)
 
 # Fallbacks - mostly these are the same for all shapes
-total_area(shape::AbstractShape, insulation::Naked, body::AbstractBody) = body.geometry.area.total
-skin_area(shape::AbstractShape, insulation::Naked, body::AbstractBody) = body.geometry.area.total
-evaporation_area(shape::AbstractShape, insulation::Naked, body::AbstractBody) = body.geometry.area.total
+total_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
+skin_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
+evaporation_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
 
 # for composite insulation cases (fat and fur/feathers)
 outer_insulation(ins::AbstractInsulation) = ins
