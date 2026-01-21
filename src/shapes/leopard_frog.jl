@@ -16,7 +16,7 @@ function geometry(shape::LeopardFrog, ::Naked)
     return Geometry(volume, characteristic_dimension, (; r_skin), SurfaceAreas(; total))
 end
 
-# area functions
+# Surface area
 
 function surface_area(shape::LeopardFrog)
     mass_g = Unitful.uconvert(u"g", shape.mass)
@@ -24,7 +24,7 @@ function surface_area(shape::LeopardFrog)
     Unitful.uconvert(u"m^2", (12.79 * Unitful.ustrip(mass_g) ^ 0.606)u"cm^2") # eq in Fig. 5
 end
 
-# silhouette area functions
+# Silhouette area
 
 function silhouette_area(shape::LeopardFrog, θ)
     area = surface_area(shape)
@@ -32,9 +32,8 @@ function silhouette_area(shape::LeopardFrog, θ)
     return pct * area / 100
 end
 
-# surface area and radii functions
+# Radius
 
-# "radii" functions
 skin_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
 insulation_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
 flesh_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
