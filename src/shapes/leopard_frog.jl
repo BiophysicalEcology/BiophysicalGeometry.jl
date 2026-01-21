@@ -13,7 +13,7 @@ function geometry(shape::LeopardFrog, ::Naked)
     characteristic_dimension = volume^(1 / 3)
     r_skin = (volume / (4 * π)) ^ (1 / 3)
     total = surface_area(shape)
-    return Geometry(volume, characteristic_dimension, (; r_skin), (; total))
+    return Geometry(volume, characteristic_dimension, (; r_skin), SurfaceAreas(; total))
 end
 
 # area functions
@@ -33,9 +33,6 @@ function silhouette_area(shape::LeopardFrog, θ)
 end
 
 # surface area and radii functions
-total_area(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.area.total
-skin_area(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.area.total
-evaporation_area(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.area.total
 
 # "radii" functions
 skin_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin

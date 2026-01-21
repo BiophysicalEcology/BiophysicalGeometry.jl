@@ -88,13 +88,34 @@ Abstract supertype for organism bodies.
 abstract type AbstractBody <: AbstractGeometryPars end
 
 """
+    SurfaceAreas
+
+    SurfaceAreas(; total, skin=total, convection=total, ventral=nothing)
+
+Surface areas of an organism for heat exchange calculations.
+
+# Keywords
+
+- `total`: Total outer surface area (including insulation if present)
+- `skin`: Skin surface area (under insulation)
+- `convection`: Area available for convection (skin minus hair coverage)
+- `ventral`: Ventral surface area (for ground contact, optional)
+"""
+@kwdef struct SurfaceAreas{T,S,C,V}
+    total::T
+    skin::S = total
+    convection::C = total
+    ventral::V = nothing
+end
+
+"""
     Geometry
 
     Geometry(volume, characteristic_dimension, length, area)
 
 The geometry of an organism.
 """
-struct Geometry{V,C,L,A} <: AbstractGeometryPars
+struct Geometry{V,C,L,A<:SurfaceAreas} <: AbstractGeometryPars
     volume::V
     characteristic_dimension::C
     length::L
@@ -141,6 +162,11 @@ total_area(body::AbstractBody) = total_area(shape(body), insulation(body), body)
 skin_area(body::AbstractBody) = skin_area(shape(body), insulation(body), body)
 evaporation_area(body::AbstractBody) = evaporation_area(shape(body), insulation(body), body)
 
+# Fallbacks - mostly these are the same for all shapes
+total_area(shape::AbstrsactShape, insulation::Naked, body::AbstractBody) = body.geometry.area.total
+skin_area(shape::AbstrsactShape, insulation::Naked, body::AbstractBody) = body.geometry.area.total
+evaporation_area(shape::AbstrsactShape, insulation::Naked, body::AbstractBody) = body.geometry.area.total
+
 # for composite insulation cases (fat and fur/feathers)
 outer_insulation(ins::AbstractInsulation) = ins
 outer_insulation(ins::CompositeInsulation) = begin
@@ -153,6 +179,7 @@ outer_insulation(ins::CompositeInsulation) = begin
         ins.layers[end]
     end
 end
+
 inner_insulation(ins::AbstractInsulation) = ins
 inner_insulation(ins::CompositeInsulation) = begin
     # find fur layer if present
@@ -165,12 +192,13 @@ inner_insulation(ins::CompositeInsulation) = begin
     end
 end
 
-total_area(shape, ins::CompositeInsulation, body) =
+total_area(shape::AbstractShape, ins::CompositeInsulation, body) =
     total_area(shape, outer_insulation(ins), body)
-skin_area(shape, ins::CompositeInsulation, body) =
+skin_area(shape::AbstractShape, ins::CompositeInsulation, body) =
     skin_area(shape, outer_insulation(ins), body)
-evaporation_area(shape, ins::CompositeInsulation, body) =
+evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body) =
     evaporation_area(shape, outer_insulation(ins), body)
+
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
 flesh_volume(ins::Union{Fat, CompositeInsulation}, body) = begin
     fat = inner_insulation(body.insulation)
