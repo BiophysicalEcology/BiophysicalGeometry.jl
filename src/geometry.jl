@@ -167,6 +167,13 @@ total_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractB
 skin_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
 evaporation_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
 
+total_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
+    total_area(shape, outer_insulation(ins), body)
+skin_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
+    skin_area(shape, outer_insulation(ins), body)
+evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
+    evaporation_area(shape, outer_insulation(ins), body)
+
 # for composite insulation cases (fat and fur/feathers)
 outer_insulation(ins::AbstractInsulation) = ins
 outer_insulation(ins::CompositeInsulation) = begin
@@ -191,13 +198,6 @@ inner_insulation(ins::CompositeInsulation) = begin
         ins.layers[end]
     end
 end
-
-total_area(shape::AbstractShape, ins::CompositeInsulation, body) =
-    total_area(shape, outer_insulation(ins), body)
-skin_area(shape::AbstractShape, ins::CompositeInsulation, body) =
-    skin_area(shape, outer_insulation(ins), body)
-evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body) =
-    evaporation_area(shape, outer_insulation(ins), body)
 
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
 flesh_volume(ins::Union{Fat, CompositeInsulation}, body) = begin
