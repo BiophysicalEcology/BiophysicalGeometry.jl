@@ -197,8 +197,8 @@ end
 
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
 function flesh_volume(ins::Union{Fat, CompositeInsulation}, body)
-    fat = inner_insulation(body.insulation
-    if body.geometry.length.fat > 0.0u"m"
+    fat = inner_insulation(body.insulation)
+    if body.geometry.length.fat > zero(body.geometry.length.fat)
         body.geometry.volume - body.shape.mass * fat.fraction / fat.density
     else
         body.geometry.volume
