@@ -174,8 +174,8 @@ evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractB
     silhouette_area(body::AbstractBody, θ)
     silhouette_area(body::AbstractBody, orientation::SolarOrientation)
 
-Calculates the silhouette (projected) area of an object given a 
-solar zenith angle `θ` or a fixed [`SolarOrientation`](@ref) such as 
+Calculates the silhouette (projected) area of an object given a
+solar zenith angle `θ` or a fixed [`SolarOrientation`](@ref) such as
 [`NormalToSun`](@ref), [`ParallelToSun`](@ref), or [`Intermediate`](@ref).
 """
 silhouette_area(body::AbstractBody, θ) = silhouette_area(shape(body), insulation(body), body, θ)
