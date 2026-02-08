@@ -13,7 +13,7 @@ function geometry(shape::DesertIguana, ::Naked)
     characteristic_dimension = volume^(1 / 3)
     r_skin = (volume / (4 * π)) ^ (1 / 3)
     total, ventral = surface_area(shape)
-    return Geometry(volume, characteristic_dimension, (; r_skin), (; total, ventral))
+    return Geometry(volume, characteristic_dimension, (; r_skin), SurfaceAreas(; total, ventral))
 end
 
 # area functions
@@ -44,10 +44,7 @@ function silhouette_area(shape::DesertIguana, ::Intermediate)
     return (normal + parallel) * 0.5
 end
 
-# surface area and radii functions
-total_area(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.area.total
-skin_area(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.area.total
-evaporation_area(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.area.total
+# radii functions
 
 skin_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
 insulation_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin

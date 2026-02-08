@@ -13,7 +13,7 @@ function geometry(shape::Sphere, ::Naked)
     radius_skin = ((3 / 4) * volume / π) ^ (1 / 3)
     total = surface_area(shape, radius_skin)
     characteristic_dimension = volume^(1 / 3) #radius_skin * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin), (; total))
+    return Geometry(volume, characteristic_dimension, (; radius_skin), SurfaceAreas(; total))
 end
 
 function geometry(shape::Sphere, fur::Fur)
@@ -25,7 +25,7 @@ function geometry(shape::Sphere, fur::Fur)
     area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness # radius_fur * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur), (; total, skin, convection))
+    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur), SurfaceAreas(; total, skin, convection))
 end
 
 function geometry(shape::Sphere, fat::Fat)
@@ -38,14 +38,14 @@ function geometry(shape::Sphere, fat::Fat)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin)
     characteristic_dimension = volume^(1 / 3) #radius_skin * 2 #
-    return Geometry(volume, characteristic_dimension, (; radius_skin, fat), (; total))
+    return Geometry(volume, characteristic_dimension, (; radius_skin, fat), SurfaceAreas(; total))
 end
 
 function geometry(shape::Sphere, fur::Fur, fat::Fat)
     volume = shape.mass / shape.density
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
-    flesh_volume = volume - fat_volume    
+    flesh_volume = volume - fat_volume
     radius_skin = ((3 / 4) * volume / π) ^ (1 / 3)
     radius_fur = radius_skin + fur.thickness
     radius_flesh = ((3 / 4) * flesh_volume / π) ^ (1 / 3)
@@ -55,7 +55,7 @@ function geometry(shape::Sphere, fur::Fur, fat::Fat)
     area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness #radius_fur * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur, fat), (; total, skin, convection))
+    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 
 # area functions
@@ -98,40 +98,22 @@ function silhouette_area(shape::Sphere, insulation::Union{Fur,CompositeInsulatio
     return (; normal, parallel)
 end
 
-# area and radii functions
+# radii functions
+
+skin_radius(shape::Sphere, insulation::AbstractInsulation, body) = body.geometry.length.radius_skin
 
 # naked
-total_area(shape::Sphere, insulation::Naked, body) = body.geometry.area.total
-skin_area(shape::Sphere, insulation::Naked, body) = body.geometry.area.total
-evaporation_area(shape::Sphere, insulation::Naked, body) = body.geometry.area.total
-
-skin_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
 insulation_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
 flesh_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
 
 # fur
-total_area(shape::Sphere, insulation::Fur, body) = body.geometry.area.total
-skin_area(shape::Sphere, insulation::Fur, body) = body.geometry.area.skin
-evaporation_area(shape::Sphere, insulation::Fur, body) = body.geometry.area.convection
-
-skin_radius(shape::Sphere, insulation::Fur, body) = body.geometry.length.radius_skin
 insulation_radius(shape::Sphere, insulation::Fur, body) = body.geometry.length.radius_fur
 flesh_radius(shape::Sphere, insulation::Fur, body) = body.geometry.length.radius_skin
 
 # fat
-total_area(shape::Sphere, insulation::Fat, body) = body.geometry.area.total
-skin_area(shape::Sphere, insulation::Fat, body) = body.geometry.area.total
-evaporation_area(shape::Sphere, insulation::Fat, body) = body.geometry.area.total
-
-skin_radius(shape::Sphere, insulation::Fat, body) = body.geometry.length.radius_skin
 insulation_radius(shape::Sphere, insulation::Fat, body) = body.geometry.length.radius_skin
 flesh_radius(shape::Sphere, insulation::Fat, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
 # fur and fat
-total_area(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.area.total
-skin_area(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.area.skin
-evaporation_area(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.area.convection
-
-skin_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_skin
 insulation_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_fur
 flesh_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
