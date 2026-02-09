@@ -164,8 +164,8 @@ evaporation_area(body::AbstractBody) = evaporation_area(shape(body), insulation(
 
 # Fallbacks - mostly these are the same for all shapes
 total_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
-skin_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
-evaporation_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
+skin_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.skin
+evaporation_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.convection
 
 total_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
     total_area(shape, outer_insulation(ins), body)
@@ -245,7 +245,6 @@ silhouette_area(body::AbstractBody, ::ParallelToSun) =
 silhouette_area(body::AbstractBody, ::Intermediate) =
     (silhouette_area(body).normal + silhouette_area(body).parallel) * 0.5
 
-    #TODO make this 'insulation_area'
-function hair_area(fibre_diameter, fibre_density, skin)
+function insulation_area(fibre_diameter, fibre_density, skin)
     π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)
 end
