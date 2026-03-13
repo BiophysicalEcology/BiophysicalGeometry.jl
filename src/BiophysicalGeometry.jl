@@ -8,7 +8,7 @@ export CompositeInsulation, Naked, Fur, Fat
 export SurfaceAreas
 export geometry, shape, insulation
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
-export surface_area, silhouette_area, SolarOrientation, Intermediate, ParallelToSun, NormalToSun
+export surface_area, silhouette_area, SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying
 
 include("geometry.jl")
 include("shapes/plate.jl")

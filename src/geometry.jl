@@ -144,6 +144,7 @@ abstract type SolarOrientation <: AbstractGeometryPars end
 struct NormalToSun <: SolarOrientation end
 struct ParallelToSun <: SolarOrientation end
 struct Intermediate <: SolarOrientation end
+struct ZenithAngleVarying <: SolarOrientation end
 
 # constructors and functions
 
@@ -244,6 +245,21 @@ silhouette_area(body::AbstractBody, ::ParallelToSun) =
 
 silhouette_area(body::AbstractBody, ::Intermediate) =
     (silhouette_area(body).normal + silhouette_area(body).parallel) * 0.5
+
+# Generic 3-arg fallback: zenith angle ignored for fixed orientations
+silhouette_area(body::AbstractBody, o::SolarOrientation, zenith_angle) = silhouette_area(body, o)
+
+# ZenithAngleVarying: compute from zenith angle using shape-specific 4-arg dispatch;
+# falls back to Intermediate() for shapes that don't implement silhouette_area(shape, ins, body, θ)
+function silhouette_area(body::AbstractBody, ::ZenithAngleVarying, zenith_angle)
+    sh  = shape(body)
+    ins = insulation(body)
+    θ   = uconvert(u"rad", zenith_angle)
+    if hasmethod(silhouette_area, (typeof(sh), typeof(ins), typeof(body), typeof(θ)))
+        return silhouette_area(sh, ins, body, θ)
+    end
+    return silhouette_area(body, Intermediate())
+end
 
 function insulation_area(fibre_diameter, fibre_density, skin)
     π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)

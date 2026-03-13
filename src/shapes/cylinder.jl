@@ -92,6 +92,12 @@ function silhouette_area(shape::Cylinder, insulation::Fur, body::AbstractBody, �
     return silhouette_area(shape, r, l, θ)
 end
 
+function silhouette_area(shape::Cylinder, insulation::Union{Naked,Fat}, body::AbstractBody, θ)
+    r = body.geometry.length.radius_skin
+    l = body.geometry.length.length_skin
+    return silhouette_area(shape, r, l, θ)
+end
+
 function silhouette_area(shape::Cylinder, insulation::CompositeInsulation, body::AbstractBody, θ)
     r = body.geometry.length.radius_fur
     l = body.geometry.length.length_fur
