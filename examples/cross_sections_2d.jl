@@ -24,8 +24,8 @@ import BiophysicalGeometry: Cylinder, Ellipsoid
 mass    = 1.0u"kg"
 density = 1000.0u"kg/m^3"
 
-#shape      = Cylinder(mass, density, 4.0)
-shape    = Ellipsoid(mass, density, 4.0, 1.0)
+shape      = Cylinder(mass, density, 4.0)
+# shape    = Ellipsoid(mass, density, 4.0, 1.0)
 # shape    = Sphere(mass, density)
 
 insulation = CompositeInsulation(Fur(10.0u"mm", 30.0u"μm", 3000u"cm^-2"),
