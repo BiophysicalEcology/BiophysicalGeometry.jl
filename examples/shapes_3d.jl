@@ -37,7 +37,7 @@ b_ratio = 4.0   # length-to-diameter ratio (used by Cylinder and Ellipsoid)
 
 shape = Cylinder(mass, density, b_ratio)
 # shape = Sphere(mass, density)
-# shape = Ellipsoid(mass, density, b_ratio, b_ratio)
+# shape = Ellipsoid(mass, density, b_ratio, 1.0)
 
 insulation = CompositeInsulation(Fur(10.0u"mm", 30.0u"μm", 3000u"cm^-2"),
                                   Fat(0.1, 901.0u"kg/m^3"))
