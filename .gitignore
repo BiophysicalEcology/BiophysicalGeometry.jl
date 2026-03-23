@@ -5,3 +5,4 @@ examples/cross_sections_2d.png
 examples/insulation_properties.png
 .gitignore
 examples/shapes_3d.png
+.claude/settings.json

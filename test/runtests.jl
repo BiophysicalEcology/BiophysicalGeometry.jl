@@ -12,3 +12,4 @@ using Test
 end
 
 @safetestset "geometry" begin include("geometry.jl") end
+@safetestset "organism" begin include("organism.jl") end

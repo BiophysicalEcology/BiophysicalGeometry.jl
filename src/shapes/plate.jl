@@ -25,15 +25,15 @@ function geometry(shape::Plate, fur::Fur)
     length_skin = (volume * shape.b * shape.c)^(1 / 3)
     width_skin = length_skin / shape.b
     height_skin = length_skin / shape.c 
-    length_fur = length_skin + fur.thickness * 2
-    width_fur = width_skin + fur.thickness * 2
-    height_fur = height_skin + fur.thickness * 2
+    length_fur = length_skin + fur.depth * 2
+    width_fur = width_skin + fur.depth * 2
+    height_fur = height_skin + fur.depth * 2
     total = surface_area(shape, length_fur, width_fur, height_fur)
     skin = surface_area(shape, length_skin, width_skin, height_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     fat = 0.0u"m"
-    characteristic_dimension = volume^(1 / 3) + fur.thickness # width_fur * 2
+    characteristic_dimension = volume^(1 / 3) + fur.depth # width_fur * 2
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 
@@ -62,14 +62,14 @@ function geometry(shape::Plate, fur::Fur, fat::Fat)
     flesh_volume = volume - fat_volume
     width_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3) / shape.b
     fat = (width_skin - width_flesh) / 2
-    length_fur = length_skin + fur.thickness * 2
-    width_fur = width_skin + fur.thickness * 2
-    height_fur = height_skin + fur.thickness * 2
+    length_fur = length_skin + fur.depth * 2
+    width_fur = width_skin + fur.depth * 2
+    height_fur = height_skin + fur.depth * 2
     total = surface_area(shape, length_fur, width_fur, height_fur)
     skin = surface_area(shape, length_skin, width_skin, height_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness #width_fur * 2 
+    characteristic_dimension = volume^(1 / 3) + fur.depth #width_fur * 2 
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 

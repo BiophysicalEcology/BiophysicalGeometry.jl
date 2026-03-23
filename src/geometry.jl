@@ -25,13 +25,13 @@ struct Naked <: AbstractInsulation end
 
 """
     Fur <: AbstractInsulation
-    
-    Fur(thickness)
 
-Insulation trait for an organism with fur.
+    Fur(depth, fibre_diameter, fibre_density)
+
+Insulation trait for an organism with fur. `depth` is the uniform fur thickness.
 """
 struct Fur{T,D,R} <: AbstractInsulation
-    thickness::T
+    depth::T
     fibre_diameter::D
     fibre_density::R
 end
@@ -199,6 +199,9 @@ inner_insulation(ins::CompositeInsulation) = begin
         ins.layers[end]
     end
 end
+
+"""Total volume of a single-part body (convenience accessor consistent with `total_volume(::Organism)`)."""
+total_volume(body::AbstractBody) = body.geometry.volume
 
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
 flesh_volume(ins::Union{Fat, CompositeInsulation}, body) = begin
