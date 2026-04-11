@@ -3,7 +3,7 @@
 
 An ellipsoidal organism shape.
 """
-mutable struct Ellipsoid{M,D,B,C} <: AbstractShape
+struct Ellipsoid{M,D,B,C} <: AbstractShape
     mass::M
     density::D
     b::B
@@ -238,6 +238,13 @@ function silhouette_area(shape::Ellipsoid, insulation::CompositeInsulation, body
     c = body.geometry.length.c_semi_minor_fur
     return silhouette_area(shape, a, b, c, θ)
 end
+
+# characteristic dimension functions
+
+# For a prolate spheroid (a_semi_major > b_semi_minor = c_semi_minor), the shortest
+# linear dimension is the minor-axis diameter (2b).
+shortest_outer_dim(::Ellipsoid, ::Union{Naked,Fat}, geom)          = 2 * geom.length.b_semi_minor_skin
+shortest_outer_dim(::Ellipsoid, ::Union{Fur,CompositeInsulation}, geom) = 2 * geom.length.b_semi_minor_fur
 
 # radii functions
 skin_radius(shape::Ellipsoid, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_skin

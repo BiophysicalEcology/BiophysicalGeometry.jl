@@ -3,7 +3,7 @@
 
 A cylindrical organism shape.
 """
-mutable struct Cylinder{M,D,B} <: AbstractShape
+struct Cylinder{M,D,B} <: AbstractShape
     mass::M
     density::D
     b::B
@@ -121,6 +121,13 @@ function silhouette_area(shape::Cylinder, insulation::Union{Fur,CompositeInsulat
     parallel = π *r^2
     return (; normal, parallel)
 end
+
+# characteristic dimension functions
+
+shortest_outer_dim(::Cylinder, ::Union{Naked,Fat}, geom) =
+    min(2 * geom.length.radius_skin, geom.length.length_skin)
+shortest_outer_dim(::Cylinder, ::Union{Fur,CompositeInsulation}, geom) =
+    min(2 * geom.length.radius_fur, geom.length.length_fur)
 
 # radii functions
 

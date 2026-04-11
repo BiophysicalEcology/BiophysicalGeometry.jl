@@ -146,10 +146,52 @@ struct ParallelToSun <: SolarOrientation end
 struct Intermediate <: SolarOrientation end
 struct ZenithAngleVarying <: SolarOrientation end
 
+# Characteristic dimension formulas
+
+"""
+    CharDimFormula
+
+Abstract supertype for characteristic dimension formulas used in heat-exchange calculations.
+"""
+abstract type CharDimFormula end
+
+"""
+    VolumeCubeRoot <: CharDimFormula
+
+    VolumeCubeRoot()
+
+Use `V^(1/3)` as the characteristic dimension (default). Orientation-independent and
+scales correctly with body size, but detached from actual linear geometry.
+"""
+struct VolumeCubeRoot <: CharDimFormula end
+
+"""
+    ShortestDimension <: CharDimFormula
+
+    ShortestDimension(factor=1.0)
+
+Use `factor × L_min` as the characteristic dimension, where `L_min` is the shortest
+outer linear dimension of the shape (including insulation/fur if present).
+
+This is physically motivated by boundary-layer theory: the shortest dimension sets
+the minimum fetch length for convection. A factor < 1 is appropriate for flat objects
+like leaves (e.g. `factor=0.7` following Gates 1980).
+
+# Arguments
+- `factor`: multiplier applied to the shortest dimension (default `1.0`)
+"""
+struct ShortestDimension{F} <: CharDimFormula
+    factor::F
+end
+ShortestDimension() = ShortestDimension(1.0)
+
 # constructors and functions
 
-function Body(shape::AbstractShape, insulation::AbstractInsulation)
-    Body(shape, insulation, geometry(shape, insulation))
+function Body(shape::AbstractShape, insulation::AbstractInsulation;
+              characteristic_dimension::CharDimFormula = VolumeCubeRoot())
+    geom = geometry(shape, insulation)
+    cd   = _apply_char_dim(characteristic_dimension, shape, insulation, geom)
+    Body(shape, insulation, Geometry(geom.volume, cd, geom.length, geom.area))
 end
 
 shape(body::AbstractBody) = body.shape
@@ -264,3 +306,7 @@ end
 function insulation_area(fibre_diameter, fibre_density, skin)
     π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)
 end
+
+_apply_char_dim(::VolumeCubeRoot, shape, ins, geom) = geom.characteristic_dimension
+_apply_char_dim(sd::ShortestDimension, shape, ins, geom) =
+    sd.factor * shortest_outer_dim(shape, ins, geom)

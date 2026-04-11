@@ -34,6 +34,11 @@ end
 
 # surface area and radii functions
 
+# characteristic dimension functions
+
+# Same cylinder approximation as DesertIguana: L=2D=4R, shortest dimension is diameter (2r).
+shortest_outer_dim(::LeopardFrog, ::Naked, geom) = 2 * geom.length.r_skin
+
 # "radii" functions
 skin_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
 insulation_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin

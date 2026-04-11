@@ -3,7 +3,7 @@
 
 A spherical organism shape.
 """
-mutable struct Sphere{M,D} <: AbstractShape
+struct Sphere{M,D} <: AbstractShape
     mass::M
     density::D
 end
@@ -97,6 +97,11 @@ function silhouette_area(shape::Sphere, insulation::Union{Fur,CompositeInsulatio
     parallel = area
     return (; normal, parallel)
 end
+
+# characteristic dimension functions
+
+shortest_outer_dim(::Sphere, ::Union{Naked,Fat}, geom)          = 2 * geom.length.radius_skin
+shortest_outer_dim(::Sphere, ::Union{Fur,CompositeInsulation}, geom) = 2 * geom.length.radius_fur
 
 # radii functions
 

@@ -3,7 +3,7 @@
 
 A flat plate-shaped organism shape.
 """
-mutable struct Plate{M,D,B,C} <: AbstractShape
+struct Plate{M,D,B,C} <: AbstractShape
     mass::M
     density::D
     b::B
@@ -102,6 +102,13 @@ function silhouette_area(shape::Plate, insulation::Union{Fur,CompositeInsulation
     parallel = min(length * width, length * height, height * width)
     return (; normal, parallel)
 end
+
+# characteristic dimension functions
+
+shortest_outer_dim(::Plate, ::Union{Naked,Fat}, geom) =
+    min(geom.length.length_skin, geom.length.width_skin, geom.length.height_skin)
+shortest_outer_dim(::Plate, ::Union{Fur,CompositeInsulation}, geom) =
+    min(geom.length.length_fur, geom.length.width_fur, geom.length.height_fur)
 
 # radii functions
 

@@ -61,6 +61,11 @@ function silhouette_area(shape::DesertIguana, ::Intermediate)
     return (normal + parallel) * 0.5
 end
 
+# characteristic dimension functions
+
+# Cylinder approximation L=2D=4R, so the shortest dimension is the diameter (2r).
+shortest_outer_dim(::DesertIguana, ::Naked, geom) = 2 * geom.length.r_skin
+
 # radii functions
 
 skin_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
