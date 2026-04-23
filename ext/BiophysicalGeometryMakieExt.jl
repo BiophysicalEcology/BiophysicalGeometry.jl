@@ -11,28 +11,14 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate
 
 # ── Cylinder ──────────────────────────────────────────────────────────────────
 
-function _cylinder_tube(r, L; nθ=72, nz=2)
-    θ = LinRange(0.0, 2π, nθ);  z = LinRange(0.0, Float64(L), nz)
+function _cylinder_tube(r, L; nθ=72, nz=2, θ_end=2π, z0=0.0)
+    θ = LinRange(0.0, θ_end, nθ);  z = LinRange(z0, z0 + Float64(L), nz)
     [r*cos(θi) for θi in θ, _ in z],
     [r*sin(θi) for θi in θ, _ in z],
     [zi        for _  in θ, zi in z]
 end
 
-function _cylinder_tube_partial(r, L; nθ=60, θ_end=3π/2, z0=0.0)
-    θ = LinRange(0.0, θ_end, nθ);  z = [z0, z0 + Float64(L)]
-    [r*cos(θi) for θi in θ, _ in z],
-    [r*sin(θi) for θi in θ, _ in z],
-    [zi        for _  in θ, zi in z]
-end
-
-function _cylinder_cap(r, z0; nθ=72, nr=12)
-    θ = LinRange(0.0, 2π, nθ);  rv = LinRange(0.0, r, nr)
-    [rr*cos(θi) for θi in θ, rr in rv],
-    [rr*sin(θi) for θi in θ, rr in rv],
-    fill(Float64(z0), nθ, nr)
-end
-
-function _cylinder_cap_partial(r, z0; nθ=60, nr=12, θ_end=3π/2)
+function _cylinder_cap(r, z0; nθ=72, nr=12, θ_end=2π)
     θ = LinRange(0.0, θ_end, nθ);  rv = LinRange(0.0, r, nr)
     [rr*cos(θi) for θi in θ, rr in rv],
     [rr*sin(θi) for θi in θ, rr in rv],
@@ -41,14 +27,7 @@ end
 
 # ── Sphere ────────────────────────────────────────────────────────────────────
 
-function _sphere_mesh(r; n=60)
-    θ = LinRange(0.0, 2π, n);  φ = LinRange(0.0, π, n)
-    [r*sin(φj)*cos(θi) for θi in θ, φj in φ],
-    [r*sin(φj)*sin(θi) for θi in θ, φj in φ],
-    [r*cos(φj)         for _  in θ, φj in φ]
-end
-
-function _sphere_mesh_partial(r; n=60, θ_end=3π/2)
+function _sphere_mesh(r; n=60, θ_end=2π)
     θ = LinRange(0.0, θ_end, n);  φ = LinRange(0.0, π, n)
     [r*sin(φj)*cos(θi) for θi in θ, φj in φ],
     [r*sin(φj)*sin(θi) for θi in θ, φj in φ],
@@ -57,14 +36,7 @@ end
 
 # ── Ellipsoid ─────────────────────────────────────────────────────────────────
 
-function _ellipsoid_mesh(a, b; n=60)
-    θ = LinRange(0.0, 2π, n);  φ = LinRange(0.0, π, n)
-    [a*sin(φj)*cos(θi) for θi in θ, φj in φ],
-    [b*sin(φj)*sin(θi) for θi in θ, φj in φ],
-    [b*cos(φj)         for _  in θ, φj in φ]
-end
-
-function _ellipsoid_mesh_partial(a, b; n=60, θ_end=3π/2)
+function _ellipsoid_mesh(a, b; n=60, θ_end=2π)
     θ = LinRange(0.0, θ_end, n);  φ = LinRange(0.0, π, n)
     [a*sin(φj)*cos(θi) for θi in θ, φj in φ],
     [b*sin(φj)*sin(θi) for θi in θ, φj in φ],
@@ -158,26 +130,26 @@ function BiophysicalGeometry.draw_cutaway!(ax, body;
         _draw_surface!(ax, _cylinder_cap(r_f, 0.0),               flesh_col)
         _draw_surface!(ax, _cylinder_cap(r_f, L_s),               flesh_col)
         if has_fat
-            _draw_surface!(ax, _cylinder_tube_partial(r_s, L_s),  fat_col)
-            _draw_surface!(ax, _cylinder_cap_partial(r_s, 0.0),   fat_col)
-            _draw_surface!(ax, _cylinder_cap_partial(r_s, L_s),   fat_col)
+            _draw_surface!(ax, _cylinder_tube(r_s, L_s; θ_end=3π/2),       fat_col)
+            _draw_surface!(ax, _cylinder_cap(r_s, 0.0;  θ_end=3π/2),       fat_col)
+            _draw_surface!(ax, _cylinder_cap(r_s, L_s;  θ_end=3π/2),       fat_col)
         end
         if has_fur
-            _draw_surface!(ax, _cylinder_tube_partial(r_i, L_i; z0=z0_fur), fur_col)
-            _draw_surface!(ax, _cylinder_cap_partial(r_i, z0_fur),           fur_col)
-            _draw_surface!(ax, _cylinder_cap_partial(r_i, z0_fur + L_i),     fur_col)
+            _draw_surface!(ax, _cylinder_tube(r_i, L_i; θ_end=3π/2, z0=z0_fur), fur_col)
+            _draw_surface!(ax, _cylinder_cap(r_i, z0_fur;            θ_end=3π/2), fur_col)
+            _draw_surface!(ax, _cylinder_cap(r_i, z0_fur + L_i;      θ_end=3π/2), fur_col)
         end
 
     elseif body.shape isa Sphere
         _draw_surface!(ax, _sphere_mesh(r_f), flesh_col)
-        has_fat && _draw_surface!(ax, _sphere_mesh_partial(r_s), fat_col)
-        has_fur && _draw_surface!(ax, _sphere_mesh_partial(r_i), fur_col)
+        has_fat && _draw_surface!(ax, _sphere_mesh(r_s; θ_end=3π/2), fat_col)
+        has_fur && _draw_surface!(ax, _sphere_mesh(r_i; θ_end=3π/2), fur_col)
 
     elseif body.shape isa Ellipsoid
         ratio = Float64(body.shape.b)
         _draw_surface!(ax, _ellipsoid_mesh(r_f * ratio, r_f), flesh_col)
-        has_fat && _draw_surface!(ax, _ellipsoid_mesh_partial(r_s * ratio, r_s), fat_col)
-        has_fur && _draw_surface!(ax, _ellipsoid_mesh_partial(r_i * ratio, r_i), fur_col)
+        has_fat && _draw_surface!(ax, _ellipsoid_mesh(r_s * ratio, r_s; θ_end=3π/2), fat_col)
+        has_fur && _draw_surface!(ax, _ellipsoid_mesh(r_i * ratio, r_i; θ_end=3π/2), fur_col)
 
     elseif body.shape isa Plate
         gl   = body.geometry.length
