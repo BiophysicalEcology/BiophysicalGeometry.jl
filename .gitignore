@@ -1,3 +1,5 @@
 Manifest.toml
 test/R/.Rhistory
 Manifest.toml
+.claude/settings.json
+.claude/settings.local.json
