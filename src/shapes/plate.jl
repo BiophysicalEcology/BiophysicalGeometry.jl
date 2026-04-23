@@ -29,7 +29,7 @@ function geometry(shape::Plate, fur::Fur)
     height_fur = height_skin + fur.thickness * 2
     total = surface_area(shape, length_fur, width_fur, height_fur)
     skin = surface_area(shape, length_skin, width_skin, height_skin)
-    area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
+    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     fat = 0.0u"m"
     characteristic_dimension = volume^(1 / 3) + fur.thickness # width_fur * 2
@@ -64,7 +64,7 @@ function geometry(shape::Plate, fur::Fur, fat::Fat)
     height_fur = height_skin + fur.thickness * 2
     total = surface_area(shape, length_fur, width_fur, height_fur)
     skin = surface_area(shape, length_skin, width_skin, height_skin)
-    area_hair = hair_area(fur.fibre_diameter, fur.fibre_density, skin)
+    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness #width_fur * 2 
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), SurfaceAreas(; total, skin, convection))
