@@ -24,7 +24,7 @@ function geometry(shape::DesertIguana, ::Naked)
     return Geometry(volume, characteristic_dimension, (; r_skin), SurfaceAreas(; total, ventral))
 end
 
-# area functions
+# Surface area
 
 function surface_area(shape::DesertIguana)
     mass_g = Unitful.uconvert(u"g", shape.mass)
@@ -33,7 +33,7 @@ function surface_area(shape::DesertIguana)
     return (; total, ventral)
 end
 
-# silhouette area functions
+# Silhouette area
 
 # Required by the generic silhouette_area(body::AbstractBody) dispatch in geometry.jl,
 # which calls silhouette_area(shape, insulation, body) and expects a (; normal, parallel) NamedTuple.
@@ -48,12 +48,10 @@ function silhouette_area(shape::DesertIguana, ::NormalToSun)
     mass_g = Unitful.uconvert(u"g", shape.mass)
     return Unitful.uconvert(u"m^2", (3.798 * Unitful.ustrip(mass_g) ^ 0.683)u"cm^2")
 end
-
 function silhouette_area(shape::DesertIguana, ::ParallelToSun)
     mass_g = Unitful.uconvert(u"g", shape.mass)
     return Unitful.uconvert(u"m^2", (0.694 * Unitful.ustrip(mass_g) ^ 0.743)u"cm^2")
 end
-
 function silhouette_area(shape::DesertIguana, ::Intermediate)
     mass_g = Unitful.uconvert(u"g", shape.mass)
     normal = Unitful.uconvert(u"m^2", (3.798 * Unitful.ustrip(mass_g) ^ 0.683)u"cm^2")
@@ -61,7 +59,7 @@ function silhouette_area(shape::DesertIguana, ::Intermediate)
     return (normal + parallel) * 0.5
 end
 
-# radii functions
+# Radius
 
 skin_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
 insulation_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin

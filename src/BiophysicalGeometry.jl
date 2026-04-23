@@ -2,10 +2,12 @@ module BiophysicalGeometry
 
 using Unitful
 
-export AbstractGeometryModel, AbstractGeometryPars, AbstractShape, AbstractInsulation, AbstractBody, Body
-export Cylinder, Sphere, Ellipsoid, Plate, LeopardFrog, DesertIguana
-export CompositeInsulation, Naked, Fur, Fat
+export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
+export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, LeopardFrog, DesertIguana
+export AbstractInsulation, CompositeInsulation, Naked, Fur, Fat
+export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 export SurfaceAreas
+
 export geometry, shape, insulation
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
 export surface_area, silhouette_area, SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying

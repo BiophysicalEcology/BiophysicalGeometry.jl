@@ -15,7 +15,6 @@ function geometry(shape::Sphere, ::Naked)
     characteristic_dimension = volume^(1 / 3) #radius_skin * 2
     return Geometry(volume, characteristic_dimension, (; radius_skin), SurfaceAreas(; total))
 end
-
 function geometry(shape::Sphere, fur::Fur)
     volume = shape.mass / shape.density
     radius_skin = ((3 / 4)* volume / π) ^ (1 / 3)
@@ -27,7 +26,6 @@ function geometry(shape::Sphere, fur::Fur)
     characteristic_dimension = volume^(1 / 3) + fur.thickness # radius_fur * 2
     return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur), SurfaceAreas(; total, skin, convection))
 end
-
 function geometry(shape::Sphere, fat::Fat)
     volume = shape.mass / shape.density
     fat_mass = shape.mass * fat.fraction
@@ -40,7 +38,6 @@ function geometry(shape::Sphere, fat::Fat)
     characteristic_dimension = volume^(1 / 3) #radius_skin * 2 #
     return Geometry(volume, characteristic_dimension, (; radius_skin, fat), SurfaceAreas(; total))
 end
-
 function geometry(shape::Sphere, fur::Fur, fat::Fat)
     volume = shape.mass / shape.density
     fat_mass = shape.mass * fat.fraction
@@ -58,7 +55,7 @@ function geometry(shape::Sphere, fur::Fur, fat::Fat)
     return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 
-# area functions
+# Surface area
 
 function surface_area(shape::Sphere, body::AbstractBody)
     r = body.geometry.length_skin / 2
@@ -68,20 +65,17 @@ function surface_area(shape::Sphere, r)
     4 * π * r ^ 2
 end
 
-# silhouette area functions
+# Silhouette area
 
 silhouette_area(shape::Sphere, r) = π * r ^ 2
-
 function silhouette_area(shape::Sphere, insulation::Union{Naked,Fat}, body::AbstractBody, θ)
     r = body.geometry.length.radius_skin
     return silhouette_area(shape, r)
 end
-
 function silhouette_area(shape::Sphere, insulation::Union{Fur,CompositeInsulation}, body::AbstractBody, θ)
     r = body.geometry.length.radius_fur
     return silhouette_area(shape, r)
 end
-
 function silhouette_area(shape::Sphere, insulation::Union{Naked,Fat}, body::AbstractBody)
     r = body.geometry.length.radius_skin
     area = silhouette_area(shape, r)
@@ -89,7 +83,6 @@ function silhouette_area(shape::Sphere, insulation::Union{Naked,Fat}, body::Abst
     parallel = area
     return (; normal, parallel)
 end
-
 function silhouette_area(shape::Sphere, insulation::Union{Fur,CompositeInsulation}, body::AbstractBody)
     r = body.geometry.length.radius_fur
     area = silhouette_area(shape, r)
@@ -98,7 +91,7 @@ function silhouette_area(shape::Sphere, insulation::Union{Fur,CompositeInsulatio
     return (; normal, parallel)
 end
 
-# radii functions
+# Radius
 
 skin_radius(shape::Sphere, insulation::AbstractInsulation, body) = body.geometry.length.radius_skin
 

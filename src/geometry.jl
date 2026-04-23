@@ -1,3 +1,4 @@
+# TODO: remove AbstractGeometryModel
 abstract type AbstractGeometryModel end
 
 """
@@ -74,18 +75,10 @@ struct CompositeInsulation{T<:Tuple} <: AbstractInsulation
 end
 CompositeInsulation(i::AbstractInsulation) = CompositeInsulation((i,))
 CompositeInsulation(is::AbstractInsulation...) = CompositeInsulation((is...,))
-function geometry(shape, ins::CompositeInsulation)
-    geometry(shape, ins.layers...)
-end
+
+geometry(shape, ins::CompositeInsulation) = geometry(shape, ins.layers...)
 
 abstract type AbstractGeometryPars end
-
-"""
-    AbstractBody
-
-Abstract supertype for organism bodies.
-"""
-abstract type AbstractBody <: AbstractGeometryPars end
 
 """
     SurfaceAreas
@@ -108,6 +101,12 @@ Surface areas of an organism for heat exchange calculations.
     ventral::V = nothing
 end
 
+abstract type SolarOrientation <: AbstractGeometryPars end
+
+struct NormalToSun <: SolarOrientation end
+struct ParallelToSun <: SolarOrientation end
+struct Intermediate <: SolarOrientation end
+
 """
     Geometry
 
@@ -123,6 +122,18 @@ struct Geometry{V,C,L,A<:SurfaceAreas} <: AbstractGeometryPars
 end
 
 """
+    AbstractBody
+
+Abstract supertype for organism bodies.
+"""
+abstract type AbstractBody <: AbstractGeometryPars end
+
+shape(body::AbstractBody) = body.shape
+insulation(body::AbstractBody) = body.insulation
+geometry(body::AbstractBody) = body.geometry
+surface_area(body::AbstractBody) = surface_area(shape(body), body)
+
+"""
     Body <: AbstractBody
 
     Body(shape::AbstractShape, insulation::AbstractInsulation)
@@ -130,10 +141,7 @@ end
 
 Physical dimensions of a body or body part that may or may note be insulated.
 """
-struct Body{
-        S<:AbstractShape,
-        I<:AbstractInsulation,
-        G<:AbstractGeometryPars} <: AbstractBody
+struct Body{S<:AbstractShape, I<:AbstractInsulation, G<:AbstractGeometryPars} <: AbstractBody
     shape::S
     insulation::I
     geometry::G
@@ -148,16 +156,10 @@ struct ZenithAngleVarying <: SolarOrientation end
 
 # constructors and functions
 
-function Body(shape::AbstractShape, insulation::AbstractInsulation)
+Body(shape::AbstractShape, insulation::AbstractInsulation) =
     Body(shape, insulation, geometry(shape, insulation))
-end
 
-shape(body::AbstractBody) = body.shape
-insulation(body::AbstractBody) = body.insulation
-geometry(body::AbstractBody) = body.geometry
-surface_area(body::AbstractBody) = surface_area(shape(body), body)
-
-# functions to extract appropriate surface areas from different objects
+# Surface areas
 
 total_area(body::AbstractBody) = total_area(shape(body), insulation(body), body)
 skin_area(body::AbstractBody) = skin_area(shape(body), insulation(body), body)
@@ -168,6 +170,7 @@ total_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractB
 skin_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.skin
 evaporation_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.convection
 
+# CompositeInsulation uses the outer layer
 total_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
     total_area(shape, outer_insulation(ins), body)
 skin_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
@@ -175,9 +178,57 @@ skin_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
 evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
     evaporation_area(shape, outer_insulation(ins), body)
 
+# Silhouette area
+
+"""
+    silhouette_area(body::AbstractBody, θ)
+    silhouette_area(body::AbstractBody, orientation::SolarOrientation)
+
+Calculates the silhouette (projected) area of an object given a
+solar zenith angle `θ` or a fixed [`SolarOrientation`](@ref) such as
+[`NormalToSun`](@ref), [`ParallelToSun`](@ref), or [`Intermediate`](@ref).
+"""
+silhouette_area(body::AbstractBody, θ) = silhouette_area(shape(body), insulation(body), body, θ)
+silhouette_area(body::AbstractBody) = silhouette_area(shape(body), insulation(body), body)
+# Orientation-specific implementations
+silhouette_area(body::AbstractBody, ::NormalToSun) = silhouette_area(body).normal
+silhouette_area(body::AbstractBody, ::ParallelToSun) = silhouette_area(body).parallel
+silhouette_area(body::AbstractBody, ::Intermediate) =
+    (silhouette_area(body).normal + silhouette_area(body).parallel) * 0.5
+
+# Insulation area
+
+# TODO make this 'insulation_area'
+function hair_area(fibre_diameter, fibre_density, skin)
+    π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)
+end
+
+# Volume
+
+flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
+function flesh_volume(ins::Union{Fat, CompositeInsulation}, body)
+    fat = inner_insulation(body.insulation)
+    if body.geometry.length.fat > zero(body.geometry.length.fat)
+        body.geometry.volume - body.shape.mass * fat.fraction / fat.density
+    else
+        body.geometry.volume
+    end
+end
+flesh_volume(ins::Fur, body) = body.geometry.volume
+flesh_volume(ins::Naked, body) = body.geometry.volume
+
+# Radius
+
+skin_radius(body::AbstractBody) = skin_radius(shape(body), insulation(body), body)
+insulation_radius(body::AbstractBody) = insulation_radius(shape(body), insulation(body), body)
+flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), body)
+
+
+# Helpers for handling CompositeInsulation
+
 # for composite insulation cases (fat and fur/feathers)
 outer_insulation(ins::AbstractInsulation) = ins
-outer_insulation(ins::CompositeInsulation) = begin
+function outer_insulation(ins::CompositeInsulation)
     # find fur layer if present
     fur_layer = findlast(i -> i isa Fur, ins.layers)
     if fur_layer !== nothing
@@ -189,7 +240,7 @@ outer_insulation(ins::CompositeInsulation) = begin
 end
 
 inner_insulation(ins::AbstractInsulation) = ins
-inner_insulation(ins::CompositeInsulation) = begin
+function inner_insulation(ins::CompositeInsulation)
     # find fur layer if present
     fat_layer = findfirst(i -> i isa Fat, ins.layers)
     if fat_layer !== nothing
