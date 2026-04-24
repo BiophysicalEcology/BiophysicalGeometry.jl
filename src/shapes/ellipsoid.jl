@@ -220,19 +220,8 @@ function silhouette_area(shape::Ellipsoid, insulation::CompositeInsulation, body
     return silhouette_area(shape, a, b, c, θ)
 end
 
-<<<<<<< characteristic-dimension-options
-# characteristic dimension functions
-
-# For a prolate spheroid (a_semi_major > b_semi_minor = c_semi_minor), the shortest
-# linear dimension is the minor-axis diameter (2b).
-shortest_outer_dim(::Ellipsoid, ::Union{Naked,Fat}, geom)          = 2 * geom.length.b_semi_minor_skin
-shortest_outer_dim(::Ellipsoid, ::Union{Fur,CompositeInsulation}, geom) = 2 * geom.length.b_semi_minor_fur
-
-# radii functions
-=======
 # Radius
 
->>>>>>> main
 skin_radius(shape::Ellipsoid, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
 
 # naked

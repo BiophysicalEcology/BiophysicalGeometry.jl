@@ -87,16 +87,7 @@ function silhouette_area(shape::Sphere, insulation::Union{Fur,CompositeInsulatio
     return (; normal, parallel)
 end
 
-<<<<<<< characteristic-dimension-options
-# characteristic dimension functions
-
-shortest_outer_dim(::Sphere, ::Union{Naked,Fat}, geom)          = 2 * geom.length.radius_skin
-shortest_outer_dim(::Sphere, ::Union{Fur,CompositeInsulation}, geom) = 2 * geom.length.radius_fur
-
-# radii functions
-=======
 # Radius
->>>>>>> main
 
 skin_radius(shape::Sphere, insulation::AbstractInsulation, body) = body.geometry.length.radius_skin
 

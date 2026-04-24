@@ -10,10 +10,8 @@ export SurfaceAreas
 
 export geometry, shape, insulation
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
-export surface_area, silhouette_area, SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying
-<<<<<<< characteristic-dimension-options
+export surface_area, silhouette_area, ZenithAngleVarying
 export outer_insulation
-=======
 export plot_body, draw_cutaway!, plot_cross_sections, draw_cross_sections!
 export draw_insulation_schematic!, draw_insulation_coverage!, plot_insulation_properties
 
@@ -40,7 +38,6 @@ end
 function plot_insulation_properties(args...; kwargs...)
     error("plot_insulation_properties requires a Makie backend — add `using GLMakie` (or CairoMakie / WGLMakie) first.")
 end
->>>>>>> main
 
 include("geometry.jl")
 include("shapes/plate.jl")
