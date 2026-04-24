@@ -1,3 +1,9 @@
 Manifest.toml
 test/R/.Rhistory
 Manifest.toml
+examples/cross_sections_2d.png
+examples/insulation_properties.png
+.gitignore
+examples/shapes_3d.png
+.claude/settings.json
+.claude/settings.local.json
