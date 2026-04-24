@@ -14,8 +14,7 @@ function geometry(shape::Cylinder, ::Naked)
     radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
     length_skin = shape.b * radius_skin * 2
     total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1 / 3) # radius_skin * 2
-    return Geometry(volume, characteristic_dimension, (; length_skin, radius_skin), SurfaceAreas(; total))
+    return Geometry(volume, (; length_skin, radius_skin), SurfaceAreas(; total))
 end
 
 function geometry(shape::Cylinder, fur::Fur)
@@ -28,8 +27,7 @@ function geometry(shape::Cylinder, fur::Fur)
     skin = surface_area(shape, radius_skin, length_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness #radius_fur * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur, length_skin, length_fur), SurfaceAreas(; total, skin, convection))
+    return Geometry(volume, (; radius_skin, radius_fur, length_skin, length_fur), SurfaceAreas(; total, skin, convection))
 end
 
 function geometry(shape::Cylinder, fat::Fat)
@@ -42,8 +40,7 @@ function geometry(shape::Cylinder, fat::Fat)
     radius_flesh = (flesh_volume / (shape.b * π * 2))^(1 / 3)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1 / 3) # radius_skin * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, length_skin, fat), SurfaceAreas(; total))
+    return Geometry(volume, (; radius_skin, length_skin, fat), SurfaceAreas(; total))
 end
 
 function geometry(shape::Cylinder, fur::Fur, fat::Fat)
@@ -61,8 +58,7 @@ function geometry(shape::Cylinder, fur::Fur, fat::Fat)
     skin = surface_area(shape, radius_skin, length_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness # radius_fur * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fur, length_skin, length_fur, fat), SurfaceAreas(; total, skin, convection))
+    return Geometry(volume, (; radius_skin, radius_fur, length_skin, length_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 
 # function surface_area(shape::Cylinder, body::AbstractBody)

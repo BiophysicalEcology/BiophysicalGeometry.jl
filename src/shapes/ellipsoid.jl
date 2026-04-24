@@ -17,8 +17,7 @@ function geometry(shape::Ellipsoid, ::Naked)
     a_semi_major_skin = b_semi_minor_skin * shape.b
     e = ((ustrip(u"m", a_semi_major_skin) ^ 2 - ustrip(u"m", c_semi_minor_skin) ^ 2) ^ (1 / 2)) / ustrip(u"m", a_semi_major_skin)
     total = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", b_semi_minor_skin), e)
-    characteristic_dimension = volume^(1 / 3) # b_semi_minor_skin * 2
-    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin), SurfaceAreas(; total))
+    return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin), SurfaceAreas(; total))
 end
 
 function geometry(shape::Ellipsoid, fur::Fur)
@@ -36,8 +35,7 @@ function geometry(shape::Ellipsoid, fur::Fur)
     skin = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair 
-    characteristic_dimension = volume^(1 / 3) + fur.thickness # b_semi_minor_fur * 2
-    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur), SurfaceAreas(; total, skin, convection))
+    return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur), SurfaceAreas(; total, skin, convection))
 end
 
 function geometry(shape::Ellipsoid, fat::Fat)
@@ -64,8 +62,7 @@ function geometry(shape::Ellipsoid, fat::Fat)
     end
     e = ((a_semi_major_skin ^ 2 - c_semi_minor_skin ^ 2) ^ (1 / 2)) / a_semi_major_skin
     total = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
-    characteristic_dimension = volume^(1 / 3) # b_semi_minor_skin * 2
-    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat), SurfaceAreas(; total))
+    return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat), SurfaceAreas(; total))
 end
 
 function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
@@ -100,8 +97,7 @@ function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
     skin = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair 
-    characteristic_dimension = volume^(1 / 3) + fur.thickness # b_semi_minor_fur * 2
-    return Geometry(volume, characteristic_dimension, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat), SurfaceAreas(; total, skin, convection))
+    return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 
 # fat thickness calculation
