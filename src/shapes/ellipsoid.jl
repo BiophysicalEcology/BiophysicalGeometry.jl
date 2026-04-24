@@ -19,7 +19,6 @@ function geometry(shape::Ellipsoid, ::Naked)
     total = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", b_semi_minor_skin), e)
     return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin), SurfaceAreas(; total))
 end
-
 function geometry(shape::Ellipsoid, fur::Fur)
     volume = shape.mass / shape.density
     b_semi_minor_skin = ((3 / 4) * volume / (π * shape.b)) ^ (1 / 3)
@@ -37,7 +36,6 @@ function geometry(shape::Ellipsoid, fur::Fur)
     convection = skin - area_hair 
     return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur), SurfaceAreas(; total, skin, convection))
 end
-
 function geometry(shape::Ellipsoid, fat::Fat)
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
@@ -64,8 +62,8 @@ function geometry(shape::Ellipsoid, fat::Fat)
     total = surface_area(shape, ustrip(u"m", a_semi_major_skin), ustrip(u"m", b_semi_minor_skin), ustrip(u"m", c_semi_minor_skin), e)
     return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat), SurfaceAreas(; total))
 end
-
 function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
+    # TODO reduce duplication here
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
@@ -100,7 +98,7 @@ function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
     return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 
-# fat thickness calculation
+# Fat thickness calculation
 
 function prolate_fat_layer(
     flesh_volume,
@@ -148,7 +146,7 @@ function prolate_fat_layer(
     return max(0.0u"m", fat)
 end
 
-# surface area functions
+# Surface area
 
 function surface_area(shape::Ellipsoid, body::AbstractBody)
     a = body.geometry.length.a_semi_major_skin
@@ -156,25 +154,18 @@ function surface_area(shape::Ellipsoid, body::AbstractBody)
     c = body.geometry.length.c_semi_minor_skin
     return surface_area(shape, a, b, c)
 end
-
 function surface_area(shape::Ellipsoid, a, b, c)
     #e = ((a ^ 2 - c ^ 2) ^ 0.5 ) / a # eccentricity
     #2 * π * b ^ 2 + 2 * π * (a * b / e) * asin(e)
     p =  1.6075
     return(4 * π * (((a ^ p * b ^ p + a ^ p * c ^ p + b ^ p * c ^ p)) / 3) ^ (1 / p))
 end
-
 function surface_area(shape::Ellipsoid, a, b, c, e)
     (2 * π * b ^ 2 + 2 * π * (a * b / e) * asin(e)) * u"m^2"
 end
 
-# silhouette area functions
+# Silhouette area 
 
-"""
-    silhouette_area
-
-Calculates the silhouette (projected) area of a prolate spheroid.
-"""
 function silhouette_area(shape::Ellipsoid, a, b, c, θ)
     a2 = cos(90) ^ 2 * (cos(θ) ^ 2 / a ^ 2 + sin(θ) ^ 2 / b ^ 2) + sin(90) ^ 2 / c ^ 2
     twohh = 2 * cos(90) * sin(90) * cos(θ) * (1 / b ^ 2 - 1 / a ^ 2)
@@ -188,7 +179,6 @@ function silhouette_area(shape::Ellipsoid, a, b, c, θ)
     semax2 = 1 / sqrt(b3)
     π * semax1  * semax2
 end
-
 function silhouette_area(shape::Ellipsoid, insulation::Union{Naked,Fat}, body::AbstractBody)
     a = body.geometry.length.a_semi_major_skin
     b = body.geometry.length.b_semi_minor_skin
@@ -197,7 +187,6 @@ function silhouette_area(shape::Ellipsoid, insulation::Union{Naked,Fat}, body::A
     parallel = π * b * c
     return (; normal, parallel)
 end
-
 function silhouette_area(shape::Ellipsoid, insulation::Union{Fur,CompositeInsulation}, body::AbstractBody)
     a = body.geometry.length.a_semi_major_fur
     b = body.geometry.length.b_semi_minor_fur
@@ -206,28 +195,24 @@ function silhouette_area(shape::Ellipsoid, insulation::Union{Fur,CompositeInsula
     parallel = π * b * c
     return (; normal, parallel)
 end
-
 function silhouette_area(shape::Ellipsoid, ::Naked, body::AbstractBody, θ)
     a = body.geometry.length.a_semi_major_skin
     b = body.geometry.length.b_semi_minor_skin
     c = body.geometry.length.c_semi_minor_skin
     return silhouette_area(shape, a, b, c, θ)
 end
-
 function silhouette_area(shape::Ellipsoid, insulation::Fur, body::AbstractBody, θ)
     a = body.geometry.length.a_semi_major_fur
     b = body.geometry.length.b_semi_minor_fur
     c = body.geometry.length.c_semi_minor_fur
     return silhouette_area(shape, a, b, c, θ)
 end
-
 function silhouette_area(shape::Ellipsoid, insulation::Fat, body::AbstractBody, θ)
     a = body.geometry.length.a_semi_major_skin
     b = body.geometry.length.b_semi_minor_skin
     c = body.geometry.length.c_semi_minor_skin
     return silhouette_area(shape, a, b, c, θ)
 end
-
 function silhouette_area(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody, θ)
     a = body.geometry.length.a_semi_major_fur
     b = body.geometry.length.b_semi_minor_fur
@@ -235,6 +220,7 @@ function silhouette_area(shape::Ellipsoid, insulation::CompositeInsulation, body
     return silhouette_area(shape, a, b, c, θ)
 end
 
+<<<<<<< characteristic-dimension-options
 # characteristic dimension functions
 
 # For a prolate spheroid (a_semi_major > b_semi_minor = c_semi_minor), the shortest
@@ -243,6 +229,10 @@ shortest_outer_dim(::Ellipsoid, ::Union{Naked,Fat}, geom)          = 2 * geom.le
 shortest_outer_dim(::Ellipsoid, ::Union{Fur,CompositeInsulation}, geom) = 2 * geom.length.b_semi_minor_fur
 
 # radii functions
+=======
+# Radius
+
+>>>>>>> main
 skin_radius(shape::Ellipsoid, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
 
 # naked

@@ -18,7 +18,6 @@ function geometry(shape::Plate, ::Naked)
     total = surface_area(shape, length_skin, width_skin, height_skin)
     return Geometry(volume, (; length_skin, width_skin, height_skin), SurfaceAreas(; total))
 end
-
 function geometry(shape::Plate, fur::Fur)
     volume = shape.mass / shape.density
     length_skin = (volume * shape.b * shape.c)^(1 / 3)
@@ -34,7 +33,6 @@ function geometry(shape::Plate, fur::Fur)
     fat = 0.0u"m"
     return Geometry(volume, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), SurfaceAreas(; total, skin, convection))
 end
-
 function geometry(shape::Plate, fat::Fat)
     volume = shape.mass / shape.density
     length_skin = (volume * shape.b * shape.c)^(1 / 3)
@@ -48,7 +46,6 @@ function geometry(shape::Plate, fat::Fat)
     total = surface_area(shape, length_skin, width_skin, height_skin)
     return Geometry(volume, (; length_skin, width_skin, height_skin, fat), SurfaceAreas(; total))
 end
-
 function geometry(shape::Plate, fur::Fur, fat::Fat)
     volume = shape.mass / shape.density
     length_skin = (volume * shape.b * shape.c)^(1 / 3)
@@ -69,7 +66,7 @@ function geometry(shape::Plate, fur::Fur, fat::Fat)
     return Geometry(volume, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), SurfaceAreas(; total, skin, convection))
 end
 
-# surface area functions
+# Surface area
 
 function surface_area(shape::Plate, body)
     length = body.geometry.length.length_skin
@@ -79,7 +76,7 @@ function surface_area(shape::Plate, body)
 end
 surface_area(shape::Plate, length, width, height) = length * width * 2 + length * height * 2 + width * height * 2
 
-# silhouette area functions
+# Silhouette area
 
 function silhouette_area(shape::Plate, insulation::Union{Naked,Fat}, body::AbstractBody)
     length = body.geometry.length.length_skin
@@ -89,7 +86,6 @@ function silhouette_area(shape::Plate, insulation::Union{Naked,Fat}, body::Abstr
     parallel = min(length * width, length * height, height * width)
     return (; normal, parallel)
 end
-
 function silhouette_area(shape::Plate, insulation::Union{Fur,CompositeInsulation}, body::AbstractBody)
     length = body.geometry.length.length_fur
     width = body.geometry.length.width_fur
@@ -99,6 +95,7 @@ function silhouette_area(shape::Plate, insulation::Union{Fur,CompositeInsulation
     return (; normal, parallel)
 end
 
+<<<<<<< characteristic-dimension-options
 # characteristic dimension functions
 
 shortest_outer_dim(::Plate, ::Union{Naked,Fat}, geom) =
@@ -107,6 +104,9 @@ shortest_outer_dim(::Plate, ::Union{Fur,CompositeInsulation}, geom) =
     min(geom.length.length_fur, geom.length.width_fur, geom.length.height_fur)
 
 # radii functions
+=======
+# Radius
+>>>>>>> main
 
 skin_radius(shape::Plate, insulation::AbstractInsulation, body) = body.geometry.length.width_skin / 2
 
