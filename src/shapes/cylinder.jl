@@ -6,22 +6,22 @@ A cylindrical organism shape.
 struct Cylinder{M,D,B} <: AbstractShape
     mass::M
     density::D
-    b::B
+    aspect_ratio_b::B
 end
 
 function geometry(shape::Cylinder, ::Naked)
     volume = shape.mass / shape.density
-    radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
-    length_skin = shape.b * radius_skin * 2
+    radius_skin = (volume / (shape.aspect_ratio_b * π * 2))^(1 / 3)
+    length_skin = shape.aspect_ratio_b * radius_skin * 2
     total = surface_area(shape, radius_skin, length_skin)
     return Geometry(volume, (; length_skin, radius_skin), SurfaceAreas(; total))
 end
 function geometry(shape::Cylinder, fur::Fur)
     volume = shape.mass / shape.density
-    radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
+    radius_skin = (volume / (shape.aspect_ratio_b * π * 2))^(1 / 3)
     radius_fur = radius_skin + fur.thickness
-    length_skin = shape.b * radius_skin * 2
-    length_fur = shape.b * radius_skin * 2 + fur.thickness * 2
+    length_skin = shape.aspect_ratio_b * radius_skin * 2
+    length_fur = shape.aspect_ratio_b * radius_skin * 2 + fur.thickness * 2
     total = surface_area(shape, radius_fur, length_fur)
     skin = surface_area(shape, radius_skin, length_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
@@ -33,9 +33,9 @@ function geometry(shape::Cylinder, fat::Fat)
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
-    length_skin = shape.b * radius_skin * 2
-    radius_flesh = (flesh_volume / (shape.b * π * 2))^(1 / 3)
+    radius_skin = (volume / (shape.aspect_ratio_b * π * 2))^(1 / 3)
+    length_skin = shape.aspect_ratio_b * radius_skin * 2
+    radius_flesh = (flesh_volume / (shape.aspect_ratio_b * π * 2))^(1 / 3)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin, length_skin)
     return Geometry(volume, (; radius_skin, length_skin, fat), SurfaceAreas(; total))
@@ -45,11 +45,11 @@ function geometry(shape::Cylinder, fur::Fur, fat::Fat)
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    radius_skin = (volume / (shape.b * π * 2))^(1 / 3)
+    radius_skin = (volume / (shape.aspect_ratio_b * π * 2))^(1 / 3)
     radius_fur = radius_skin + fur.thickness
-    length_skin = shape.b * radius_skin * 2
-    length_fur = shape.b * radius_skin * 2 + fur.thickness * 2
-    radius_flesh = (flesh_volume / (shape.b * π * 2))^(1 / 3)
+    length_skin = shape.aspect_ratio_b * radius_skin * 2
+    length_fur = shape.aspect_ratio_b * radius_skin * 2 + fur.thickness * 2
+    radius_flesh = (flesh_volume / (shape.aspect_ratio_b * π * 2))^(1 / 3)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_fur, length_fur)
     skin = surface_area(shape, radius_skin, length_skin)

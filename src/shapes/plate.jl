@@ -6,23 +6,23 @@ A flat plate-shaped organism shape.
 struct Plate{M,D,B,C} <: AbstractShape
     mass::M
     density::D
-    b::B
-    c::C
+    aspect_ratio_b::B
+    aspect_ratio_c::C
 end
 
 function geometry(shape::Plate, ::Naked)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c 
+    length_skin = (volume * shape.aspect_ratio_b * shape.aspect_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.aspect_ratio_b
+    height_skin = length_skin / shape.aspect_ratio_c 
     total = surface_area(shape, length_skin, width_skin, height_skin)
     return Geometry(volume, (; length_skin, width_skin, height_skin), SurfaceAreas(; total))
 end
 function geometry(shape::Plate, fur::Fur)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c 
+    length_skin = (volume * shape.aspect_ratio_b * shape.aspect_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.aspect_ratio_b
+    height_skin = length_skin / shape.aspect_ratio_c 
     length_fur = length_skin + fur.thickness * 2
     width_fur = width_skin + fur.thickness * 2
     height_fur = height_skin + fur.thickness * 2
@@ -35,26 +35,26 @@ function geometry(shape::Plate, fur::Fur)
 end
 function geometry(shape::Plate, fat::Fat)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c 
+    length_skin = (volume * shape.aspect_ratio_b * shape.aspect_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.aspect_ratio_b
+    height_skin = length_skin / shape.aspect_ratio_c 
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    width_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3) / shape.b
+    width_flesh = (flesh_volume * shape.aspect_ratio_b * shape.aspect_ratio_c)^(1 / 3) / shape.aspect_ratio_b
     fat = (width_skin - width_flesh) / 2
     total = surface_area(shape, length_skin, width_skin, height_skin)
     return Geometry(volume, (; length_skin, width_skin, height_skin, fat), SurfaceAreas(; total))
 end
 function geometry(shape::Plate, fur::Fur, fat::Fat)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c
+    length_skin = (volume * shape.aspect_ratio_b * shape.aspect_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.aspect_ratio_b
+    height_skin = length_skin / shape.aspect_ratio_c
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    width_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3) / shape.b
+    width_flesh = (flesh_volume * shape.aspect_ratio_b * shape.aspect_ratio_c)^(1 / 3) / shape.aspect_ratio_b
     fat = (width_skin - width_flesh) / 2
     length_fur = length_skin + fur.thickness * 2
     width_fur = width_skin + fur.thickness * 2
