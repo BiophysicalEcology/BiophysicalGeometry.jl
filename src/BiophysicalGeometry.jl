@@ -4,8 +4,7 @@ using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
 export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, LeopardFrog, DesertIguana
-export AbstractInsulationLayer, AbstractSolidLayer, AbstractPorousLayer
-export CompositeInsulation, Naked, FibrousLayer, FatLayer
+export AbstractInsulation, CompositeInsulation, Naked, Fur, Fat
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 export SurfaceAreas
 

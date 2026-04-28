@@ -9,76 +9,72 @@ Abstract supertype for the shape of the organism being modelled.
 abstract type AbstractShape <: AbstractGeometryModel end
 
 """
-    AbstractInsulationLayer
+    AbstractInsulation
 
-Abstract supertype for all insulation layers of an organism being modelled.
+Abstract supertype for the insulation of the organism being modelled.
 """
-abstract type AbstractInsulationLayer end
-
-"""
-    AbstractSolidLayer <: AbstractInsulationLayer
-
-Abstract supertype for solid (non-porous) insulation layers such as subcutaneous fat,
-chitin (arthropod cuticle), or keratin (scales, scutes). Users may define additional
-solid layers by subtyping this.
-"""
-abstract type AbstractSolidLayer <: AbstractInsulationLayer end
+abstract type AbstractInsulation <: AbstractGeometryModel end
 
 """
-    AbstractPorousLayer <: AbstractInsulationLayer
-
-Abstract supertype for porous (fibre/air-filled) insulation layers such as fur, feathers,
-or hair. The porous structure is characterised by fibre geometry rather than bulk
-fraction. Users may define additional porous layers by subtyping this.
-"""
-abstract type AbstractPorousLayer <: AbstractInsulationLayer end
-
-"""
-    Naked <: AbstractInsulationLayer
+    Naked <: AbstractInsulation
 
     Naked()
 
-Insulation trait for an organism without any insulation layer.
+Insulation trait for an organism without fur.
 """
-struct Naked <: AbstractInsulationLayer end
+struct Naked <: AbstractInsulation end
 
 """
-    FibrousLayer <: AbstractPorousLayer
+    Fur <: AbstractInsulation
 
-    FibrousLayer(thickness, fibre_diameter, fibre_density)
+    Fur(thickness, fibre_diameter, fibre_density)
 
-A porous insulation layer characterised by fibre geometry (fur, feathers, wool, hair, etc.).
+Insulation trait for an organism with fur.
 """
-struct FibrousLayer{T,D,R} <: AbstractPorousLayer
+struct Fur{T,D,R} <: AbstractInsulation
     thickness::T
     fibre_diameter::D
     fibre_density::R
 end
 
-"""
-    FatLayer <: AbstractSolidLayer
+# TODO
+# """
+#     Feathers <: AbstractInsulation
+#
+#     Feathers(thickness)
+#
+# Insulation trait for an organism with feathers.
+# """
+# struct Feathers{T,D,R} <: AbstractInsulation
+#     thickness::T
+#     fibre_diameter::D
+#     fibre_density::R
+# end
 
-    FatLayer(fraction, density)
-
-A solid insulation layer of subcutaneous fat.
 """
-struct FatLayer{F,D} <: AbstractSolidLayer
+    Fat <: AbstractInsulation
+
+    Fat(fraction, density)
+
+Insulation trait for an organism with fat.
+"""
+struct Fat{F,D} <: AbstractInsulation
     fraction::F
     density::D
 end
 
 """
-    CompositeInsulation <: AbstractInsulationLayer
+    CompositeInsulation <: AbstractInsulation
 
     CompositeInsulation(layers)
 
-A composite of insulation layers (e.g., fibrous layer over fat layer) for an organism.
+A composite of insulation layers (e.g., fur, fat) for an organism.
 """
-struct CompositeInsulation{T<:Tuple} <: AbstractInsulationLayer
+struct CompositeInsulation{T<:Tuple} <: AbstractInsulation
     layers::T
 end
-CompositeInsulation(i::AbstractInsulationLayer) = CompositeInsulation((i,))
-CompositeInsulation(is::AbstractInsulationLayer...) = CompositeInsulation((is...,))
+CompositeInsulation(i::AbstractInsulation) = CompositeInsulation((i,))
+CompositeInsulation(is::AbstractInsulation...) = CompositeInsulation((is...,))
 
 geometry(shape, ins::CompositeInsulation) = geometry(shape, ins.layers...)
 
@@ -166,18 +162,18 @@ abstract type AbstractBody <: AbstractGeometryPars end
 """
     Body <: AbstractBody
 
-    Body(shape::AbstractShape, insulation::AbstractInsulationLayer)
-    Body(shape::AbstractShape, insulation::AbstractInsulationLayer, geometry::AbstractGeometryPars)
+    Body(shape::AbstractShape, insulation::AbstractInsulation)
+    Body(shape::AbstractShape, insulation::AbstractInsulation, geometry::AbstractGeometryPars)
 
 Physical dimensions of a body or body part that may or may not be insulated.
 """
-struct Body{S<:AbstractShape, I<:AbstractInsulationLayer, G<:AbstractGeometryPars} <: AbstractBody
+struct Body{S<:AbstractShape, I<:AbstractInsulation, G<:AbstractGeometryPars} <: AbstractBody
     shape::S
     insulation::I
     geometry::G
 end
 
-Body(shape::AbstractShape, insulation::AbstractInsulationLayer) =
+Body(shape::AbstractShape, insulation::AbstractInsulation) =
     Body(shape, insulation, geometry(shape, insulation))
 
 """
@@ -188,7 +184,7 @@ Return the shape of `body`.
 shape(body::AbstractBody) = body.shape
 
 """
-    insulation(body::AbstractBody) -> AbstractInsulationLayer
+    insulation(body::AbstractBody) -> AbstractInsulation
 
 Return the insulation of `body`.
 """
@@ -232,9 +228,9 @@ Return the area available for evaporative water loss from `body`.
 evaporation_area(body::AbstractBody) = evaporation_area(shape(body), insulation(body), body)
 
 # Fallbacks — mostly the same for all shapes
-total_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.total
-skin_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.skin
-evaporation_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.convection
+total_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
+skin_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.skin
+evaporation_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.convection
 
 # CompositeInsulation uses the outer layer
 total_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
@@ -264,15 +260,15 @@ end
 Return the volume of the flesh (non-fat) component of `body`.
 """
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
-function flesh_volume(ins::Union{FatLayer, CompositeInsulation}, body)
-    fat_layer = inner_insulation(body.insulation)
+function flesh_volume(ins::Union{Fat, CompositeInsulation}, body)
+    fat = inner_insulation(body.insulation)
     if body.geometry.length.fat > zero(body.geometry.length.fat)
-        body.geometry.volume - body.shape.mass * fat_layer.fraction / fat_layer.density
+        body.geometry.volume - body.shape.mass * fat.fraction / fat.density
     else
         body.geometry.volume
     end
 end
-flesh_volume(ins::FibrousLayer, body) = body.geometry.volume
+flesh_volume(ins::Fur, body) = body.geometry.volume
 flesh_volume(ins::Naked, body) = body.geometry.volume
 
 # Radius
@@ -301,34 +297,32 @@ flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), b
 # Helpers for handling CompositeInsulation
 
 """
-    outer_insulation(ins::AbstractInsulationLayer) -> AbstractInsulationLayer
+    outer_insulation(ins::AbstractInsulation) -> AbstractInsulation
 
 Return the outermost insulation layer. For [`CompositeInsulation`](@ref), returns the
-porous layer (e.g. [`FibrousLayer`](@ref)) if one is present, otherwise the last layer.
-For other types, returns `ins` itself.
+fur layer if one is present, otherwise the last layer. For other types, returns `ins` itself.
 """
-outer_insulation(ins::AbstractInsulationLayer) = ins
+outer_insulation(ins::AbstractInsulation) = ins
 function outer_insulation(ins::CompositeInsulation)
-    idx = findlast(i -> i isa AbstractPorousLayer, ins.layers)
-    if idx !== nothing
-        ins.layers[idx]
+    fur_layer = findlast(i -> i isa Fur, ins.layers)
+    if fur_layer !== nothing
+        ins.layers[fur_layer]
     else
         ins.layers[end]
     end
 end
 
 """
-    inner_insulation(ins::AbstractInsulationLayer) -> AbstractInsulationLayer
+    inner_insulation(ins::AbstractInsulation) -> AbstractInsulation
 
 Return the innermost insulation layer. For [`CompositeInsulation`](@ref), returns the
-solid layer (e.g. [`FatLayer`](@ref)) if one is present, otherwise the last layer.
-For other types, returns `ins` itself.
+fat layer if one is present, otherwise the last layer. For other types, returns `ins` itself.
 """
-inner_insulation(ins::AbstractInsulationLayer) = ins
+inner_insulation(ins::AbstractInsulation) = ins
 function inner_insulation(ins::CompositeInsulation)
-    idx = findfirst(i -> i isa AbstractSolidLayer, ins.layers)
-    if idx !== nothing
-        ins.layers[idx]
+    fat_layer = findfirst(i -> i isa Fat, ins.layers)
+    if fat_layer !== nothing
+        ins.layers[fat_layer]
     else
         ins.layers[end]
     end

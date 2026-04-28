@@ -1,11 +1,11 @@
 # insulation_properties.jl
 #
-# Visualises the properties of fibrous insulation layers as modelled in
+# Visualises the properties of fur/fibre insulation as modelled in
 # BiophysicalGeometry.jl.  Four panels:
 #
-#   1. FibrousLayer schematic — side-view cartoon showing fibre diameter d, layer
-#      depth (thickness), fibre length L, and the inter-fibre spacing implied by N.
-#      When L > layer depth the fibres are drawn as tilted parallelograms.
+#   1. Fur schematic — side-view cartoon showing fibre diameter d, fur depth
+#      (thickness), fibre length L, and the inter-fibre spacing implied by N.
+#      When L > fur depth the fibres are drawn as tilted parallelograms.
 #
 #   2. Coverage fraction heatmap — fraction of skin area occupied by fibre
 #      cross-sections as a function of d and N.
@@ -37,17 +37,17 @@ density = 1000.0u"kg/m^3"
 b_ratio = 4.0
 
 insulation_depth = 10.0u"mm"
-fibre_length     = 14.0u"mm"   # actual fibre length (may exceed layer depth → fibres tilt)
+fibre_length     = 14.0u"mm"   # actual fibre length (may exceed fur depth → fibres tilt)
 fibre_diameter   = 30.0u"μm"
 fibre_density    = 3000u"cm^-2"
 
-fibrous_layer = FibrousLayer(insulation_depth, fibre_diameter, fibre_density)
-fat_layer     = FatLayer(0.1, 901.0u"kg/m^3")
-comp          = CompositeInsulation(fibrous_layer, fat_layer)
+fur  = Fur(insulation_depth, fibre_diameter, fibre_density)
+fat  = Fat(0.1, 901.0u"kg/m^3")
+comp = CompositeInsulation(fur, fat)
 
 cyl        = Cylinder(mass, density, b_ratio)
-ins_list   = [Naked(), fat_layer, fibrous_layer, comp]
-ins_labels = ["Naked", "FatLayer", "FibrousLayer", "FibrousLayer + FatLayer"]
+ins_list   = [Naked(), fat, fur, comp]
+ins_labels = ["Naked", "Fat", "Fur", "Fur + Fat"]
 
 # ── Panel 3: Surface area comparison bar chart ────────────────────────────────
 
@@ -120,10 +120,10 @@ ax2 = Axis(fig[1, 2])
 ax3 = Axis(fig[2, 1])
 ax4 = Axis(fig[2, 2:3])
 
-draw_insulation_schematic!(ax1, fibrous_layer; fibre_length)
-hm = draw_insulation_coverage!(ax2, fibrous_layer)
+draw_insulation_schematic!(ax1, fur; fibre_length)
+hm = draw_insulation_coverage!(ax2, fur)
 draw_area_comparison!(ax3, cyl, ins_list, ins_labels)
-draw_silhouette_vs_zenith!(ax4, cyl, [Naked(), fibrous_layer, comp], ["Naked", "FibrousLayer", "FibrousLayer + FatLayer"])
+draw_silhouette_vs_zenith!(ax4, cyl, [Naked(), fur, comp], ["Naked", "Fur", "Fur + Fat"])
 
 Colorbar(fig[1, 3], hm; label="Coverage fraction f", width=14, labelsize=10)
 

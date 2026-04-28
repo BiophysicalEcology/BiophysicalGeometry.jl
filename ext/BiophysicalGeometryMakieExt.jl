@@ -20,12 +20,12 @@ function _scaled_radii(body, sc)
      ins  =ustrip(u"m", r.ins)   * sc)
 end
 
-_layer_flags(r) = (fat_layer=r.skin > r.flesh + 1e-9, fibrous_layer=r.ins > r.skin + 1e-9)
+_layer_flags(r) = (fat=r.skin > r.flesh + 1e-9, fur=r.ins > r.skin + 1e-9)
 
 _axis_ratio(::Any)        = 1.0
 _axis_ratio(s::Ellipsoid) = Float64(s.b)
 
-_colors(p) = (flesh=p[:flesh_col][], fat_layer=p[:fat_layer_col][], fibrous_layer=p[:fibrous_layer_col][])
+_colors(p) = (flesh=p[:flesh_col][], fat=p[:fat_col][], fur=p[:fur_col][])
 
 _limits(lx, ly, tx, ty) = (
     long_x=(-lx, lx), long_y=(-ly, ly),
@@ -122,8 +122,8 @@ function _draw_cutaway_shape!(p, ::Cylinder, body, sc, cols)
     z0_fur = -(L_i - L_s) / 2
 
     _draw_cylinder!(p, r.flesh, L_s, cols.flesh)
-    fl.fat_layer && _draw_cylinder!(p, r.skin, L_s, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_cylinder!(p, r.ins,  L_i, cols.fibrous_layer; θ_end=3π/2, z0=z0_fur)
+    fl.fat && _draw_cylinder!(p, r.skin, L_s, cols.fat; θ_end=3π/2)
+    fl.fur && _draw_cylinder!(p, r.ins,  L_i, cols.fur; θ_end=3π/2, z0=z0_fur)
 end
 
 function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
@@ -132,8 +132,8 @@ function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
     ratio = _axis_ratio(shape)
 
     _draw_surface!(p, _ellipsoid_mesh(r.flesh * ratio, r.flesh), cols.flesh)
-    fl.fat_layer && _draw_surface!(p, _ellipsoid_mesh(r.skin * ratio, r.skin; θ_end=3π/2), cols.fat_layer)
-    fl.fibrous_layer && _draw_surface!(p, _ellipsoid_mesh(r.ins  * ratio, r.ins;  θ_end=3π/2), cols.fibrous_layer)
+    fl.fat && _draw_surface!(p, _ellipsoid_mesh(r.skin * ratio, r.skin; θ_end=3π/2), cols.fat)
+    fl.fur && _draw_surface!(p, _ellipsoid_mesh(r.ins  * ratio, r.ins;  θ_end=3π/2), cols.fur)
 end
 
 function _draw_cutaway_shape!(p, shape::Plate, body, sc, cols)
@@ -152,8 +152,8 @@ function _draw_cutaway_shape!(p, shape::Plate, body, sc, cols)
     hh_f = hl_f / Float64(shape.c)
 
     _draw_box_faces!(p, hl_f, hw_f, hh_f, cols.flesh; full=true)
-    fl.fat_layer && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat_layer)
-    fl.fibrous_layer && _draw_box_faces!(p, hl_i, hw_i, hh_i, cols.fibrous_layer)
+    fl.fat && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat)
+    fl.fur && _draw_box_faces!(p, hl_i, hw_i, hh_i, cols.fur)
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -183,14 +183,14 @@ function _section_layers(::Cylinder, body, mode, r, cols)
     hl_i = _get(gl, :length_fur, gl.length_skin) / 2
     if mode === :long
         [
-            (r_i > r_s, () -> _rect_pts(r_i, hl_i), cols.fibrous_layer),
-            (r_s > r_f, () -> _rect_pts(r_s, hl_s), cols.fat_layer),
+            (r_i > r_s, () -> _rect_pts(r_i, hl_i), cols.fur),
+            (r_s > r_f, () -> _rect_pts(r_s, hl_s), cols.fat),
             (true,      () -> _rect_pts(r_f, hl_s),  cols.flesh),
         ]
     else
         [
-            (r_i > r_s, () -> _circle_pts(r_i), cols.fibrous_layer),
-            (r_s > r_f, () -> _circle_pts(r_s), cols.fat_layer),
+            (r_i > r_s, () -> _circle_pts(r_i), cols.fur),
+            (r_s > r_f, () -> _circle_pts(r_s), cols.fat),
             (true,      () -> _circle_pts(r_f), cols.flesh),
         ]
     end
@@ -209,8 +209,8 @@ function _section_layers(shape::Plate, body, mode, r, cols)
         d_f = (r_f, (r_f * shape.b) / shape.c)
     end
     [
-        (r_i > r_s, () -> _rect_pts(d_i...), cols.fibrous_layer),
-        (r_s > r_f, () -> _rect_pts(d_s...), cols.fat_layer),
+        (r_i > r_s, () -> _rect_pts(d_i...), cols.fur),
+        (r_s > r_f, () -> _rect_pts(d_s...), cols.fat),
         (true,      () -> _rect_pts(d_f...),  cols.flesh),
     ]
 end
@@ -220,8 +220,8 @@ function _section_layers(shape::Union{Sphere,Ellipsoid}, _, mode, r, cols)
     ratio = _axis_ratio(shape)
     geom  = mode === :long ? x -> _ellipse_pts(x, x * ratio) : _circle_pts
     [
-        (r_i > r_s, () -> geom(r_i), cols.fibrous_layer),
-        (r_s > r_f, () -> geom(r_s), cols.fat_layer),
+        (r_i > r_s, () -> geom(r_i), cols.fur),
+        (r_s > r_f, () -> geom(r_s), cols.fat),
         (true,      () -> geom(r_f), cols.flesh),
     ]
 end
@@ -262,8 +262,8 @@ end
 @recipe(BodyCutaway, body) do scene
     Theme(
         flesh_col = RGBAf(0.88, 0.48, 0.42, 1.00),
-        fat_layer_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
-        fibrous_layer_col   = RGBAf(0.76, 0.62, 0.42, 0.45),
+        fat_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
+        fur_col   = RGBAf(0.76, 0.62, 0.42, 0.45),
         sc        = 100.0,
     )
 end
@@ -277,8 +277,8 @@ end
 @recipe(BodyLongSection, body) do scene
     Theme(
         flesh_col = RGBf(0.88, 0.48, 0.42),
-        fat_layer_col   = RGBf(1.00, 0.97, 0.60),
-        fibrous_layer_col   = RGBf(0.76, 0.62, 0.42),
+        fat_col   = RGBf(1.00, 0.97, 0.60),
+        fur_col   = RGBf(0.76, 0.62, 0.42),
     )
 end
 
@@ -291,8 +291,8 @@ end
 @recipe(BodyTransSection, body) do scene
     Theme(
         flesh_col = RGBf(0.88, 0.48, 0.42),
-        fat_layer_col   = RGBf(1.00, 0.97, 0.60),
-        fibrous_layer_col   = RGBf(0.76, 0.62, 0.42),
+        fat_col   = RGBf(1.00, 0.97, 0.60),
+        fur_col   = RGBf(0.76, 0.62, 0.42),
     )
 end
 
@@ -307,7 +307,7 @@ end
 # ══════════════════════════════════════════════════════════════════════════════
 
 """
-    draw_cutaway!(ax::Axis3, body; sc=100.0, flesh_col=…, fat_layer_col=…, fibrous_layer_col=…)
+    draw_cutaway!(ax::Axis3, body; sc=100.0, flesh_col=…, fat_col=…, fur_col=…)
 
 Draw a quarter-cutaway 3-D surface mesh of `body` into an existing `Axis3`.
 `sc` converts metres to axis units (default 100 → cm labels).
@@ -315,14 +315,14 @@ Draw a quarter-cutaway 3-D surface mesh of `body` into an existing `Axis3`.
 function BiophysicalGeometry.draw_cutaway!(ax, body;
         sc        = 100.0,
         flesh_col = RGBAf(0.88, 0.48, 0.42, 1.00),
-        fat_layer_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
-        fibrous_layer_col   = RGBAf(0.76, 0.62, 0.42, 0.45))
-    bodycutaway!(ax, body; sc, flesh_col, fat_layer_col, fibrous_layer_col)
+        fat_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
+        fur_col   = RGBAf(0.76, 0.62, 0.42, 0.45))
+    bodycutaway!(ax, body; sc, flesh_col, fat_col, fur_col)
     ax.xlabel = "x (cm)"; ax.ylabel = "y (cm)"; ax.zlabel = "z (cm)"
 end
 
 """
-    plot_body(body; sc=100.0, flesh_col=…, fat_layer_col=…, fibrous_layer_col=…) -> Figure
+    plot_body(body; sc=100.0, flesh_col=…, fat_col=…, fur_col=…) -> Figure
 
 Create a labelled `Figure` with `Axis3`, draw a quarter-cutaway of `body`,
 and attach a legend. Returns the `Figure`.
@@ -330,8 +330,8 @@ and attach a legend. Returns the `Figure`.
 function BiophysicalGeometry.plot_body(body;
         sc        = 100.0,
         flesh_col = RGBAf(0.88, 0.48, 0.42, 1.00),
-        fat_layer_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
-        fibrous_layer_col   = RGBAf(0.76, 0.62, 0.42, 0.45))
+        fat_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
+        fur_col   = RGBAf(0.76, 0.62, 0.42, 0.45))
 
     shape_name = string(nameof(typeof(body.shape)))
     ins_name   = string(nameof(typeof(body.insulation)))
@@ -343,18 +343,18 @@ function BiophysicalGeometry.plot_body(body;
     ax = Axis3(fig[1, 1];
                perspectiveness=0.5, viewmode=:fit, aspect=:data,
                elevation=π/7, azimuth=5π/4)
-    draw_cutaway!(ax, body; sc, flesh_col, fat_layer_col, fibrous_layer_col)
+    draw_cutaway!(ax, body; sc, flesh_col, fat_col, fur_col)
     Legend(fig[2, 1],
         [PolyElement(polycolor=flesh_col, strokecolor=:saddlebrown, strokewidth=1),
-         PolyElement(polycolor=fat_layer_col,   strokecolor=:saddlebrown, strokewidth=1),
-         PolyElement(polycolor=fibrous_layer_col,   strokecolor=:black,       strokewidth=1)],
-        ["Flesh / muscle", "Subcutaneous fat layer", "Fibrous insulation layer"];
+         PolyElement(polycolor=fat_col,   strokecolor=:saddlebrown, strokewidth=1),
+         PolyElement(polycolor=fur_col,   strokecolor=:black,       strokewidth=1)],
+        ["Flesh / muscle", "Subcutaneous fat", "Fur / insulation"];
         orientation=:horizontal, framevisible=false)
     return fig
 end
 
 """
-    draw_cross_sections!(ax_long, ax_tran, body; flesh_col=…, fat_layer_col=…, fibrous_layer_col=…)
+    draw_cross_sections!(ax_long, ax_tran, body; flesh_col=…, fat_col=…, fur_col=…)
 
 Draw longitudinal and transverse cross-section polygons into a pair of `Axis`
 objects.  Layers are drawn outer-to-inner so each inner layer paints over the
@@ -362,11 +362,11 @@ outer one.
 """
 function BiophysicalGeometry.draw_cross_sections!(ax_long, ax_tran, body;
         flesh_col = RGBf(0.88, 0.48, 0.42),
-        fat_layer_col   = RGBf(1.00, 0.97, 0.60),
-        fibrous_layer_col   = RGBf(0.76, 0.62, 0.42))
+        fat_col   = RGBf(1.00, 0.97, 0.60),
+        fur_col   = RGBf(0.76, 0.62, 0.42))
 
-    bodylongsection!(ax_long, body; flesh_col, fat_layer_col, fibrous_layer_col)
-    bodytranssection!(ax_tran, body; flesh_col, fat_layer_col, fibrous_layer_col)
+    bodylongsection!(ax_long, body; flesh_col, fat_col, fur_col)
+    bodytranssection!(ax_tran, body; flesh_col, fat_col, fur_col)
 
     r    = _radii(body)
     lims = _section_limits(body.shape, body, r, 0.12)
@@ -375,15 +375,15 @@ function BiophysicalGeometry.draw_cross_sections!(ax_long, ax_tran, body;
 end
 
 """
-    plot_cross_sections(body; flesh_col=…, fat_layer_col=…, fibrous_layer_col=…) -> Figure
+    plot_cross_sections(body; flesh_col=…, fat_col=…, fur_col=…) -> Figure
 
 Create a two-panel `Figure` (longitudinal + transverse cross-sections) with
 legend. Returns the `Figure`.
 """
 function BiophysicalGeometry.plot_cross_sections(body;
         flesh_col = RGBf(0.88, 0.48, 0.42),
-        fat_layer_col   = RGBf(1.00, 0.97, 0.60),
-        fibrous_layer_col   = RGBf(0.76, 0.62, 0.42))
+        fat_col   = RGBf(1.00, 0.97, 0.60),
+        fur_col   = RGBf(0.76, 0.62, 0.42))
 
     shape_name = string(nameof(typeof(body.shape)))
     ins_name   = string(nameof(typeof(body.insulation)))
@@ -398,12 +398,12 @@ function BiophysicalGeometry.plot_cross_sections(body;
     ax_tran = Axis(fig[1, 2];
                    title="Transverse section",
                    xlabel="x (cm)", ylabel="y (cm)", aspect=DataAspect())
-    draw_cross_sections!(ax_long, ax_tran, body; flesh_col, fat_layer_col, fibrous_layer_col)
+    draw_cross_sections!(ax_long, ax_tran, body; flesh_col, fat_col, fur_col)
     Legend(fig[2, 1:2],
         [PolyElement(polycolor=flesh_col, strokecolor=flesh_col, strokewidth=1),
-         PolyElement(polycolor=fat_layer_col,   strokecolor=fat_layer_col,   strokewidth=1),
-         PolyElement(polycolor=fibrous_layer_col,   strokecolor=fibrous_layer_col,   strokewidth=1)],
-        ["Flesh / muscle", "Subcutaneous fat layer", "Fibrous insulation layer"];
+         PolyElement(polycolor=fat_col,   strokecolor=fat_col,   strokewidth=1),
+         PolyElement(polycolor=fur_col,   strokecolor=fur_col,   strokewidth=1)],
+        ["Flesh / muscle", "Subcutaneous fat", "Fur / fibre insulation"];
         orientation=:horizontal, framevisible=false)
     rowgap!(fig.layout, 8)
     colgap!(fig.layout, 30)
@@ -411,19 +411,19 @@ function BiophysicalGeometry.plot_cross_sections(body;
 end
 
 """
-    draw_insulation_schematic!(ax, fibrous_layer::FibrousLayer; fibre_length=fibrous_layer.thickness)
+    draw_insulation_schematic!(ax, fur::Fur; fibre_length=fur.thickness)
 
-Draw a side-view schematic of a [`FibrousLayer`](@ref) insulation into `ax`.  Fibre width
-is exaggerated for clarity.  When `fibre_length > fibrous_layer.thickness` the fibres are
+Draw a side-view schematic of a `Fur` insulation layer into `ax`.  Fibre width
+is exaggerated for clarity.  When `fibre_length > fur.thickness` the fibres are
 drawn as tilted parallelograms.
 """
-function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::FibrousLayer;
-        fibre_length = fibrous_layer.thickness)
+function BiophysicalGeometry.draw_insulation_schematic!(ax, fur::Fur;
+        fibre_length = fur.thickness)
 
-    thick_mm     = ustrip(u"mm", fibrous_layer.thickness)
+    thick_mm     = ustrip(u"mm", fur.thickness)
     fibre_len_mm = ustrip(u"mm", fibre_length)
-    d_μm         = ustrip(u"μm", fibrous_layer.fibre_diameter)
-    n_cm2        = ustrip(u"cm^-2", fibrous_layer.fibre_density)
+    d_μm         = ustrip(u"μm", fur.fibre_diameter)
+    n_cm2        = ustrip(u"cm^-2", fur.fibre_density)
 
     spacing_mm = 1.0 / sqrt(n_cm2 / 100.0)
     d_display  = spacing_mm * 0.40
@@ -460,7 +460,7 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::Fibro
     scatter!(ax, [x_ann, x_ann], [0.0, thick_mm];
              color=:black, markersize=6, marker=:rect)
     text!(ax, x_ann + 0.04*W, thick_mm / 2;
-          text="fibrous layer depth\n$(round(Int, thick_mm)) mm",
+          text="fur depth\n$(round(Int, thick_mm)) mm",
           fontsize=9, align=(:left, :center))
 
     if dx > 1e-6
@@ -495,7 +495,7 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::Fibro
           text="spacing ≈ $(round(spacing_mm, digits=2)) mm  (N = $n_cm2 cm⁻²)",
           fontsize=8, align=(:center, :bottom), color=:darkgreen)
 
-    ax.title  = "Fibrous layer schematic  (fibre width exaggerated for clarity)"
+    ax.title  = "Fur schematic  (fibre width exaggerated for clarity)"
     ax.xlabel = "position (mm)"
     ax.ylabel = "height above skin (mm)"
     ylims!(ax, -skin_h * 5, thick_mm * 1.55)
@@ -504,13 +504,13 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::Fibro
 end
 
 """
-    draw_insulation_coverage!(ax, fibrous_layer::FibrousLayer; d_range=LinRange(10,120,200), N_range=LinRange(200,9000,200))
+    draw_insulation_coverage!(ax, fur::Fur; d_range=LinRange(10,120,200), N_range=LinRange(200,9000,200))
 
 Draw a coverage-fraction heatmap (plasma colormap) with contour lines at f = 0.25,
-0.50, 0.75, 1.0, and mark the reference point for `fibrous_layer`.  Returns the `Heatmap`
+0.50, 0.75, 1.0, and mark the reference point for `fur`.  Returns the `Heatmap`
 object so the caller can attach a `Colorbar`.
 """
-function BiophysicalGeometry.draw_insulation_coverage!(ax, fibrous_layer::FibrousLayer;
+function BiophysicalGeometry.draw_insulation_coverage!(ax, fur::Fur;
         d_range = LinRange(10.0, 120.0, 200),
         N_range = LinRange(200.0, 9000.0, 200))
 
@@ -531,8 +531,8 @@ function BiophysicalGeometry.draw_insulation_coverage!(ax, fibrous_layer::Fibrou
         end
     end
 
-    d_ref   = ustrip(u"μm",    fibrous_layer.fibre_diameter)
-    N_ref   = ustrip(u"cm^-2", fibrous_layer.fibre_density)
+    d_ref   = ustrip(u"μm",    fur.fibre_diameter)
+    N_ref   = ustrip(u"cm^-2", fur.fibre_density)
     cov_ref = π * ((d_ref * 1e-6) / 2)^2 * (N_ref * 1e4)
     scatter!(ax, [d_ref], [N_ref]; color=:lime, markersize=11,
              strokecolor=:black, strokewidth=1)
@@ -547,25 +547,25 @@ function BiophysicalGeometry.draw_insulation_coverage!(ax, fibrous_layer::Fibrou
 end
 
 """
-    plot_insulation_properties(fibrous_layer::FibrousLayer; fibre_length=fibrous_layer.thickness, kwargs...) → Figure
+    plot_insulation_properties(fur::Fur; fibre_length=fur.thickness, kwargs...) → Figure
 
-Create a two-panel `Figure` showing a fibrous layer schematic and coverage heatmap for
-the supplied [`FibrousLayer`](@ref).  `fibre_length` may exceed `fibrous_layer.thickness`
-to show tilted fibres.  `d_range` and `N_range` control the heatmap axes (μm / cm⁻²).
+Create a two-panel `Figure` showing a fur schematic and coverage heatmap for
+the supplied `Fur` object.  `fibre_length` may exceed `fur.thickness` to show
+tilted fibres.  `d_range` and `N_range` control the heatmap axes (μm / cm⁻²).
 """
-function BiophysicalGeometry.plot_insulation_properties(fibrous_layer::FibrousLayer;
-        fibre_length = fibrous_layer.thickness,
+function BiophysicalGeometry.plot_insulation_properties(fur::Fur;
+        fibre_length = fur.thickness,
         d_range      = LinRange(10.0, 120.0, 200),
         N_range      = LinRange(200.0, 9000.0, 200))
 
     fig = Figure(size=(900, 420), backgroundcolor=:white)
     Label(fig[0, 1:3],
-          "BiophysicalGeometry.jl — FibrousLayer Properties";
+          "BiophysicalGeometry.jl — Fur Properties";
           fontsize=14, font=:bold, padding=(0, 0, 8, 0))
     ax1 = Axis(fig[1, 1])
     ax2 = Axis(fig[1, 2])
-    draw_insulation_schematic!(ax1, fibrous_layer; fibre_length)
-    hm = draw_insulation_coverage!(ax2, fibrous_layer; d_range, N_range)
+    draw_insulation_schematic!(ax1, fur; fibre_length)
+    hm = draw_insulation_coverage!(ax2, fur; d_range, N_range)
     Colorbar(fig[1, 3], hm; label="Coverage fraction f", width=14, labelsize=10)
     colgap!(fig.layout, 12)
     colsize!(fig.layout, 3, Auto(0.05))
