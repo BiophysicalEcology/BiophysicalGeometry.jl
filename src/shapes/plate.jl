@@ -165,6 +165,8 @@ function validate_position(::Plate, body::AbstractBody, ::Val{S}, pos) where {S}
         issetequal(keys(pos), (:x, :z)) || error(":$S needs (x, z); got $(keys(pos))")
         abs(pos.x) ≤ L/2 || error(":$S x out of range ±$(L/2): $(pos.x)")
         abs(pos.z) ≤ H/2 || error(":$S z out of range ±$(H/2): $(pos.z)")
+    else
+        error("Plate has no surface :$S; valid: $(attachment_surfaces(shape(body)))")
     end
 end
 
@@ -212,4 +214,9 @@ end
 function surface_centroid(::Plate, body::AbstractBody, ::Val{:side_d})
     _, W, _ = _plate_skin(body); (zero(W), -W/2, zero(W))
 end
-surface_centroid_normal(sh::Plate, body::AbstractBody, v::Val) = surface_normal(sh, body, v, nothing)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:top})    = ( 0.0,  0.0,  1.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:bottom}) = ( 0.0,  0.0, -1.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_a}) = ( 1.0,  0.0,  0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_b}) = (-1.0,  0.0,  0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_c}) = ( 0.0,  1.0,  0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_d}) = ( 0.0, -1.0,  0.0)

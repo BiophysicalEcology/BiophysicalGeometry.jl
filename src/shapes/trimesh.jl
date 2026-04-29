@@ -98,13 +98,22 @@ function silhouette_area(::TriMesh, ::Naked, body::AbstractBody, θ)
     body.geometry.characteristic_dimension^2
 end
 
-# Radii fall back to half the characteristic dimension.
-skin_radius(::TriMesh, ::AbstractInsulation, body::AbstractBody) =
+# Radii fall back to half the characteristic dimension. Defined for Naked
+# only; insulation variants would require vertex-normal expansion which
+# isn't implemented (matching geometry's Naked-only support).
+skin_radius(::TriMesh, ::Naked, body::AbstractBody) =
     body.geometry.characteristic_dimension / 2
-insulation_radius(::TriMesh, ::AbstractInsulation, body::AbstractBody) =
+insulation_radius(::TriMesh, ::Naked, body::AbstractBody) =
     body.geometry.characteristic_dimension / 2
-flesh_radius(::TriMesh, ::AbstractInsulation, body::AbstractBody) =
+flesh_radius(::TriMesh, ::Naked, body::AbstractBody) =
     body.geometry.characteristic_dimension / 2
+
+skin_radius(::TriMesh, ::AbstractInsulation, ::AbstractBody) =
+    error("TriMesh does not yet support insulated bodies; use Naked.")
+insulation_radius(::TriMesh, ::AbstractInsulation, ::AbstractBody) =
+    error("TriMesh does not yet support insulated bodies; use Naked.")
+flesh_radius(::TriMesh, ::AbstractInsulation, ::AbstractBody) =
+    error("TriMesh does not yet support insulated bodies; use Naked.")
 
 # ── Composition opt-out ──────────────────────────────────────────────────
 

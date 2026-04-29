@@ -176,3 +176,39 @@ end
     @test flesh_volume(cb) ≈ flesh_volume(only)
     @test skin_radius(cb) == skin_radius(only)
 end
+
+@testset "silhouette_rasterized" begin
+    # Sphere of radius r → silhouette is π·r² regardless of sun direction.
+    sph = Body(Sphere(1u"kg", ρ), Naked())
+    cb = CompositeBody(; parts = (; sph), joins = (), root = :sph)
+    R = skin_radius(sph)
+    expected = π * R^2
+    A1 = silhouette_rasterized(cb, (1.0, 0.0, 0.0); resolution=256)
+    A2 = silhouette_rasterized(cb, (0.0, 1.0, 0.0); resolution=256)
+    A3 = silhouette_rasterized(cb, (1.0, 1.0, 1.0); resolution=256)
+    # Rasterisation accuracy ~ 1/resolution in each dimension; allow 1.5%.
+    @test abs(A1 - expected) / expected < 0.015
+    @test abs(A2 - expected) / expected < 0.015
+    @test abs(A3 - expected) / expected < 0.015
+
+    # Two equal spheres joined at the +z pole make a snowman along z.
+    # Projected from +z (along the join axis) → discs overlap → ≈ π·R².
+    # Projected from +x (across the axis) → side-by-side discs → ≈ 2·π·R².
+    # Per-part summed silhouette is always 2·π·R² regardless of view, so
+    # along-axis it overcounts by the overlap.
+    s1 = Body(Sphere(1u"kg", ρ), Naked())
+    s2 = Body(Sphere(1u"kg", ρ), Naked())
+    snowman = CompositeBody(;
+        parts = (; s1, s2),
+        joins = (Join(:s1, Attachment(:radial, (θ=0.0, φ=0.0), Disc(0.001u"m")),
+                      :s2, Attachment(:radial, (θ=0.0, φ=0.0), Disc(0.001u"m"))),),
+        root = :s1,
+    )
+    Aalong  = silhouette_rasterized(snowman, (0.0, 0.0, 1.0); resolution=256)
+    Across  = silhouette_rasterized(snowman, (1.0, 0.0, 0.0); resolution=256)
+    summed  = silhouette_area(snowman).normal
+    @test abs(Aalong - expected) / expected < 0.02
+    @test abs(Across - 2*expected) / (2*expected) < 0.02
+    @test summed ≈ 2 * expected            # summed counts both spheres
+    @test Aalong < summed                  # overlap → rasteriser < summed
+end

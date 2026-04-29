@@ -4,6 +4,7 @@ using Makie
 using Unitful
 using BiophysicalGeometry
 import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, HalfCylinder, HalfEllipsoid, TriMesh
+import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
 # Mesh helpers now live in core (src/meshes.jl); reuse them here.
 import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh,
@@ -135,12 +136,7 @@ end
 # ══════════════════════════════════════════════════════════════════════════════
 
 # Pick a fill colour per part — outer insulation if any, else flesh.
-function _part_color(body, cols)
-    gl = body.geometry.length
-    has_fur = haskey(gl, :length_fur) || haskey(gl, :a_semi_major_fur) ||
-              haskey(gl, :width_fur)  || haskey(gl, :radius_fur)
-    has_fur ? cols.fur : cols.flesh
-end
+_part_color(body, cols) = body.insulation isa Naked ? cols.flesh : cols.fur
 
 function _draw_composite!(p, b::CompositeBody, sc, cols)
     for (key, part) in pairs(b.parts)

@@ -63,20 +63,21 @@ Join(parent::Symbol, pa::Attachment, child::Symbol, ca::Attachment; twist=0.0) =
 # ── Pose ──────────────────────────────────────────────────────────────────
 
 """
-    Pose{T,R}
+    Pose{T,M}
 
 World-frame pose of a part: a translation (3-tuple of length quantities)
-and a 3×3 rotation matrix (dimensionless).
+and a 3×3 rotation matrix (dimensionless). Rotation matrices are never
+mutated after construction, so the identity matrix is shared.
 """
-struct Pose{T,R<:AbstractMatrix}
+struct Pose{T,M<:AbstractMatrix}
     translation::NTuple{3,T}
-    rotation::R
+    rotation::M
 end
 
 const _IDENTITY_ROTATION = [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
 
 identity_pose(::Type{T}) where {T} =
-    Pose((zero(T), zero(T), zero(T)), copy(_IDENTITY_ROTATION))
+    Pose((zero(T), zero(T), zero(T)), _IDENTITY_ROTATION)
 
 """
     apply_pose(pose, point) -> NTuple{3,Length}
@@ -115,7 +116,7 @@ end
 function rotation_align(a::NTuple{3,<:Real}, b::NTuple{3,<:Real})
     d = a[1]*b[1] + a[2]*b[2] + a[3]*b[3]
     if d > 1.0 - 1e-12
-        return copy(_IDENTITY_ROTATION)
+        return _IDENTITY_ROTATION
     elseif d < -1.0 + 1e-12
         # 180° rotation; pick any axis ⟂ a
         ax = abs(a[1]) < 0.9 ? (1.0, 0.0, 0.0) : (0.0, 1.0, 0.0)
@@ -243,8 +244,15 @@ function validate_join(parts::NamedTuple, j::Join)
     Ac = patch_area(c, j.child_attachment)
     rel = abs(Ap - Ac) / max(Ap, Ac)
     if rel > 1e-6
-        error("Join patches differ in area: parent $Ap vs child $Ac. " *
-              "FullCover sides must match; Disc sides must share radius.")
+        ps, cs = j.parent_attachment.shape, j.child_attachment.shape
+        if ps isa Disc && cs isa Disc
+            error("Join Disc radii must match: parent r=$(ps.radius), child r=$(cs.radius)")
+        elseif ps isa FullCover && cs isa FullCover
+            error("Join FullCover surfaces have unequal area: " *
+                  ":$(j.parent_attachment.surface)=$Ap vs :$(j.child_attachment.surface)=$Ac")
+        else
+            error("Join patch areas differ: parent $(typeof(ps))=$Ap vs child $(typeof(cs))=$Ac")
+        end
     end
     return nothing
 end
@@ -253,13 +261,11 @@ end
 
 function covered_areas(parts::NamedTuple, joins)
     ks = keys(parts)
-    z = (k -> zero(parts[k].geometry.area.total)).(ks)
-    cov = Dict{Symbol,Any}(k => z[i] for (i, k) in enumerate(ks))
+    A = typeof(parts[first(ks)].geometry.area.total)
+    cov = Dict{Symbol, A}(k => zero(parts[k].geometry.area.total) for k in ks)
     for j in joins
-        Ap = patch_area(parts[j.parent], j.parent_attachment)
-        Ac = patch_area(parts[j.child],  j.child_attachment)
-        cov[j.parent] = cov[j.parent] + Ap
-        cov[j.child]  = cov[j.child]  + Ac
+        cov[j.parent] += patch_area(parts[j.parent], j.parent_attachment)
+        cov[j.child]  += patch_area(parts[j.child],  j.child_attachment)
     end
     NamedTuple{ks}(Tuple(cov[k] for k in ks))
 end
@@ -306,29 +312,29 @@ end
 function solve_poses(parts::NamedTuple, joins, root::Symbol, root_pose::Pose)
     haskey(parts, root) || error("root :$root is not a part")
     # Adjacency: which joins involve which part
-    children_of = Dict{Symbol, Vector{Tuple{Symbol, Join, Bool}}}()
+    neighbours = Dict{Symbol, Vector{Tuple{Symbol, Join, Bool}}}()
     for j in joins
-        push!(get!(() -> [], children_of, j.parent), (j.child, j, true))
-        push!(get!(() -> [], children_of, j.child),  (j.parent, j, false))
+        push!(get!(() -> [], neighbours, j.parent), (j.child, j, true))
+        push!(get!(() -> [], neighbours, j.child),  (j.parent, j, false))
     end
 
     poses = Dict{Symbol, Pose}()
     poses[root] = root_pose
     visited = Set{Symbol}([root])
-    queue = [root]
-    while !isempty(queue)
-        cur = popfirst!(queue)
-        for (other, j, parent_is_cur) in get(children_of, cur, ())
+    stack = [root]
+    while !isempty(stack)
+        cur = pop!(stack)
+        for (other, j, parent_is_cur) in get(neighbours, cur, ())
             other in visited && continue
             push!(visited, other)
-            if parent_is_cur
-                poses[other] = _child_pose(parts[cur], poses[cur], parts[other], j)
+            poses[other] = if parent_is_cur
+                _child_pose(parts[cur], poses[cur], parts[other], j)
             else
                 # Reverse the join: child becomes parent. Swap and recompute.
                 rj = Join(j.child, j.child_attachment, j.parent, j.parent_attachment, -j.twist)
-                poses[other] = _child_pose(parts[cur], poses[cur], parts[other], rj)
+                _child_pose(parts[cur], poses[cur], parts[other], rj)
             end
-            push!(queue, other)
+            push!(stack, other)
         end
     end
     if length(visited) != length(parts)
@@ -408,10 +414,13 @@ end
 
 flesh_volume(b::CompositeBody) = sum(flesh_volume, values(b.parts))
 
-# Silhouette: per-part summed (upper bound — ignores part-on-part shadowing).
+# Silhouette for a composite is the per-part sum — an *upper bound* that
+# ignores part-on-part shadowing. For accurate values, project all parts
+# together and rasterise: see `silhouette_rasterized`.
 function silhouette_area(b::CompositeBody)
-    total_normal   = zero(silhouette_area(first(values(b.parts))).normal)
-    total_parallel = zero(silhouette_area(first(values(b.parts))).parallel)
+    s1 = silhouette_area(first(values(b.parts)))
+    total_normal   = zero(s1.normal)
+    total_parallel = zero(s1.parallel)
     for p in values(b.parts)
         s = silhouette_area(p)
         total_normal   += s.normal

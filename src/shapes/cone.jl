@@ -20,7 +20,6 @@ Cone(mass, density, b) = Cone(mass, density, b, 0.0)
 
 # Volume of a frustum = (π/3) · L · (R² + R·r + r²) with r = top_ratio·R.
 # With L = 2·b·R: V = (2π/3) · b · R³ · (1 + t + t²).
-_cone_top_ratio(s::Cone) = s.top_ratio
 _cone_volume_factor(t) = 1 + t + t^2
 
 function _cone_radius(volume, b, t)
@@ -29,7 +28,7 @@ end
 
 function geometry(shape::Cone, ::Naked)
     volume = shape.mass / shape.density
-    t = _cone_top_ratio(shape)
+    t = shape.top_ratio
     radius_skin = _cone_radius(volume, shape.b, t)
     length_skin = 2 * shape.b * radius_skin
     total = surface_area(shape, radius_skin, length_skin)
@@ -40,7 +39,7 @@ function geometry(shape::Cone, ::Naked)
 end
 function geometry(shape::Cone, fur::Fur)
     volume = shape.mass / shape.density
-    t = _cone_top_ratio(shape)
+    t = shape.top_ratio
     radius_skin = _cone_radius(volume, shape.b, t)
     radius_fur = radius_skin + fur.thickness
     length_skin = 2 * shape.b * radius_skin
@@ -59,7 +58,7 @@ function geometry(shape::Cone, fat::Fat)
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    t = _cone_top_ratio(shape)
+    t = shape.top_ratio
     radius_skin = _cone_radius(volume, shape.b, t)
     length_skin = 2 * shape.b * radius_skin
     radius_flesh = _cone_radius(flesh_volume, shape.b, t)
@@ -75,7 +74,7 @@ function geometry(shape::Cone, fur::Fur, fat::Fat)
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    t = _cone_top_ratio(shape)
+    t = shape.top_ratio
     radius_skin = _cone_radius(volume, shape.b, t)
     radius_fur = radius_skin + fur.thickness
     length_skin = 2 * shape.b * radius_skin
@@ -95,7 +94,7 @@ end
 # Aggregate surface area for a frustum: base disc + top disc + slant surface.
 # Slant length s = sqrt((R - r)² + L²) where r = t·R.
 function surface_area(shape::Cone, R, L)
-    t = _cone_top_ratio(shape)
+    t = shape.top_ratio
     r = t * R
     s = sqrt((R - r)^2 + L^2)
     π * R^2 + π * r^2 + π * (R + r) * s

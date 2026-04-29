@@ -7,6 +7,10 @@
 #
 # All helpers are unit-agnostic: caller passes raw numbers in whatever
 # units they want (typically metres or cm).
+#
+# Internal API: these underscore-prefixed names are consumed by
+# `silhouette.jl` and the Makie extension (`BiophysicalGeometryMakieExt`).
+# Not part of the public package API.
 
 # ── Cylinder ──────────────────────────────────────────────────────────────
 
@@ -127,20 +131,25 @@ _box_face_x(x, y1, y2, z1, z2) =
 _outer_length_cyl(body) =
     haskey(body.geometry.length, :length_fur) ? body.geometry.length.length_fur : body.geometry.length.length_skin
 
-function _part_outer_meshes(::Cylinder, body, sc)
-    R = ustrip(u"m", insulation_radius(body)) * sc
+# Outer length, skin length, and per-end fur axial overhang (all in m·sc).
+# Cylinder/Cone/HalfCylinder share the convention that fur extends past
+# both flesh ends by the same amount.
+function _axial_extent(body, sc)
     Lo = ustrip(u"m", _outer_length_cyl(body)) * sc
     Ls = ustrip(u"m", body.geometry.length.length_skin) * sc
-    pad = (Lo - Ls) / 2  # fur axial overhang per end
+    (Lo, Ls, (Lo - Ls) / 2)
+end
+
+function _part_outer_meshes(::Cylinder, body, sc)
+    R = ustrip(u"m", insulation_radius(body)) * sc
+    Lo, _, pad = _axial_extent(body, sc)
     z0 = -pad
     [_cylinder_tube(R, Lo; z0=z0), _cylinder_cap(R, z0), _cylinder_cap(R, z0 + Lo)]
 end
 
 function _part_outer_meshes(shape::Cone, body, sc)
     R = ustrip(u"m", insulation_radius(body)) * sc
-    Lo = ustrip(u"m", _outer_length_cyl(body)) * sc
-    Ls = ustrip(u"m", body.geometry.length.length_skin) * sc
-    pad = (Lo - Ls) / 2
+    Lo, _, pad = _axial_extent(body, sc)
     z0 = -pad
     Rtop = shape.top_ratio * R
     meshes = Any[_cone_tube(R, Rtop, Lo; z0=z0), _cylinder_cap(R, z0)]
@@ -185,10 +194,8 @@ end
 
 function _part_outer_meshes(::HalfCylinder, body, sc)
     R = ustrip(u"m", insulation_radius(body)) * sc
-    Lo = ustrip(u"m", _outer_length_cyl(body)) * sc
+    Lo, L_skin, pad = _axial_extent(body, sc)
     r_skin = ustrip(u"m", body.geometry.length.radius_skin) * sc
-    L_skin = ustrip(u"m", body.geometry.length.length_skin) * sc
-    pad = (Lo - L_skin) / 2
     z0 = -pad
     [_half_cylinder_tube(R, Lo; z0=z0), _half_cylinder_cap(R, z0), _half_cylinder_cap(R, z0 + Lo),
      _half_cylinder_flat(r_skin, L_skin; z0=0.0)]

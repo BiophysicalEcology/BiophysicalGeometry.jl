@@ -128,18 +128,13 @@ function _half_ellipsoid_dome(a, b, c)
     return π * b^2 + π * (a * b / e) * asin(e)
 end
 
-# Silhouette area: half of full ellipsoid's, so two halves reproduce the full.
+# Silhouette area: half of full ellipsoid's, so two halves reproduce the
+# full. For an ellipsoid (a, b, c) the silhouette projected along direction
+# d is an ellipse of area π·sqrt(b²c²·d_x² + a²c²·d_y² + a²b²·d_z²). With
+# the sun in the equatorial plane at angle θ from the long (a) axis,
+# d = (cos θ, sin θ, 0) gives π·c·sqrt(b²·cos²θ + a²·sin²θ).
 function silhouette_area(::HalfEllipsoid, a, b, c, θ)
-    a2 = cos(90)^2 * (cos(θ)^2 / a^2 + sin(θ)^2 / b^2) + sin(90)^2 / c^2
-    twohh = 2 * cos(90) * sin(90) * cos(θ) * (1 / b^2 - 1 / a^2)
-    b2 = sin(θ)^2 / a^2 + cos(θ)^2 / b^2
-    θ2 = 0.5 * atan(twohh, a2 - b2)
-    sps = sin(θ2); cps = cos(θ2)
-    a3 = cps * (a2 * cps + twohh * sps) + b2 * sps * sps
-    b3 = sps * (a2 * sps - twohh * cps) + b2 * cps * cps
-    semax1 = 1 / sqrt(a3)
-    semax2 = 1 / sqrt(b3)
-    π * semax1 * semax2 / 2
+    π * c * sqrt(b^2 * cos(θ)^2 + a^2 * sin(θ)^2) / 2
 end
 
 function silhouette_area(::HalfEllipsoid, ::Union{Naked,Fat}, body::AbstractBody)
