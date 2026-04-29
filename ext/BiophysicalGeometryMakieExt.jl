@@ -3,7 +3,14 @@ module BiophysicalGeometryMakieExt
 using Makie
 using Unitful
 using BiophysicalGeometry
-import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate
+import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, HalfCylinder, HalfEllipsoid, TriMesh
+import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
+# Mesh helpers now live in core (src/meshes.jl); reuse them here.
+import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh,
+    _half_cylinder_tube, _half_cylinder_cap, _half_cylinder_flat,
+    _half_ellipsoid_dome_mesh, _half_ellipsoid_flat_mesh,
+    _cone_tube, _box_face_x, _box_face_y, _box_face_z,
+    _part_outer_meshes, _transform_mesh
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
@@ -37,47 +44,6 @@ function _draw_layers!(target, layers)
         cond && _layer!(target, geom(), col)
     end
 end
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 3-D MESH GENERATORS
-# ══════════════════════════════════════════════════════════════════════════════
-
-function _cylinder_tube(r, L; nθ=72, nz=2, θ_end=2π, z0=0.0)
-    θ = LinRange(0.0, θ_end, nθ);  z = LinRange(z0, z0 + Float64(L), nz)
-    [r*cos(θi) for θi in θ, _ in z],
-    [r*sin(θi) for θi in θ, _ in z],
-    [zi        for _  in θ, zi in z]
-end
-
-function _cylinder_cap(r, z0; nθ=72, nr=12, θ_end=2π)
-    θ = LinRange(0.0, θ_end, nθ);  rv = LinRange(0.0, r, nr)
-    [rr*cos(θi) for θi in θ, rr in rv],
-    [rr*sin(θi) for θi in θ, rr in rv],
-    fill(Float64(z0), nθ, nr)
-end
-
-# Sphere is the special case _ellipsoid_mesh(r, r).
-function _ellipsoid_mesh(a, b; n=60, θ_end=2π)
-    θ = LinRange(0.0, θ_end, n);  φ = LinRange(0.0, π, n)
-    [a*sin(φj)*cos(θi) for θi in θ, φj in φ],
-    [b*sin(φj)*sin(θi) for θi in θ, φj in φ],
-    [b*cos(φj)         for _  in θ, φj in φ]
-end
-
-_box_face_z(x1, x2, y1, y2, z) =
-    ([xi for xi in (x1, x2), _ in (y1, y2)],
-     [yi for _ in (x1, x2), yi in (y1, y2)],
-     fill(Float64(z), 2, 2))
-
-_box_face_y(x1, x2, y, z1, z2) =
-    ([xi for xi in (x1, x2), _ in (z1, z2)],
-     fill(Float64(y), 2, 2),
-     [zi for _ in (x1, x2), zi in (z1, z2)])
-
-_box_face_x(x, y1, y2, z1, z2) =
-    (fill(Float64(x), 2, 2),
-     [yi for yi in (y1, y2), _ in (z1, z2)],
-     [zi for _ in (y1, y2), zi in (z1, z2)])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 3-D DRAW PRIMITIVES
@@ -136,6 +102,14 @@ function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
     fl.fur && _draw_surface!(p, _ellipsoid_mesh(r.ins  * ratio, r.ins;  θ_end=3π/2), cols.fur)
 end
 
+# For free-form meshes there is no analytic cutaway — just render the full
+# outer surface in flesh colour. (No layered fur/fat support yet for TriMesh.)
+function _draw_cutaway_shape!(p, shape::TriMesh, body, sc, cols)
+    for m in _part_outer_meshes(shape, body, sc)
+        _draw_surface!(p, m, cols.flesh)
+    end
+end
+
 function _draw_cutaway_shape!(p, shape::Plate, body, sc, cols)
     r  = _scaled_radii(body, sc)
     fl = _layer_flags(r)
@@ -154,6 +128,64 @@ function _draw_cutaway_shape!(p, shape::Plate, body, sc, cols)
     _draw_box_faces!(p, hl_f, hw_f, hh_f, cols.flesh; full=true)
     fl.fat && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat)
     fl.fur && _draw_box_faces!(p, hl_i, hw_i, hh_i, cols.fur)
+end
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPOSITE BODY DRAWING
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Pick a fill colour per part — outer insulation if any, else flesh.
+function _part_color(body, cols)
+    gl = body.geometry.length
+    has_fur = haskey(gl, :length_fur) || haskey(gl, :a_semi_major_fur) ||
+              haskey(gl, :width_fur)  || haskey(gl, :radius_fur)
+    has_fur ? cols.fur : cols.flesh
+end
+
+function _draw_composite!(p, b::CompositeBody, sc, cols)
+    for (key, part) in pairs(b.parts)
+        pose = b.poses[key]
+        col = _part_color(part, cols)
+        for mesh in _part_outer_meshes(part.shape, part, sc)
+            _draw_surface!(p, _transform_mesh(mesh..., pose, sc), col)
+        end
+    end
+end
+
+# Posed world-frame bounding box of a composite (in `sc` units): (mins, maxs).
+function _composite_bbox(b::CompositeBody, sc)
+    xmin, xmax = Inf, -Inf
+    ymin, ymax = Inf, -Inf
+    zmin, zmax = Inf, -Inf
+    for (key, part) in pairs(b.parts)
+        pose = b.poses[key]
+        for grid in _part_outer_meshes(part.shape, part, sc)
+            X, Y, Z = _transform_mesh(grid..., pose, sc)
+            xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
+            ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
+            zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
+        end
+    end
+    ((xmin, ymin, zmin), (xmax, ymax, zmax))
+end
+
+_composite_extent(b::CompositeBody, sc) =
+    let (mins, maxs) = _composite_bbox(b, sc)
+        max(maxs[1]-mins[1], maxs[2]-mins[2], maxs[3]-mins[3])
+    end
+
+# Posed bounding box for a single part (in `sc` units).
+function _part_bbox(shape, body, pose::Pose, sc)
+    xmin, xmax = Inf, -Inf
+    ymin, ymax = Inf, -Inf
+    zmin, zmax = Inf, -Inf
+    for grid in _part_outer_meshes(shape, body, sc)
+        X, Y, Z = _transform_mesh(grid..., pose, sc)
+        xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
+        ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
+        zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
+    end
+    ((xmin, ymin, zmin), (xmax, ymax, zmax))
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -270,7 +302,11 @@ end
 
 function Makie.plot!(p::BodyCutaway)
     body = p[:body][];  sc = p[:sc][]
-    _draw_cutaway_shape!(p, body.shape, body, sc, _colors(p))
+    if body isa CompositeBody
+        _draw_composite!(p, body, sc, _colors(p))
+    else
+        _draw_cutaway_shape!(p, body.shape, body, sc, _colors(p))
+    end
     p
 end
 
@@ -333,8 +369,13 @@ function BiophysicalGeometry.plot_body(body;
         fat_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
         fur_col   = RGBAf(0.76, 0.62, 0.42, 0.45))
 
-    shape_name = string(nameof(typeof(body.shape)))
-    ins_name   = string(nameof(typeof(body.insulation)))
+    if body isa CompositeBody
+        shape_name = "Composite($(length(body.parts)) parts)"
+        ins_name   = ""
+    else
+        shape_name = string(nameof(typeof(body.shape)))
+        ins_name   = string(nameof(typeof(body.insulation)))
+    end
 
     fig = Figure(size=(600, 560), backgroundcolor=:white)
     Label(fig[0, 1],
@@ -350,6 +391,111 @@ function BiophysicalGeometry.plot_body(body;
          PolyElement(polycolor=fur_col,   strokecolor=:black,       strokewidth=1)],
         ["Flesh / muscle", "Subcutaneous fat", "Fur / insulation"];
         orientation=:horizontal, framevisible=false)
+    return fig
+end
+
+"""
+    plot_body_silhouette(body::CompositeBody; resolution=128, sc=100.0, kwargs...) -> Figure
+
+Interactive Makie figure: 3-D cutaway of `body` on the left, rasterised
+silhouette projection on the right, with `zenith θ` and `azimuth φ`
+sliders below. The silhouette area updates live as you drag the sliders.
+
+The `resolution` kwarg controls the silhouette bitmap (≈ accuracy /
+performance trade-off). `sc` scales metres to plot units (default 100 → cm).
+"""
+function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
+        resolution::Integer = 128,
+        sc        = 100.0,
+        flesh_col = RGBAf(0.88, 0.48, 0.42, 1.00),
+        fat_col   = RGBAf(1.00, 0.97, 0.60, 0.75),
+        fur_col   = RGBAf(0.76, 0.62, 0.42, 0.45))
+
+    fig = Figure(size=(1100, 640), backgroundcolor=:white)
+    Label(fig[0, 1:2],
+          "BiophysicalGeometry.jl — silhouette projection (interactive)";
+          fontsize=13, font=:bold, padding=(0, 0, 8, 0))
+
+    ax3 = Axis3(fig[1, 1];
+                perspectiveness=0.5, viewmode=:fit, aspect=:data,
+                elevation=π/7, azimuth=5π/4,
+                xlabel="x (cm)", ylabel="y (cm)", zlabel="z (cm)",
+                title="Body + sun direction")
+    ax2 = Axis(fig[1, 2]; aspect=DataAspect(), title="Silhouette projection",
+               xlabel="u (cm)", ylabel="v (cm)")
+
+    cols = (flesh=flesh_col, fat=fat_col, fur=fur_col)
+    _draw_composite!(ax3, body, sc, cols)
+
+    sg = SliderGrid(fig[2, 1:2],
+        (label="zenith θ (0=overhead, π/2=horizon)", range=range(0.0, π/2, length=91),
+         startvalue=π/4, format="{:.2f} rad"),
+        (label="azimuth φ", range=range(0.0, 2π, length=361),
+         startvalue=0.0, format="{:.2f} rad"))
+    θobs = sg.sliders[1].value
+    φobs = sg.sliders[2].value
+
+    sun_dir = lift(θobs, φobs) do θ, φ
+        (sin(θ)*cos(φ), sin(θ)*sin(φ), cos(θ))
+    end
+
+    # Silhouette image + area (single rasteriser call per slider event).
+    result = lift(sun_dir) do d
+        silhouette_rasterized(body, d; resolution=resolution, return_image=true)
+    end
+
+    # Display bitmap as a heatmap in cm-coords on ax2.
+    img_x = lift(result) do r
+        LinRange(r.x_range[1] * sc, r.x_range[2] * sc, size(r.bitmap, 1))
+    end
+    img_y = lift(result) do r
+        LinRange(r.y_range[1] * sc, r.y_range[2] * sc, size(r.bitmap, 2))
+    end
+    img = lift(r -> Float32.(r.bitmap), result)
+    heatmap!(ax2, img_x, img_y, img; colormap=[:white, RGBAf(0.2, 0.2, 0.25, 1.0)],
+             colorrange=(0.0f0, 1.0f0))
+    # Refit ax2 limits to the projected bbox each time the sun direction
+    # changes (Makie won't auto-shrink the limits otherwise).
+    on(result) do r
+        xlims!(ax2, r.x_range[1] * sc, r.x_range[2] * sc)
+        ylims!(ax2, r.y_range[1] * sc, r.y_range[2] * sc)
+    end
+    notify(result)
+
+    # Sun-direction indicator: line from a sun marker to the root body's
+    # centre (so the target stays at the main body, not pulled around by
+    # legs/head when the bbox centre moves).
+    root_part = body.parts[body.root]
+    root_pose = body.poses[body.root]
+    (rb_min, rb_max) = _part_bbox(root_part.shape, root_part, root_pose, sc)
+    body_centre = Point3f((rb_min[1] + rb_max[1]) / 2,
+                          (rb_min[2] + rb_max[2]) / 2,
+                          (rb_min[3] + rb_max[3]) / 2)
+    # Whole-composite bbox just used to pick a sensible arrow length and
+    # axis limits.
+    (bb_min, bb_max) = _composite_bbox(body, sc)
+    extent = max(bb_max[1]-bb_min[1], bb_max[2]-bb_min[2], bb_max[3]-bb_min[3])
+    arrow_len = 0.7 * extent
+
+    sun_marker_pos = lift(d -> Point3f(body_centre[1] + arrow_len * d[1],
+                                        body_centre[2] + arrow_len * d[2],
+                                        body_centre[3] + arrow_len * d[3]), sun_dir)
+    sun_line = lift(p -> [p, body_centre], sun_marker_pos)
+    lines!(ax3, sun_line; color=:goldenrod, linewidth=3)
+    scatter!(ax3, lift(p -> [p], sun_marker_pos);
+             color=:goldenrod, markersize=20, marker=:circle,
+             strokecolor=:black, strokewidth=1)
+
+    # Expand axis limits so the sun marker is always visible.
+    pad = arrow_len * 1.05
+    xlims!(ax3, body_centre[1] - pad, body_centre[1] + pad)
+    ylims!(ax3, body_centre[2] - pad, body_centre[2] + pad)
+    zlims!(ax3, body_centre[3] - pad, body_centre[3] + pad)
+
+    Label(fig[3, 1:2],
+          lift(r -> "silhouette area = " * string(round(ustrip(u"cm^2", r.area), digits=1)) * " cm²", result);
+          fontsize=14, font=:bold)
+
     return fig
 end
 

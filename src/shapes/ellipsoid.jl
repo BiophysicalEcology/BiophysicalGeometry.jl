@@ -1,14 +1,30 @@
 """
-    Ellipsoid <: AbstractShape
+    Ellipsoid(mass, density, b, c, pole_a_truncation=0.0) <: AbstractShape
 
-An ellipsoidal organism shape.
+A prolate ellipsoid (b = c) with semi-major axis along `+x`. With
+`pole_a_truncation > 0`, the `+x` end is sliced flat: the cut plane sits at
+`x = (1 - pole_a_truncation) * a`. `pole_a_truncation = 0` is a full ellipsoid;
+`pole_a_truncation = 1` cuts through the centre (half ellipsoid).
+
+The flat face exposed by the cut has semi-axes
+`(b * sqrt(1 - (1 - pole_a_truncation)^2), c * sqrt(1 - (1 - pole_a_truncation)^2))`.
+
+Surface area is reported for the full (untruncated) ellipsoid — this slightly
+over-counts (by the removed spherical cap) for thin truncations.
 """
-mutable struct Ellipsoid{M,D,B,C} <: AbstractShape
+mutable struct Ellipsoid{M,D,B,C,T} <: AbstractShape
     mass::M
     density::D
     b::B
     c::C
+    pole_a_truncation::T
 end
+Ellipsoid(mass, density, b, c) = Ellipsoid(mass, density, b, c, 0.0)
+
+# x-position of the truncated pole_a (as a fraction of a). 1.0 = full ellipsoid.
+_pole_a_x_ratio(s::Ellipsoid) = 1 - s.pole_a_truncation
+# Radial scale at the truncated pole (so cut disc has y/z extents = scale * b/c).
+_pole_a_radial_scale(s::Ellipsoid) = sqrt(max(0.0, 1 - _pole_a_x_ratio(s)^2))
 
 function geometry(shape::Ellipsoid, ::Naked)
     volume = shape.mass / shape.density
@@ -243,3 +259,88 @@ flesh_radius(shape::Ellipsoid, insulation::Fat, body::AbstractBody) = body.geome
 # fur and fat
 insulation_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_fur
 flesh_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
+
+# Composition
+
+attachment_surfaces(::Ellipsoid) = (:pole_a, :pole_b, :equator)
+
+# Outer semi-axes (a, b, c). Returns the fur-level if furred, else skin.
+# Used by surface_area; attachment positions use _ellipsoid_skin instead.
+function _ellipsoid_outer(body::AbstractBody)
+    gl = body.geometry.length
+    if haskey(gl, :a_semi_major_fur)
+        (gl.a_semi_major_fur, gl.b_semi_minor_fur, gl.c_semi_minor_fur)
+    else
+        (gl.a_semi_major_skin, gl.b_semi_minor_skin, gl.c_semi_minor_skin)
+    end
+end
+
+# Skin-level semi-axes — used for flesh-anchored attachment positions.
+function _ellipsoid_skin(body::AbstractBody)
+    gl = body.geometry.length
+    (gl.a_semi_major_skin, gl.b_semi_minor_skin, gl.c_semi_minor_skin)
+end
+
+# Notional area for pole attachments. For a truncated pole_a this is the
+# actual flat-disc area exposed by the cut; for an untruncated pole it's
+# the cross-sectional disc through the pole (used as a loose upper bound).
+function surface_area(sh::Ellipsoid, body::AbstractBody, ::Val{:pole_a})
+    _, b, c = _ellipsoid_outer(body)
+    s = _pole_a_radial_scale(sh)
+    s == 0 ? π * b * c : π * (s * b) * (s * c)
+end
+function surface_area(::Ellipsoid, body::AbstractBody, ::Val{:pole_b})
+    _, b, c = _ellipsoid_outer(body)
+    π * b * c
+end
+
+# Loose bound for equator joins: full ellipsoid surface area.
+surface_area(::Ellipsoid, body::AbstractBody, ::Val{:equator}) =
+    body.geometry.area.total
+
+function validate_position(sh::Ellipsoid, ::AbstractBody, ::Val{:pole_a}, pos)
+    if sh.pole_a_truncation == 0
+        isempty(keys(pos)) || error(":pole_a position must be empty (;); got $(keys(pos))")
+    else
+        # Truncated pole_a is a flat disc — accept (;) (centre) or (r, φ).
+        isempty(keys(pos)) || issetequal(keys(pos), (:r, :φ)) ||
+            error(":pole_a (truncated) needs (;) or (r, φ); got $(keys(pos))")
+    end
+end
+validate_position(::Ellipsoid, body::AbstractBody, ::Val{:pole_b}, pos) =
+    validate_position(shape(body), body, Val(:pole_a), pos)
+function validate_position(::Ellipsoid, ::AbstractBody, ::Val{:equator}, pos)
+    issetequal(keys(pos), (:φ,)) ||
+        error(":equator position needs (φ,); got $(keys(pos))")
+end
+
+function surface_point(sh::Ellipsoid, body::AbstractBody, ::Val{:pole_a}, _)
+    a, _, _ = _ellipsoid_skin(body)
+    (a * _pole_a_x_ratio(sh), zero(a), zero(a))
+end
+function surface_point(::Ellipsoid, body::AbstractBody, ::Val{:pole_b}, _)
+    a, _, _ = _ellipsoid_skin(body)
+    (-a, zero(a), zero(a))
+end
+function surface_point(::Ellipsoid, body::AbstractBody, ::Val{:equator}, pos)
+    _, b, c = _ellipsoid_skin(body)
+    (zero(b), b * cos(pos.φ), c * sin(pos.φ))
+end
+
+surface_normal(::Ellipsoid, ::AbstractBody, ::Val{:pole_a}, _) = ( 1.0, 0.0, 0.0)
+surface_normal(::Ellipsoid, ::AbstractBody, ::Val{:pole_b}, _) = (-1.0, 0.0, 0.0)
+surface_normal(::Ellipsoid, ::AbstractBody, ::Val{:equator}, pos) =
+    (0.0, cos(pos.φ), sin(pos.φ))
+
+function surface_centroid(sh::Ellipsoid, body::AbstractBody, ::Val{:pole_a})
+    a, _, _ = _ellipsoid_skin(body); (a * _pole_a_x_ratio(sh), zero(a), zero(a))
+end
+function surface_centroid(::Ellipsoid, body::AbstractBody, ::Val{:pole_b})
+    a, _, _ = _ellipsoid_skin(body); (-a, zero(a), zero(a))
+end
+function surface_centroid(::Ellipsoid, body::AbstractBody, ::Val{:equator})
+    _, b, _ = _ellipsoid_skin(body); (zero(b), b, zero(b))  # arbitrary point on equator
+end
+surface_centroid_normal(::Ellipsoid, ::AbstractBody, ::Val{:pole_a}) = ( 1.0, 0.0, 0.0)
+surface_centroid_normal(::Ellipsoid, ::AbstractBody, ::Val{:pole_b}) = (-1.0, 0.0, 0.0)
+surface_centroid_normal(::Ellipsoid, ::AbstractBody, ::Val{:equator}) = (0.0, 1.0, 0.0)

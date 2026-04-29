@@ -3,15 +3,20 @@ module BiophysicalGeometry
 using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
-export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, LeopardFrog, DesertIguana
+export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, Cone, LeopardFrog, DesertIguana
+export HalfCylinder, HalfEllipsoid, TriMesh
 export AbstractInsulation, CompositeInsulation, Naked, Fur, Fat
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 export SurfaceAreas
+export CompositeBody, Join, Attachment, Disc, FullCover, AbstractAttachmentShape, Pose
+export attachment_surfaces
 
 export geometry, shape, insulation
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
-export surface_area, silhouette_area, SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying
+export surface_area, silhouette_area, silhouette_rasterized, SilhouetteResult
+export SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying
 export plot_body, draw_cutaway!, plot_cross_sections, draw_cross_sections!
+export plot_body_silhouette
 export draw_insulation_schematic!, draw_insulation_coverage!, plot_insulation_properties
 
 # Stubs — implemented in BiophysicalGeometryMakieExt when Makie is loaded.
@@ -37,13 +42,23 @@ end
 function plot_insulation_properties(args...; kwargs...)
     error("plot_insulation_properties requires a Makie backend — add `using GLMakie` (or CairoMakie / WGLMakie) first.")
 end
+function plot_body_silhouette(args...; kwargs...)
+    error("plot_body_silhouette requires a Makie backend — add `using GLMakie` (or CairoMakie / WGLMakie) first.")
+end
 
 include("geometry.jl")
+include("composition.jl")
 include("shapes/plate.jl")
 include("shapes/cylinder.jl")
 include("shapes/sphere.jl")
 include("shapes/ellipsoid.jl")
+include("shapes/cone.jl")
+include("shapes/half_cylinder.jl")
+include("shapes/half_ellipsoid.jl")
+include("shapes/trimesh.jl")
 include("shapes/desert_iguana.jl")
 include("shapes/leopard_frog.jl")
+include("meshes.jl")
+include("silhouette.jl")
 
 end
