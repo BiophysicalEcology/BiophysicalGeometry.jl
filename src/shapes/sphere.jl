@@ -110,3 +110,27 @@ flesh_radius(shape::Sphere, insulation::Fat, body) = body.geometry.length.radius
 # fur and fat
 insulation_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_fur
 flesh_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+
+# Composition
+
+attachment_surfaces(::Sphere) = (:radial,)
+
+surface_area(::Sphere, body::AbstractBody, ::Val{:radial}) =
+    4 * π * insulation_radius(body)^2
+
+function validate_position(::Sphere, body::AbstractBody, ::Val{:radial}, pos)
+    issetequal(keys(pos), (:θ, :φ)) ||
+        error(":radial position needs (θ, φ); got $(keys(pos))")
+end
+
+function surface_point(::Sphere, body::AbstractBody, ::Val{:radial}, pos)
+    R = skin_radius(body)
+    (R * sin(pos.θ) * cos(pos.φ), R * sin(pos.θ) * sin(pos.φ), R * cos(pos.θ))
+end
+surface_normal(::Sphere, ::AbstractBody, ::Val{:radial}, pos) =
+    (sin(pos.θ) * cos(pos.φ), sin(pos.θ) * sin(pos.φ), cos(pos.θ))
+
+function surface_centroid(::Sphere, body::AbstractBody, ::Val{:radial})
+    R = skin_radius(body); (R, zero(R), zero(R))  # arbitrary point
+end
+surface_centroid_normal(::Sphere, ::AbstractBody, ::Val{:radial}) = (1.0, 0.0, 0.0)
