@@ -5,19 +5,19 @@ using Test
 
 density = 1000.0u"kg/m^3"
 mass = 65.0u"kg"
-shape_b = 5.0
-shape_c = 5.0
-fur_thickness = 10.0u"mm"
+axis_ratio_b = 5.0
+axis_ratio_c = 5.0
+fibrous_layer_thickness = 10.0u"mm"
 fibre_diameter = 30.0u"μm"
 fibre_density = 3000u"cm^-2"
 fat_fraction = 0.1
 fat_density = 901.0u"kg/m^3"
 
-fur = Fur(fur_thickness, fibre_diameter, fibre_density)
-fat = Fat(fat_fraction, fat_density)
+fibrous_layer = FibrousLayer(fibrous_layer_thickness, fibre_diameter, fibre_density)
+fat_layer = FatLayer(fat_fraction, fat_density)
 
 # plate
-shape = Plate(mass, density, shape_b, shape_c)
+shape = Plate(mass, density, axis_ratio_b, axis_ratio_c)
 body = Body(shape, Naked())
 
 total_area(body)
@@ -37,7 +37,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fur)
+body = Body(shape, fibrous_layer)
 
 total_area(body)
 skin_area(body)
@@ -56,7 +56,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fat)
+body = Body(shape, fat_layer)
 
 total_area(body)
 skin_area(body)
@@ -71,7 +71,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, CompositeInsulation(fur, fat))
+body = Body(shape, CompositeInsulation(fibrous_layer, fat_layer))
 
 total_area(body)
 skin_area(body)
@@ -91,7 +91,7 @@ body.geometry.length
 body.geometry.volume
 
 # cylinder
-shape = Cylinder(mass, density, shape_b)
+shape = Cylinder(mass, density, axis_ratio_b)
 body = Body(shape, Naked())
 
 total_area(body)
@@ -112,7 +112,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fur)
+body = Body(shape, fibrous_layer)
 
 total_area(body)
 skin_area(body)
@@ -132,7 +132,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fat)
+body = Body(shape, fat_layer)
 
 total_area(body)
 skin_area(body)
@@ -152,7 +152,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, CompositeInsulation(fur, fat))
+body = Body(shape, CompositeInsulation(fibrous_layer, fat_layer))
 
 total_area(body)
 skin_area(body)
@@ -193,7 +193,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fur)
+body = Body(shape, fibrous_layer)
 
 total_area(body)
 skin_area(body)
@@ -212,7 +212,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fat)
+body = Body(shape, fat_layer)
 
 total_area(body)
 skin_area(body)
@@ -231,7 +231,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, CompositeInsulation(fur, fat))
+body = Body(shape, CompositeInsulation(fibrous_layer, fat_layer))
 
 total_area(body)
 skin_area(body)
@@ -251,7 +251,7 @@ body.geometry.length
 body.geometry.volume
 
 # ellipsoid
-shape = Ellipsoid(mass, density, shape_b, shape_c)
+shape = Ellipsoid(mass, density, axis_ratio_b, axis_ratio_c)
 body = Body(shape, Naked())
 
 total_area(body)
@@ -272,7 +272,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fur)
+body = Body(shape, fibrous_layer)
 
 total_area(body)
 skin_area(body)
@@ -292,7 +292,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, fat)
+body = Body(shape, fat_layer)
 
 total_area(body)
 skin_area(body)
@@ -312,7 +312,7 @@ body.geometry.area
 body.geometry.length
 body.geometry.volume
 
-body = Body(shape, CompositeInsulation(fur, fat))
+body = Body(shape, CompositeInsulation(fibrous_layer, fat_layer))
 
 total_area(body)
 skin_area(body)

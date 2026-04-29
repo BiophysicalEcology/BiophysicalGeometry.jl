@@ -4,13 +4,15 @@ using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
 export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, LeopardFrog, DesertIguana
-export AbstractInsulation, CompositeInsulation, Naked, Fur, Fat
+export AbstractInsulationLayer, AbstractSolidLayer, AbstractPorousLayer
+export CompositeInsulation, Naked, FibrousLayer, FatLayer
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 export SurfaceAreas
 
 export geometry, shape, insulation
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
-export surface_area, silhouette_area, SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying
+export surface_area, silhouette_area, ZenithAngleVarying
+export outer_insulation
 export plot_body, draw_cutaway!, plot_cross_sections, draw_cross_sections!
 export draw_insulation_schematic!, draw_insulation_coverage!, plot_insulation_properties
 

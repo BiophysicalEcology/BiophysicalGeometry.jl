@@ -18,10 +18,9 @@ function geometry(shape::DesertIguana, ::Naked)
     volume = shape.mass / shape.density
     # Cylinder approximation for body dimensions: assume L=2D=4R, so vol=4π R³
     r_skin = (volume / (4 * π)) ^ (1 / 3)
-    characteristic_dimension = volume ^ (1 / 3)
     # Surface areas from allometric functions (Porter and Tracy 1984)
     total, ventral = surface_area(shape)
-    return Geometry(volume, characteristic_dimension, (; r_skin), SurfaceAreas(; total, ventral))
+    return Geometry(volume, (; r_skin), SurfaceAreas(; total, ventral))
 end
 
 # Surface area
