@@ -10,7 +10,7 @@ end
 
 function geometry(shape::LeopardFrog, ::Naked)
     volume = shape.mass / shape.density
-    r_skin = (volume / (4 * π)) ^ (1 / 3)
+    r_skin = cbrt(volume / (4 * π))
     total = surface_area(shape)
     return Geometry(volume, (; r_skin), SurfaceAreas(; total))
 end

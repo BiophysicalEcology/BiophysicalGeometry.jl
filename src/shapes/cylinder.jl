@@ -11,14 +11,14 @@ end
 
 function geometry(shape::Cylinder, ::Naked)
     volume = shape.mass / shape.density
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+    radius_skin = cbrt(volume / (shape.axis_ratio_b * π * 2))
     length_skin = shape.axis_ratio_b * radius_skin * 2
     total = surface_area(shape, radius_skin, length_skin)
     return Geometry(volume, (; length_skin, radius_skin), SurfaceAreas(; total))
 end
 function geometry(shape::Cylinder, fibrous_layer::FibrousLayer)
     volume = shape.mass / shape.density
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+    radius_skin = cbrt(volume / (shape.axis_ratio_b * π * 2))
     radius_fur = radius_skin + fibrous_layer.thickness
     length_skin = shape.axis_ratio_b * radius_skin * 2
     length_fur = shape.axis_ratio_b * radius_skin * 2 + fibrous_layer.thickness * 2
@@ -33,9 +33,9 @@ function geometry(shape::Cylinder, fat_layer::FatLayer)
     fat_volume = fat_mass / fat_layer.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+    radius_skin = cbrt(volume / (shape.axis_ratio_b * π * 2))
     length_skin = shape.axis_ratio_b * radius_skin * 2
-    radius_flesh = (flesh_volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+    radius_flesh = cbrt(flesh_volume / (shape.axis_ratio_b * π * 2))
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin, length_skin)
     return Geometry(volume, (; radius_skin, length_skin, fat), SurfaceAreas(; total))
@@ -45,11 +45,11 @@ function geometry(shape::Cylinder, fibrous_layer::FibrousLayer, fat_layer::FatLa
     fat_volume = fat_mass / fat_layer.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+    radius_skin = cbrt(volume / (shape.axis_ratio_b * π * 2))
     radius_fur = radius_skin + fibrous_layer.thickness
     length_skin = shape.axis_ratio_b * radius_skin * 2
     length_fur = shape.axis_ratio_b * radius_skin * 2 + fibrous_layer.thickness * 2
-    radius_flesh = (flesh_volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+    radius_flesh = cbrt(flesh_volume / (shape.axis_ratio_b * π * 2))
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_fur, length_fur)
     skin = surface_area(shape, radius_skin, length_skin)

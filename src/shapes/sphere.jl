@@ -10,13 +10,13 @@ end
 
 function geometry(shape::Sphere, ::Naked)
     volume = shape.mass / shape.density
-    radius_skin = ((3 / 4) * volume / π) ^ (1 / 3)
+    radius_skin = cbrt((3 / 4) * volume / π)
     total = surface_area(shape, radius_skin)
     return Geometry(volume, (; radius_skin), SurfaceAreas(; total))
 end
 function geometry(shape::Sphere, fibrous_layer::FibrousLayer)
     volume = shape.mass / shape.density
-    radius_skin = ((3 / 4)* volume / π) ^ (1 / 3)
+    radius_skin = cbrt((3 / 4) * volume / π)
     radius_fur = radius_skin + fibrous_layer.thickness
     total = surface_area(shape, radius_fur)
     skin = surface_area(shape, radius_skin)
@@ -29,8 +29,8 @@ function geometry(shape::Sphere, fat_layer::FatLayer)
     fat_mass = shape.mass * fat_layer.fraction
     fat_volume = fat_mass / fat_layer.density
     flesh_volume = volume - fat_volume
-    radius_skin = ((3 / 4) * volume / π) ^ (1 / 3)
-    radius_flesh = ((3 / 4) * flesh_volume / π) ^ (1 / 3)
+    radius_skin = cbrt((3 / 4) * volume / π)
+    radius_flesh = cbrt((3 / 4) * flesh_volume / π)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin)
     return Geometry(volume, (; radius_skin, fat), SurfaceAreas(; total))
@@ -40,9 +40,9 @@ function geometry(shape::Sphere, fibrous_layer::FibrousLayer, fat_layer::FatLaye
     fat_mass = shape.mass * fat_layer.fraction
     fat_volume = fat_mass / fat_layer.density
     flesh_volume = volume - fat_volume
-    radius_skin = ((3 / 4) * volume / π) ^ (1 / 3)
+    radius_skin = cbrt((3 / 4) * volume / π)
     radius_fur = radius_skin + fibrous_layer.thickness
-    radius_flesh = ((3 / 4) * flesh_volume / π) ^ (1 / 3)
+    radius_flesh = cbrt((3 / 4) * flesh_volume / π)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_fur)
     skin = surface_area(shape, radius_skin)
