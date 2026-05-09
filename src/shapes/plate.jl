@@ -12,7 +12,7 @@ end
 
 function geometry(shape::Plate, ::Naked)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    length_skin = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c)
     width_skin = length_skin / shape.axis_ratio_b
     height_skin = length_skin / shape.axis_ratio_c 
     total = surface_area(shape, length_skin, width_skin, height_skin)
@@ -20,7 +20,7 @@ function geometry(shape::Plate, ::Naked)
 end
 function geometry(shape::Plate, fibrous_layer::FibrousLayer)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    length_skin = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c)
     width_skin = length_skin / shape.axis_ratio_b
     height_skin = length_skin / shape.axis_ratio_c
     length_fur = length_skin + fibrous_layer.thickness * 2
@@ -35,26 +35,26 @@ function geometry(shape::Plate, fibrous_layer::FibrousLayer)
 end
 function geometry(shape::Plate, fat_layer::FatLayer)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    length_skin = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c)
     width_skin = length_skin / shape.axis_ratio_b
     height_skin = length_skin / shape.axis_ratio_c
     fat_mass = shape.mass * fat_layer.fraction
     fat_volume = fat_mass / fat_layer.density
     flesh_volume = volume - fat_volume
-    width_flesh = (flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3) / shape.axis_ratio_b
+    width_flesh = cbrt(flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
     fat = (width_skin - width_flesh) / 2
     total = surface_area(shape, length_skin, width_skin, height_skin)
     return Geometry(volume, (; length_skin, width_skin, height_skin, fat), SurfaceAreas(; total))
 end
 function geometry(shape::Plate, fibrous_layer::FibrousLayer, fat_layer::FatLayer)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    length_skin = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c)
     width_skin = length_skin / shape.axis_ratio_b
     height_skin = length_skin / shape.axis_ratio_c
     fat_mass = shape.mass * fat_layer.fraction
     fat_volume = fat_mass / fat_layer.density
     flesh_volume = volume - fat_volume
-    width_flesh = (flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3) / shape.axis_ratio_b
+    width_flesh = cbrt(flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
     fat = (width_skin - width_flesh) / 2
     length_fur = length_skin + fibrous_layer.thickness * 2
     width_fur = width_skin + fibrous_layer.thickness * 2
