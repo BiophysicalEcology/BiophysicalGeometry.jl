@@ -15,7 +15,7 @@ struct DesertIguana{M,D} <: AbstractShape
 end
 
 function geometry(shape::DesertIguana, ::Naked)
-    volume = shape.mass / shape.density
+    volume = body_volume(shape)
     # Cylinder approximation for body dimensions: assume L=2D=4R, so vol=4π R³
     r_skin = cbrt(volume / (4 * π))
     # Surface areas from allometric functions (Porter and Tracy 1984)
@@ -58,8 +58,6 @@ function silhouette_area(shape::DesertIguana, ::Intermediate)
     return (normal + parallel) * 0.5
 end
 
-# Radius
+# Radius accessor — DesertIguana only supports Naked
 
-skin_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
-insulation_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
-flesh_radius(shape::DesertIguana, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
+_skin_radius(::DesertIguana, length) = length.r_skin

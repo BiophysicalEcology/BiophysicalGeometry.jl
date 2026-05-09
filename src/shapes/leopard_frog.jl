@@ -9,7 +9,7 @@ struct LeopardFrog{M,D} <: AbstractShape
 end
 
 function geometry(shape::LeopardFrog, ::Naked)
-    volume = shape.mass / shape.density
+    volume = body_volume(shape)
     r_skin = cbrt(volume / (4 * π))
     total = surface_area(shape)
     return Geometry(volume, (; r_skin), SurfaceAreas(; total))
@@ -31,8 +31,6 @@ function silhouette_area(shape::LeopardFrog, θ)
     return pct * area / 100
 end
 
-# Radius
+# Radius accessor — LeopardFrog only supports Naked
 
-skin_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
-insulation_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
-flesh_radius(shape::LeopardFrog, insulation::Naked, body::AbstractBody) = body.geometry.length.r_skin
+_skin_radius(::LeopardFrog, length) = length.r_skin

@@ -259,6 +259,37 @@ end
 # Volume
 
 """
+    body_volume(shape::AbstractShape)
+
+Return the body volume `mass / density` for `shape`.
+"""
+body_volume(shape::AbstractShape) = shape.mass / shape.density
+
+"""
+    fat_volume(shape::AbstractShape, fat_layer::FatLayer)
+
+Return the fat volume implied by a [`FatLayer`](@ref): `mass * fraction / density`.
+"""
+fat_volume(shape::AbstractShape, fat_layer::FatLayer) =
+    shape.mass * fat_layer.fraction / fat_layer.density
+
+"""
+    fibrous_areas(shape, fibrous_layer::FibrousLayer, skin_args::Tuple, fur_args::Tuple)
+
+Return a [`SurfaceAreas`](@ref) for a body wrapped in a [`FibrousLayer`](@ref). `skin_args`
+and `fur_args` are the positional arguments forwarded to `surface_area(shape, ...)` for the
+inner skin and outer fur surfaces respectively. `convection` is the skin area not occluded
+by fibres.
+"""
+function fibrous_areas(shape::AbstractShape, fibrous_layer::FibrousLayer, skin_args::Tuple, fur_args::Tuple)
+    skin = surface_area(shape, skin_args...)
+    total = surface_area(shape, fur_args...)
+    area_hair = insulation_area(fibrous_layer.fibre_diameter, fibrous_layer.fibre_density, skin)
+    convection = skin - area_hair
+    return SurfaceAreas(; total, skin, convection)
+end
+
+"""
     flesh_volume(body::AbstractBody)
 
 Return the volume of the flesh (non-fat) component of `body`.
@@ -297,6 +328,23 @@ insulation_radius(body::AbstractBody) = insulation_radius(shape(body), insulatio
 Return the radius of the flesh (inner) cylinder of `body`.
 """
 flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), body)
+
+# Generic radius dispatch. Each concrete shape only needs to define
+# `_skin_radius(shape, length)` and (where insulation is supported)
+# `_fur_radius(shape, length)` accessors over its `body.geometry.length` NamedTuple.
+
+skin_radius(s::AbstractShape, ::AbstractInsulationLayer, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length)
+
+insulation_radius(s::AbstractShape, ::Union{Naked,FatLayer}, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length)
+insulation_radius(s::AbstractShape, ::Union{FibrousLayer,CompositeInsulation}, b::AbstractBody) =
+    _fur_radius(s, b.geometry.length)
+
+flesh_radius(s::AbstractShape, ::Union{Naked,FibrousLayer}, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length)
+flesh_radius(s::AbstractShape, ::Union{FatLayer,CompositeInsulation}, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length) - b.geometry.length.fat
 
 # Helpers for handling CompositeInsulation
 
