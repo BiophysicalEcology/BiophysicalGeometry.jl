@@ -47,5 +47,6 @@ include("shapes/sphere.jl")
 include("shapes/ellipsoid.jl")
 include("shapes/desert_iguana.jl")
 include("shapes/leopard_frog.jl")
+include("display.jl")
 
 end
