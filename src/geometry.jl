@@ -249,7 +249,7 @@ evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractB
 """
     insulation_area(fibre_diameter, fibre_density, skin)
 
-Return the total cross-sectional area of insulation fibres (fur/feather) covering `skin` area,
+Return the total cross-sectional area of insulation fibres (fur, feathers, etc.) covering `skin` area,
 given `fibre_diameter` and `fibre_density` (fibres per unit area).
 """
 function insulation_area(fibre_diameter, fibre_density, skin)
@@ -274,16 +274,16 @@ fat_volume(shape::AbstractShape, fat_layer::FatLayer) =
     shape.mass * fat_layer.fraction / fat_layer.density
 
 """
-    fibrous_areas(shape, fibrous_layer::FibrousLayer, skin_args::Tuple, fur_args::Tuple)
+    fibrous_areas(shape, fibrous_layer::FibrousLayer, skin_args::Tuple, fibrous_args::Tuple)
 
 Return a [`SurfaceAreas`](@ref) for a body wrapped in a [`FibrousLayer`](@ref). `skin_args`
-and `fur_args` are the positional arguments forwarded to `surface_area(shape, ...)` for the
-inner skin and outer fur surfaces respectively. `convection` is the skin area not occluded
+and `fibrous_args` are the positional arguments forwarded to `surface_area(shape, ...)` for the
+inner skin and outer fibrous surfaces respectively. `convection` is the skin area not occluded
 by fibres.
 """
-function fibrous_areas(shape::AbstractShape, fibrous_layer::FibrousLayer, skin_args::Tuple, fur_args::Tuple)
+function fibrous_areas(shape::AbstractShape, fibrous_layer::FibrousLayer, skin_args::Tuple, fibrous_args::Tuple)
     skin = surface_area(shape, skin_args...)
-    total = surface_area(shape, fur_args...)
+    total = surface_area(shape, fibrous_args...)
     area_hair = insulation_area(fibrous_layer.fibre_diameter, fibrous_layer.fibre_density, skin)
     convection = skin - area_hair
     return SurfaceAreas(; total, skin, convection)
@@ -331,7 +331,7 @@ flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), b
 
 # Generic radius dispatch. Each concrete shape only needs to define
 # `_skin_radius(shape, length)` and (where insulation is supported)
-# `_fur_radius(shape, length)` accessors over its `body.geometry.length` NamedTuple.
+# `_fibrous_radius(shape, length)` accessors over its `body.geometry.length` NamedTuple.
 
 skin_radius(s::AbstractShape, ::AbstractInsulationLayer, b::AbstractBody) =
     _skin_radius(s, b.geometry.length)
@@ -339,7 +339,7 @@ skin_radius(s::AbstractShape, ::AbstractInsulationLayer, b::AbstractBody) =
 insulation_radius(s::AbstractShape, ::Union{Naked,FatLayer}, b::AbstractBody) =
     _skin_radius(s, b.geometry.length)
 insulation_radius(s::AbstractShape, ::Union{FibrousLayer,CompositeInsulation}, b::AbstractBody) =
-    _fur_radius(s, b.geometry.length)
+    _fibrous_radius(s, b.geometry.length)
 
 flesh_radius(s::AbstractShape, ::Union{Naked,FibrousLayer}, b::AbstractBody) =
     _skin_radius(s, b.geometry.length)

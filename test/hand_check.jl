@@ -25,22 +25,22 @@ fibre_density_per_area = 3000u"cm^-2"
 fat_fraction = 0.1
 fat_density = 901.0u"kg/m^3"
 
-T_fur = uconvert(u"m", fibrous_thickness)
-D_fur = uconvert(u"m", fibre_diameter)
-N_fur = uconvert(u"m^-2", fibre_density_per_area)
+T_fibrous = uconvert(u"m", fibrous_thickness)
+D_fibrous = uconvert(u"m", fibre_diameter)
+N_fibrous = uconvert(u"m^-2", fibre_density_per_area)
 
 V       = uconvert(u"m^3", mass / density)                       # body volume
 V_fat   = uconvert(u"m^3", mass * fat_fraction / fat_density)    # fat volume
 V_flesh = V - V_fat
 
-hair_area(skin) = π * (D_fur/2)^2 * N_fur * skin                 # fur cross-section over skin
+hair_area(skin) = π * (D_fibrous/2)^2 * N_fibrous * skin                 # fibrous cross-section over skin
 
 θ = uconvert(u"rad", 30.0u"°")
 
 # === Sphere: V = 4/3 π R³ ===
 
 R       = uconvert(u"m", cbrt(3V       / (4π)))
-R_fur   = R + T_fur
+R_fibrous   = R + T_fibrous
 R_flesh = uconvert(u"m", cbrt(3V_flesh / (4π)))
 fat_sphere = R - R_flesh
 
@@ -52,8 +52,8 @@ sil_sphere(r) = π * r^2           # disc projection (orientation-independent)
 
 Rc       = uconvert(u"m", cbrt(V       / (2π * axis_ratio_b)))
 Lc       = 2 * axis_ratio_b * Rc
-Rc_fur   = Rc + T_fur
-Lc_fur   = Lc + 2 * T_fur
+Rc_fibrous   = Rc + T_fibrous
+Lc_fibrous   = Lc + 2 * T_fibrous
 Rc_flesh = uconvert(u"m", cbrt(V_flesh / (2π * axis_ratio_b)))
 fat_cyl  = Rc - Rc_flesh
 
@@ -70,9 +70,9 @@ sil_cyl_zenith(r, l, θ)  = 2 * r * l * sin(θ) + π * r^2 * cos(θ)
 Lp       = uconvert(u"m", cbrt(V * axis_ratio_b * axis_ratio_c))
 Wp       = Lp / axis_ratio_b
 Hp       = Lp / axis_ratio_c
-Lp_fur   = Lp + 2 * T_fur
-Wp_fur   = Wp + 2 * T_fur
-Hp_fur   = Hp + 2 * T_fur
+Lp_fibrous   = Lp + 2 * T_fibrous
+Wp_fibrous   = Wp + 2 * T_fibrous
+Hp_fibrous   = Hp + 2 * T_fibrous
 Wp_flesh = uconvert(u"m", cbrt(V_flesh * axis_ratio_b * axis_ratio_c)) / axis_ratio_b
 fat_plate = (Wp - Wp_flesh) / 2
 
@@ -87,9 +87,9 @@ plate_faces(L, W, H) = (L*W, L*H, W*H)
 b_e     = uconvert(u"m", cbrt(3V / (4π * axis_ratio_b)))
 c_e     = b_e
 a_e     = axis_ratio_b * b_e
-b_efur  = b_e + T_fur
-c_efur  = c_e + T_fur
-a_efur  = a_e + T_fur
+b_efibrous  = b_e + T_fibrous
+c_efibrous  = c_e + T_fibrous
+a_efibrous  = a_e + T_fibrous
 
 # Prolate spheroid (c = b < a) surface area: S = 2πb² + 2π (a b / e) asin(e),  e = √(a² - b²)/a
 function S_prolate(a, b, c)
@@ -143,15 +143,15 @@ check("Plate/Naked volume",           V,                       0.065u"m^3")
 
 # --- Plate / FibrousLayer ---
 S_plate_skin = S_plate(Lp, Wp, Hp)
-S_plate_fur  = S_plate(Lp_fur, Wp_fur, Hp_fur)
-faces_p_fur  = plate_faces(Lp_fur, Wp_fur, Hp_fur)
-check("Plate/Fur total_area",         S_plate_fur,            1.3504052015217138u"m^2")
-check("Plate/Fur skin_area",          S_plate_skin,           1.2163304590093516u"m^2")
-check("Plate/Fur evaporation_area",   S_plate_skin - hair_area(S_plate_skin),
+S_plate_fibrous  = S_plate(Lp_fibrous, Wp_fibrous, Hp_fibrous)
+faces_p_fibrous  = plate_faces(Lp_fibrous, Wp_fibrous, Hp_fibrous)
+check("Plate/Fibrous total_area",         S_plate_fibrous,            1.3504052015217138u"m^2")
+check("Plate/Fibrous skin_area",          S_plate_skin,           1.2163304590093516u"m^2")
+check("Plate/Fibrous evaporation_area",   S_plate_skin - hair_area(S_plate_skin),
                                                               1.190537258877413u"m^2")
-check("Plate/Fur insulation_radius",  Wp_fur/2,               0.12756673438603786u"m")
-check("Plate/Fur sil_normal",         max(faces_p_fur...),    0.3050547569365926u"m^2")
-check("Plate/Fur sil_parallel",       min(faces_p_fur...),    0.06509308688767174u"m^2")
+check("Plate/Fibrous insulation_radius",  Wp_fibrous/2,               0.12756673438603786u"m")
+check("Plate/Fibrous sil_normal",         max(faces_p_fibrous...),    0.3050547569365926u"m^2")
+check("Plate/Fibrous sil_parallel",       min(faces_p_fibrous...),    0.06509308688767174u"m^2")
 
 # --- Plate / FatLayer ---
 check("Plate/Fat flesh_radius",       Wp/2 - fat_plate,       0.11304560873468857u"m")
@@ -168,14 +168,14 @@ check("Cyl/Naked sil_zenith(30°)",    sil_cyl_zenith(Rc, Lc, θ), 0.20654751165
 
 # --- Cylinder / FibrousLayer ---
 S_cyl_skin = S_cyl(Rc, Lc)
-S_cyl_fur  = S_cyl(Rc_fur, Lc_fur)
-check("Cyl/Fur total_area",           S_cyl_fur,              1.2362029452302272u"m^2")
-check("Cyl/Fur skin_area",            S_cyl_skin,             1.1222291434482228u"m^2")
-check("Cyl/Fur evaporation_area",     S_cyl_skin - hair_area(S_cyl_skin),
+S_cyl_fibrous  = S_cyl(Rc_fibrous, Lc_fibrous)
+check("Cyl/Fibrous total_area",           S_cyl_fibrous,              1.2362029452302272u"m^2")
+check("Cyl/Fibrous skin_area",            S_cyl_skin,             1.1222291434482228u"m^2")
+check("Cyl/Fibrous evaporation_area",     S_cyl_skin - hair_area(S_cyl_skin),
                                                               1.098431432327489u"m^2")
-check("Cyl/Fur insulation_radius",    Rc_fur,                 0.13742495668987026u"m")
-check("Cyl/Fur sil_normal",           sil_cyl_normal(Rc_fur, Lc_fur), 0.355724381353875u"m^2")
-check("Cyl/Fur sil_zenith(30°)",      sil_cyl_zenith(Rc_fur, Lc_fur, θ),
+check("Cyl/Fibrous insulation_radius",    Rc_fibrous,                 0.13742495668987026u"m")
+check("Cyl/Fibrous sil_normal",           sil_cyl_normal(Rc_fibrous, Lc_fibrous), 0.355724381353875u"m^2")
+check("Cyl/Fibrous sil_zenith(30°)",      sil_cyl_zenith(Rc_fibrous, Lc_fibrous, θ),
                                                               0.22924427552149568u"m^2")
 
 # --- Cylinder / FatLayer ---
@@ -188,12 +188,12 @@ check("Sphere/Naked sil_normal",      sil_sphere(R),          0.1954488131662070
 check("Sphere/Naked sil_zenith(30°)", sil_sphere(R),          0.19544881316620707u"m^2")
 
 # --- Sphere / FibrousLayer ---
-check("Sphere/Fur total_area",        S_sphere(R_fur),        0.8457394607097782u"m^2")
-check("Sphere/Fur skin_area",         S_sphere(R),            0.7817952526648283u"m^2")
-check("Sphere/Fur evaporation_area",  S_sphere(R) - hair_area(S_sphere(R)),
+check("Sphere/Fibrous total_area",        S_sphere(R_fibrous),        0.8457394607097782u"m^2")
+check("Sphere/Fibrous skin_area",         S_sphere(R),            0.7817952526648283u"m^2")
+check("Sphere/Fibrous evaporation_area",  S_sphere(R) - hair_area(S_sphere(R)),
                                                               0.7652166976637417u"m^2")
-check("Sphere/Fur insulation_radius", R_fur,                  0.25942591981125845u"m")
-check("Sphere/Fur sil_normal",        sil_sphere(R_fur),      0.21143486517744456u"m^2")
+check("Sphere/Fibrous insulation_radius", R_fibrous,                  0.25942591981125845u"m")
+check("Sphere/Fibrous sil_normal",        sil_sphere(R_fibrous),      0.21143486517744456u"m^2")
 
 # --- Sphere / FatLayer ---
 check("Sphere/Fat flesh_radius",      R_flesh,                0.2398340405261943u"m")
@@ -209,9 +209,9 @@ check("Ell/Naked sil_parallel",       sil_ell_parallel(b_e, c_e),  0.06684255386
 # correspond to "horizontal prolate ellipsoid, sun zenith θ from vertical".
 # For reference:
 #   - textbook horizontal-ellipsoid projection at θ=30°  ≈ 0.2914 m² (Naked)
-#                                                        ≈ 0.3158 m² (Fur)
+#                                                        ≈ 0.3158 m² (Fibrous)
 #   - package implementation at θ=30°                    ≈ 0.0767 m² (Naked)
-#                                                        ≈ 0.0875 m² (Fur)
+#                                                        ≈ 0.0875 m² (Fibrous)
 # See the comment block on `silhouette_area(::Ellipsoid, a, b, c, θ)` in
 # src/shapes/ellipsoid.jl. Once the orientation convention is clarified
 # (e.g. against the original Fortran/NicheMapR source), reinstate one of
@@ -219,14 +219,14 @@ check("Ell/Naked sil_parallel",       sil_ell_parallel(b_e, c_e),  0.06684255386
 
 # --- Ellipsoid / FibrousLayer ---
 S_ell_skin = S_prolate(a_e, b_e, c_e)
-S_ell_fur  = S_prolate(a_efur, b_efur, c_efur)
-check("Ell/Fur total_area",           S_ell_fur,              1.1587845516526847u"m^2")
-check("Ell/Fur skin_area",            S_ell_skin,             1.0679282565991794u"m^2")
-check("Ell/Fur evaporation_area",     S_ell_skin - hair_area(S_ell_skin),
+S_ell_fibrous  = S_prolate(a_efibrous, b_efibrous, c_efibrous)
+check("Ell/Fibrous total_area",           S_ell_fibrous,              1.1587845516526847u"m^2")
+check("Ell/Fibrous skin_area",            S_ell_skin,             1.0679282565991794u"m^2")
+check("Ell/Fibrous evaporation_area",     S_ell_skin - hair_area(S_ell_skin),
                                                               1.045282036532102u"m^2")
-check("Ell/Fur insulation_radius",    b_efur,                 0.15586516277963594u"m")
-check("Ell/Fur sil_normal",           sil_ell_normal(a_efur, b_efur), 0.3620218640142718u"m^2")
-# Ell/Fur zenith silhouette: same divergence — see note above.
+check("Ell/Fibrous insulation_radius",    b_efibrous,                 0.15586516277963594u"m")
+check("Ell/Fibrous sil_normal",           sil_ell_normal(a_efibrous, b_efibrous), 0.3620218640142718u"m^2")
+# Ell/Fibrous zenith silhouette: same divergence — see note above.
 
 # --- DesertIguana / Naked ---
 check("DI/Naked total_area",          di_total,               2.144297264544543u"m^2")

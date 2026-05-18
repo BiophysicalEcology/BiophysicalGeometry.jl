@@ -21,11 +21,11 @@ end
 function geometry(shape::Cylinder, fibrous_layer::FibrousLayer)
     volume = body_volume(shape)
     radius_skin = _cylinder_radius(shape, volume)
-    radius_fur = radius_skin + fibrous_layer.thickness
+    radius_fibrous = radius_skin + fibrous_layer.thickness
     length_skin = shape.axis_ratio_b * radius_skin * 2
-    length_fur = length_skin + fibrous_layer.thickness * 2
-    areas = fibrous_areas(shape, fibrous_layer, (radius_skin, length_skin), (radius_fur, length_fur))
-    return Geometry(volume, (; radius_skin, radius_fur, length_skin, length_fur), areas)
+    length_fibrous = length_skin + fibrous_layer.thickness * 2
+    areas = fibrous_areas(shape, fibrous_layer, (radius_skin, length_skin), (radius_fibrous, length_fibrous))
+    return Geometry(volume, (; radius_skin, radius_fibrous, length_skin, length_fibrous), areas)
 end
 function geometry(shape::Cylinder, fat_layer::FatLayer)
     volume = body_volume(shape)
@@ -41,13 +41,13 @@ function geometry(shape::Cylinder, fibrous_layer::FibrousLayer, fat_layer::FatLa
     volume = body_volume(shape)
     flesh_volume = volume - fat_volume(shape, fat_layer)
     radius_skin = _cylinder_radius(shape, volume)
-    radius_fur = radius_skin + fibrous_layer.thickness
+    radius_fibrous = radius_skin + fibrous_layer.thickness
     length_skin = shape.axis_ratio_b * radius_skin * 2
-    length_fur = length_skin + fibrous_layer.thickness * 2
+    length_fibrous = length_skin + fibrous_layer.thickness * 2
     radius_flesh = _cylinder_radius(shape, flesh_volume)
     fat = radius_skin - radius_flesh
-    areas = fibrous_areas(shape, fibrous_layer, (radius_skin, length_skin), (radius_fur, length_fur))
-    return Geometry(volume, (; radius_skin, radius_fur, length_skin, length_fur, fat), areas)
+    areas = fibrous_areas(shape, fibrous_layer, (radius_skin, length_skin), (radius_fibrous, length_fibrous))
+    return Geometry(volume, (; radius_skin, radius_fibrous, length_skin, length_fibrous, fat), areas)
 end
 
 # Surface area
@@ -68,9 +68,9 @@ end
 _cylinder_outer_dims(::Union{Naked,FatLayer}, body) =
     (body.geometry.length.radius_skin, body.geometry.length.length_skin)
 _cylinder_outer_dims(::Union{FibrousLayer,CompositeInsulation}, body) =
-    (body.geometry.length.radius_fur, body.geometry.length.length_fur)
+    (body.geometry.length.radius_fibrous, body.geometry.length.length_fibrous)
 
 # Radius accessors
 
 _skin_radius(::Cylinder, length) = length.radius_skin
-_fur_radius(::Cylinder, length) = length.radius_fur
+_fibrous_radius(::Cylinder, length) = length.radius_fibrous

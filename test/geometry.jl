@@ -26,8 +26,8 @@ const composite = CompositeInsulation(fibrous_layer, fat_layer)
     @test BG.fat_volume(sphere, fat_layer) == mass * fat_fraction / fat_density
 
     skin_args = (0.25u"m",)
-    fur_args = (0.26u"m",)
-    fa = BG.fibrous_areas(sphere, fibrous_layer, skin_args, fur_args)
+    fibrous_args = (0.26u"m",)
+    fa = BG.fibrous_areas(sphere, fibrous_layer, skin_args, fibrous_args)
     expected_skin = 4 * π * (0.25u"m")^2
     expected_total = 4 * π * (0.26u"m")^2
     expected_hair = π * (fibre_diameter / 2)^2 * fibre_density * expected_skin

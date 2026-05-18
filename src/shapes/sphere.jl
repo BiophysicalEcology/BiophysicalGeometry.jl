@@ -19,9 +19,9 @@ end
 function geometry(shape::Sphere, fibrous_layer::FibrousLayer)
     volume = body_volume(shape)
     radius_skin = _sphere_radius(volume)
-    radius_fur = radius_skin + fibrous_layer.thickness
-    areas = fibrous_areas(shape, fibrous_layer, (radius_skin,), (radius_fur,))
-    return Geometry(volume, (; radius_skin, radius_fur), areas)
+    radius_fibrous = radius_skin + fibrous_layer.thickness
+    areas = fibrous_areas(shape, fibrous_layer, (radius_skin,), (radius_fibrous,))
+    return Geometry(volume, (; radius_skin, radius_fibrous), areas)
 end
 function geometry(shape::Sphere, fat_layer::FatLayer)
     volume = body_volume(shape)
@@ -36,11 +36,11 @@ function geometry(shape::Sphere, fibrous_layer::FibrousLayer, fat_layer::FatLaye
     volume = body_volume(shape)
     flesh_volume = volume - fat_volume(shape, fat_layer)
     radius_skin = _sphere_radius(volume)
-    radius_fur = radius_skin + fibrous_layer.thickness
+    radius_fibrous = radius_skin + fibrous_layer.thickness
     radius_flesh = _sphere_radius(flesh_volume)
     fat = radius_skin - radius_flesh
-    areas = fibrous_areas(shape, fibrous_layer, (radius_skin,), (radius_fur,))
-    return Geometry(volume, (; radius_skin, radius_fur, fat), areas)
+    areas = fibrous_areas(shape, fibrous_layer, (radius_skin,), (radius_fibrous,))
+    return Geometry(volume, (; radius_skin, radius_fibrous, fat), areas)
 end
 
 # Surface area
@@ -63,9 +63,9 @@ function silhouette_area(shape::Sphere, ins::AbstractInsulationLayer, body::Abst
 end
 
 _sphere_outer_radius(::Union{Naked,FatLayer}, body) = body.geometry.length.radius_skin
-_sphere_outer_radius(::Union{FibrousLayer,CompositeInsulation}, body) = body.geometry.length.radius_fur
+_sphere_outer_radius(::Union{FibrousLayer,CompositeInsulation}, body) = body.geometry.length.radius_fibrous
 
 # Radius accessors
 
 _skin_radius(::Sphere, length) = length.radius_skin
-_fur_radius(::Sphere, length) = length.radius_fur
+_fibrous_radius(::Sphere, length) = length.radius_fibrous

@@ -45,16 +45,16 @@ function geometry(shape::Ellipsoid, fibrous_layer::FibrousLayer)
     volume = _ellipsoid_volume(shape)
     skin_axes = _ellipsoid_skin_axes(shape, volume)
     (a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) = skin_axes
-    a_semi_major_fur = a_semi_major_skin + fibrous_layer.thickness
-    b_semi_minor_fur = b_semi_minor_skin + fibrous_layer.thickness
-    c_semi_minor_fur = c_semi_minor_skin + fibrous_layer.thickness
-    fur_axes = (a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur)
+    a_semi_major_fibrous = a_semi_major_skin + fibrous_layer.thickness
+    b_semi_minor_fibrous = b_semi_minor_skin + fibrous_layer.thickness
+    c_semi_minor_fibrous = c_semi_minor_skin + fibrous_layer.thickness
+    fibrous_axes = (a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous)
     areas = fibrous_areas(shape, fibrous_layer,
         _ellipsoid_surface_args(skin_axes),
-        _ellipsoid_surface_args(fur_axes))
+        _ellipsoid_surface_args(fibrous_axes))
     return Geometry(volume,
         (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-           a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur),
+           a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous),
         areas)
 end
 function geometry(shape::Ellipsoid, fat_layer::FatLayer)
@@ -99,16 +99,16 @@ function geometry(shape::Ellipsoid, fibrous_layer::FibrousLayer, fat_layer::FatL
     b_semi_minor_skin = _w * (b_flesh + raw_fat) + (1 - _w) * (b_full + zero(raw_fat))
     c_semi_minor_skin = _w * (c_flesh + raw_fat) + (1 - _w) * (c_full + zero(raw_fat))
     skin_axes = (a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
-    a_semi_major_fur = a_semi_major_skin + fibrous_layer.thickness
-    b_semi_minor_fur = b_semi_minor_skin + fibrous_layer.thickness
-    c_semi_minor_fur = c_semi_minor_skin + fibrous_layer.thickness
-    fur_axes = (a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur)
+    a_semi_major_fibrous = a_semi_major_skin + fibrous_layer.thickness
+    b_semi_minor_fibrous = b_semi_minor_skin + fibrous_layer.thickness
+    c_semi_minor_fibrous = c_semi_minor_skin + fibrous_layer.thickness
+    fibrous_axes = (a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous)
     areas = fibrous_areas(shape, fibrous_layer,
         _ellipsoid_surface_args(skin_axes),
-        _ellipsoid_surface_args(fur_axes))
+        _ellipsoid_surface_args(fibrous_axes))
     return Geometry(volume,
         (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-           a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat),
+           a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous, fat),
         areas)
 end
 
@@ -239,12 +239,12 @@ _ellipsoid_outer_axes(::Union{Naked,FatLayer}, body) = (
     body.geometry.length.c_semi_minor_skin,
 )
 _ellipsoid_outer_axes(::Union{FibrousLayer,CompositeInsulation}, body) = (
-    body.geometry.length.a_semi_major_fur,
-    body.geometry.length.b_semi_minor_fur,
-    body.geometry.length.c_semi_minor_fur,
+    body.geometry.length.a_semi_major_fibrous,
+    body.geometry.length.b_semi_minor_fibrous,
+    body.geometry.length.c_semi_minor_fibrous,
 )
 
 # Radius accessors
 
 _skin_radius(::Ellipsoid, length) = length.b_semi_minor_skin
-_fur_radius(::Ellipsoid, length) = length.b_semi_minor_fur
+_fibrous_radius(::Ellipsoid, length) = length.b_semi_minor_fibrous
