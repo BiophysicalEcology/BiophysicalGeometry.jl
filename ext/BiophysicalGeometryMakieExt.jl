@@ -118,12 +118,12 @@ function _draw_cutaway_shape!(p, ::Cylinder, body, sc, cols)
 
     gl     = body.geometry.length
     L_s    = ustrip(u"m", gl.length_skin) * sc
-    L_i    = ustrip(u"m", _get(gl, :length_fur, gl.length_skin)) * sc
-    z0_fur = -(L_i - L_s) / 2
+    L_i    = ustrip(u"m", _get(gl, :length_fibrous, gl.length_skin)) * sc
+    z0_fibrous = -(L_i - L_s) / 2
 
     _draw_cylinder!(p, r.flesh, L_s, cols.flesh)
     fl.fat_layer && _draw_cylinder!(p, r.skin, L_s, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_cylinder!(p, r.ins,  L_i, cols.fibrous_layer; θ_end=3π/2, z0=z0_fur)
+    fl.fibrous_layer && _draw_cylinder!(p, r.ins,  L_i, cols.fibrous_layer; θ_end=3π/2, z0=z0_fibrous)
 end
 
 function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
@@ -144,9 +144,9 @@ function _draw_cutaway_shape!(p, shape::Plate, body, sc, cols)
     hw_s = ustrip(u"m", gl.width_skin)  / 2 * sc
     hl_s = ustrip(u"m", gl.length_skin) / 2 * sc
     hh_s = ustrip(u"m", gl.height_skin) / 2 * sc
-    hw_i = ustrip(u"m", _get(gl, :width_fur,  gl.width_skin))  / 2 * sc
-    hl_i = ustrip(u"m", _get(gl, :length_fur, gl.length_skin)) / 2 * sc
-    hh_i = ustrip(u"m", _get(gl, :height_fur, gl.height_skin)) / 2 * sc
+    hw_i = ustrip(u"m", _get(gl, :width_fibrous,  gl.width_skin))  / 2 * sc
+    hl_i = ustrip(u"m", _get(gl, :length_fibrous, gl.length_skin)) / 2 * sc
+    hh_i = ustrip(u"m", _get(gl, :height_fibrous, gl.height_skin)) / 2 * sc
     hw_f = r.flesh
     hl_f = hw_f * Float64(shape.b)
     hh_f = hl_f / Float64(shape.c)
@@ -180,7 +180,7 @@ function _section_layers(::Cylinder, body, mode, r, cols)
     gl   = body.geometry.length
     r_f, r_s, r_i = r.flesh, r.skin, r.ins
     hl_s = gl.length_skin / 2
-    hl_i = _get(gl, :length_fur, gl.length_skin) / 2
+    hl_i = _get(gl, :length_fibrous, gl.length_skin) / 2
     if mode === :long
         [
             (r_i > r_s, () -> _rect_pts(r_i, hl_i), cols.fibrous_layer),
@@ -201,11 +201,11 @@ function _section_layers(shape::Plate, body, mode, r, cols)
     r_f, r_s, r_i = r.flesh, r.skin, r.ins
     if mode === :long
         d_s = (gl.length_skin / 2, gl.height_skin / 2)
-        d_i = (_get(gl, :length_fur, gl.length_skin) / 2, _get(gl, :height_fur, gl.height_skin) / 2)
+        d_i = (_get(gl, :length_fibrous, gl.length_skin) / 2, _get(gl, :height_fibrous, gl.height_skin) / 2)
         d_f = (r_f * shape.b, r_f * shape.b / shape.c)
     else
         d_s = (gl.width_skin / 2, gl.height_skin / 2)
-        d_i = (_get(gl, :width_fur, gl.width_skin) / 2, _get(gl, :height_fur, gl.height_skin) / 2)
+        d_i = (_get(gl, :width_fibrous, gl.width_skin) / 2, _get(gl, :height_fibrous, gl.height_skin) / 2)
         d_f = (r_f, (r_f * shape.b) / shape.c)
     end
     [
@@ -232,7 +232,7 @@ end
 
 function _section_limits(::Cylinder, body, r, pad)
     gl   = body.geometry.length
-    hl_i = _get(gl, :length_fur, gl.length_skin) / 2
+    hl_i = _get(gl, :length_fibrous, gl.length_skin) / 2
     ri   = _pu(r.ins) * (1 + pad)
     li   = _pu(hl_i)  * (1 + pad)
     _limits(ri, li, ri, li)
@@ -240,9 +240,9 @@ end
 
 function _section_limits(::Plate, body, r, pad)
     gl   = body.geometry.length
-    hl_i = _get(gl, :length_fur, gl.length_skin) / 2
-    hh_i = _get(gl, :height_fur, gl.height_skin) / 2
-    hw_i = _get(gl, :width_fur,  gl.width_skin)  / 2
+    hl_i = _get(gl, :length_fibrous, gl.length_skin) / 2
+    hh_i = _get(gl, :height_fibrous, gl.height_skin) / 2
+    hw_i = _get(gl, :width_fibrous,  gl.width_skin)  / 2
     _limits(_pu(hl_i) * (1 + pad), _pu(hh_i) * (1 + pad),
             _pu(hw_i) * (1 + pad), _pu(hh_i) * (1 + pad))
 end

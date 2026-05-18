@@ -8,47 +8,39 @@ struct Sphere{M,D} <: AbstractShape
     density::D
 end
 
+_sphere_radius(volume) = cbrt((3 / 4) * volume / π)
+
 function geometry(shape::Sphere, ::Naked)
-    volume = shape.mass / shape.density
-    radius_skin = cbrt((3 / 4) * volume / π)
+    volume = body_volume(shape)
+    radius_skin = _sphere_radius(volume)
     total = surface_area(shape, radius_skin)
     return Geometry(volume, (; radius_skin), SurfaceAreas(; total))
 end
 function geometry(shape::Sphere, fibrous_layer::FibrousLayer)
-    volume = shape.mass / shape.density
-    radius_skin = cbrt((3 / 4) * volume / π)
-    radius_fur = radius_skin + fibrous_layer.thickness
-    total = surface_area(shape, radius_fur)
-    skin = surface_area(shape, radius_skin)
-    area_hair = insulation_area(fibrous_layer.fibre_diameter, fibrous_layer.fibre_density, skin)
-    convection = skin - area_hair
-    return Geometry(volume, (; radius_skin, radius_fur), SurfaceAreas(; total, skin, convection))
+    volume = body_volume(shape)
+    radius_skin = _sphere_radius(volume)
+    radius_fibrous = radius_skin + fibrous_layer.thickness
+    areas = fibrous_areas(shape, fibrous_layer, (radius_skin,), (radius_fibrous,))
+    return Geometry(volume, (; radius_skin, radius_fibrous), areas)
 end
 function geometry(shape::Sphere, fat_layer::FatLayer)
-    volume = shape.mass / shape.density
-    fat_mass = shape.mass * fat_layer.fraction
-    fat_volume = fat_mass / fat_layer.density
-    flesh_volume = volume - fat_volume
-    radius_skin = cbrt((3 / 4) * volume / π)
-    radius_flesh = cbrt((3 / 4) * flesh_volume / π)
+    volume = body_volume(shape)
+    flesh_volume = volume - fat_volume(shape, fat_layer)
+    radius_skin = _sphere_radius(volume)
+    radius_flesh = _sphere_radius(flesh_volume)
     fat = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin)
     return Geometry(volume, (; radius_skin, fat), SurfaceAreas(; total))
 end
 function geometry(shape::Sphere, fibrous_layer::FibrousLayer, fat_layer::FatLayer)
-    volume = shape.mass / shape.density
-    fat_mass = shape.mass * fat_layer.fraction
-    fat_volume = fat_mass / fat_layer.density
-    flesh_volume = volume - fat_volume
-    radius_skin = cbrt((3 / 4) * volume / π)
-    radius_fur = radius_skin + fibrous_layer.thickness
-    radius_flesh = cbrt((3 / 4) * flesh_volume / π)
+    volume = body_volume(shape)
+    flesh_volume = volume - fat_volume(shape, fat_layer)
+    radius_skin = _sphere_radius(volume)
+    radius_fibrous = radius_skin + fibrous_layer.thickness
+    radius_flesh = _sphere_radius(flesh_volume)
     fat = radius_skin - radius_flesh
-    total = surface_area(shape, radius_fur)
-    skin = surface_area(shape, radius_skin)
-    area_hair = insulation_area(fibrous_layer.fibre_diameter, fibrous_layer.fibre_density, skin)
-    convection = skin - area_hair
-    return Geometry(volume, (; radius_skin, radius_fur, fat), SurfaceAreas(; total, skin, convection))
+    areas = fibrous_areas(shape, fibrous_layer, (radius_skin,), (radius_fibrous,))
+    return Geometry(volume, (; radius_skin, radius_fibrous, fat), areas)
 end
 
 # Surface area
@@ -57,52 +49,23 @@ function surface_area(shape::Sphere, body::AbstractBody)
     r = body.geometry.length_skin / 2
     return surface_area(shape, r)
 end
-function surface_area(shape::Sphere, r)
-    4 * π * r ^ 2
-end
+surface_area(shape::Sphere, r) = 4 * π * r ^ 2
 
 # Silhouette area
 
 silhouette_area(shape::Sphere, r) = π * r ^ 2
-function silhouette_area(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    return silhouette_area(shape, r)
-end
-function silhouette_area(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fur
-    return silhouette_area(shape, r)
-end
-function silhouette_area(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody)
-    r = body.geometry.length.radius_skin
-    area = silhouette_area(shape, r)
-    normal = area
-    parallel = area
-    return (; normal, parallel)
-end
-function silhouette_area(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fur
-    area = silhouette_area(shape, r)
-    normal = area
-    parallel = area
-    return (; normal, parallel)
+
+silhouette_area(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
+    silhouette_area(shape, _sphere_outer_radius(ins, body))
+function silhouette_area(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody)
+    area = silhouette_area(shape, _sphere_outer_radius(ins, body))
+    return (; normal=area, parallel=area)
 end
 
-# Radius
+_sphere_outer_radius(::Union{Naked,FatLayer}, body) = body.geometry.length.radius_skin
+_sphere_outer_radius(::Union{FibrousLayer,CompositeInsulation}, body) = body.geometry.length.radius_fibrous
 
-skin_radius(shape::Sphere, insulation::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
+# Radius accessors
 
-# naked
-insulation_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
-
-# fibrous layer
-insulation_radius(shape::Sphere, insulation::FibrousLayer, body) = body.geometry.length.radius_fur
-flesh_radius(shape::Sphere, insulation::FibrousLayer, body) = body.geometry.length.radius_skin
-
-# fat layer
-insulation_radius(shape::Sphere, insulation::FatLayer, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Sphere, insulation::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
-
-# fibrous + fat layer
-insulation_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_fur
-flesh_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+_skin_radius(::Sphere, length) = length.radius_skin
+_fibrous_radius(::Sphere, length) = length.radius_fibrous
