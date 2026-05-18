@@ -24,6 +24,10 @@ function _ellipsoid_skin_axes(shape::Ellipsoid, volume)
     return (a, b, c)
 end
 
+# Smooth Heaviside on a length: ≈ 1 for fat ≫ ε, ≈ 0 for fat ≪ -ε, smooth
+# everywhere. Used to blend the "no fat" and "with fat" geometry branches.
+@inline _smooth_step_meters(fat) = 0.5 * (1 + fat / sqrt(fat*fat + (1e-9u"m")^2))
+
 _ellipsoid_eccentricity(a, c) = sqrt(a^2 - c^2) / a
 
 # Pass the (a, b, c, e) tuple into the unitless surface_area method.
@@ -58,17 +62,23 @@ function geometry(shape::Ellipsoid, fat_layer::FatLayer)
     fat_v = _ellipsoid_fat_volume(shape, fat_layer)
     flesh_v = volume - fat_v
     (a_flesh, b_flesh, c_flesh) = _ellipsoid_skin_axes(shape, flesh_v)
-    fat = prolate_fat_layer(
+    raw_fat = prolate_fat_layer(
         ustrip(u"m^3", flesh_v),
         ustrip(u"m^3", fat_v),
         shape.axis_ratio_b,
         ustrip(u"m", b_flesh))
-    skin_axes = if fat <= 0.0u"m"
-        _ellipsoid_skin_axes(shape, volume)
-    else
-        (a_flesh + fat, b_flesh + fat, c_flesh + fat)
-    end
-    (a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) = skin_axes
+    # Smooth-blend the "not enough fat" fallback (full-volume axes, fat=0)
+    # and the normal flesh+fat axes. The previous if/else was a value
+    # discontinuity at raw_fat = 0 — bad for reverse-mode AD. A single
+    # smooth Heaviside drives both the axes blend and the effective_fat
+    # value, so they stay consistent at every raw_fat.
+    (a_full, b_full, c_full) = _ellipsoid_skin_axes(shape, volume)
+    _w = _smooth_step_meters(raw_fat)
+    fat = _w * raw_fat                                  # smooth-clamped to ≥ 0
+    a_semi_major_skin = _w * (a_flesh + raw_fat) + (1 - _w) * (a_full + zero(raw_fat))
+    b_semi_minor_skin = _w * (b_flesh + raw_fat) + (1 - _w) * (b_full + zero(raw_fat))
+    c_semi_minor_skin = _w * (c_flesh + raw_fat) + (1 - _w) * (c_full + zero(raw_fat))
+    skin_axes = (a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
     total = surface_area(shape, _ellipsoid_surface_args(skin_axes)...)
     return Geometry(volume, (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat), SurfaceAreas(; total))
 end
@@ -77,17 +87,18 @@ function geometry(shape::Ellipsoid, fibrous_layer::FibrousLayer, fat_layer::FatL
     fat_v = _ellipsoid_fat_volume(shape, fat_layer)
     flesh_v = volume - fat_v
     (a_flesh, b_flesh, c_flesh) = _ellipsoid_skin_axes(shape, flesh_v)
-    fat = prolate_fat_layer(
+    raw_fat = prolate_fat_layer(
         ustrip(u"m^3", flesh_v),
         ustrip(u"m^3", fat_v),
         shape.axis_ratio_b,
         ustrip(u"m", b_flesh))
-    skin_axes = if fat <= 0.0u"m"
-        _ellipsoid_skin_axes(shape, volume)
-    else
-        (a_flesh + fat, b_flesh + fat, c_flesh + fat)
-    end
-    (a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) = skin_axes
+    (a_full, b_full, c_full) = _ellipsoid_skin_axes(shape, volume)
+    _w = _smooth_step_meters(raw_fat)
+    fat = _w * raw_fat
+    a_semi_major_skin = _w * (a_flesh + raw_fat) + (1 - _w) * (a_full + zero(raw_fat))
+    b_semi_minor_skin = _w * (b_flesh + raw_fat) + (1 - _w) * (b_full + zero(raw_fat))
+    c_semi_minor_skin = _w * (c_flesh + raw_fat) + (1 - _w) * (c_full + zero(raw_fat))
+    skin_axes = (a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
     a_semi_major_fur = a_semi_major_skin + fibrous_layer.thickness
     b_semi_minor_fur = b_semi_minor_skin + fibrous_layer.thickness
     c_semi_minor_fur = c_semi_minor_skin + fibrous_layer.thickness
@@ -129,31 +140,33 @@ function prolate_fat_layer(
     T2a = T1^2
     T2b = ( (C / (3*A)) - (B^2) / (9 * A^2) )^3
 
-    # Prevent sqrt of negative number
-    T2 = (T2a + T2b >= 0) ? sqrt(T2a + T2b) : 0.0
+    # Prevent sqrt of negative number with a smooth surrogate:
+    # `sqrt(max(x, 0))` has an infinite-slope kink at x=0; the previous
+    # ternary version had a value-discontinuity in the derivative as well.
+    # `sqrt((x + sqrt(x² + ε²)) / 2)` is the standard smooth `sqrt of relu`
+    # — equal to sqrt(x) for x ≫ ε, smoothly → 0 for x ≪ -ε, finite-slope at 0.
+    _T2sum = T2a + T2b
+    T2 = sqrt((_T2sum + sqrt(_T2sum*_T2sum + 1e-24)) / 2)
 
     T3 = B / (3*A)
 
-    # Cube roots with sign handling
+    # Smooth signed cube root: cbrt'(0) is +∞, which propagates as NaN through
+    # reverse-mode AD when the Cardano discriminant lands near zero. The previous
+    # `abs(x) < 1e-12 && return zero(x)` cutoff itself was a discontinuity
+    # (derivative jumps from 0 inside the dead-zone to ∞ at the boundary).
+    # Regularise instead: `sign-preserving cube root of x ≈ x / (x² + ε²)^(1/3)`
+    # is the standard smooth surrogate — exact for |x| ≫ ε, finite-slope at 0,
+    # and infinitely differentiable everywhere.
+    @inline _smooth_signed_cuberoot(x) = x / (x*x + 1e-24)^(1//3)
 
-    function signed_cuberoot(x)
-        # cbrt'(0) is +∞, which is mathematically correct but propagates as
-        # NaN through Enzyme when chained with very-small (Cardano formula
-        # discriminant) values. The cubic root of an effectively-zero
-        # discriminant is itself effectively zero with effectively-zero
-        # contribution to the cubic's solution, so clamp the singular point
-        # to zero to keep the derivative finite.
-        abs(x) < 1e-12 && return zero(x)
-        x < 0 ? -((-x)^(1//3)) : x^(1//3)
-    end
+    root1 = _smooth_signed_cuberoot(T1 + T2)
+    root2 = _smooth_signed_cuberoot(T1 - T2)
 
-    root1 = signed_cuberoot(T1 + T2)
-    root2 = signed_cuberoot(T1 - T2)
-
-    fat = (root1 + root2 - T3) * u"m"
-
-    # If negative, not enough fat to cover spheroid
-    return max(0.0u"m", fat)
+    # Raw cubic-formula thickness; can be negative when the body cannot hold
+    # the requested fat volume. We return the *raw* value (with units) and
+    # let the caller smooth-clamp it as part of the geometry blend, so the
+    # downstream `effective_fat` and the axes blend share a single Heaviside.
+    return (root1 + root2 - T3) * u"m"
 end
 
 # Surface area
