@@ -120,53 +120,24 @@ function prolate_fat_layer(
     axis_ratio_b,
     semi_minor_flesh
 )
-    # Flesh is approximated as a prolate spheroid:
-    # Volume = 4/3 π * A * B * C
-    # C = B, A = axis_ratio_b * B
-    # → B = ((3 * volume) / (4 * axis_ratio_b * π))^(1//3)
-    # Fat thickness X is root of cubic: A X^3 + B X^2 + C X + D = 0
-    A = 1.0
-    B = axis_ratio_b * semi_minor_flesh + 2 * semi_minor_flesh
-    C = 2 * axis_ratio_b * semi_minor_flesh^2 + semi_minor_flesh^2
-    D = axis_ratio_b * semi_minor_flesh^3 - (( (fat_volume + flesh_volume) * 3.0 ) / (4.0 * π))
-
-    # Components of cubic formula
-
-    T1a = (-B)^3 / (27 * A^3)
-    T1b = (B * C) / (6 * A^2)
-    T1c = D / (2 * A)
-    T1  = T1a + T1b - T1c
-
-    T2a = T1^2
-    T2b = ( (C / (3*A)) - (B^2) / (9 * A^2) )^3
-
-    # Prevent sqrt of negative number with a smooth surrogate:
-    # `sqrt(max(x, 0))` has an infinite-slope kink at x=0; the previous
-    # ternary version had a value-discontinuity in the derivative as well.
-    # `sqrt((x + sqrt(x² + ε²)) / 2)` is the standard smooth `sqrt of relu`
-    # — equal to sqrt(x) for x ≫ ε, smoothly → 0 for x ≪ -ε, finite-slope at 0.
-    _T2sum = T2a + T2b
-    T2 = sqrt((_T2sum + sqrt(_T2sum*_T2sum + 1e-24)) / 2)
-
-    T3 = B / (3*A)
-
-    # Smooth signed cube root: cbrt'(0) is +∞, which propagates as NaN through
-    # reverse-mode AD when the Cardano discriminant lands near zero. The previous
-    # `abs(x) < 1e-12 && return zero(x)` cutoff itself was a discontinuity
-    # (derivative jumps from 0 inside the dead-zone to ∞ at the boundary).
-    # Regularise instead: `sign-preserving cube root of x ≈ x / (x² + ε²)^(1/3)`
-    # is the standard smooth surrogate — exact for |x| ≫ ε, finite-slope at 0,
-    # and infinitely differentiable everywhere.
-    @inline _smooth_signed_cuberoot(x) = x / (x*x + 1e-24)^(1//3)
-
-    root1 = _smooth_signed_cuberoot(T1 + T2)
-    root2 = _smooth_signed_cuberoot(T1 - T2)
-
-    # Raw cubic-formula thickness; can be negative when the body cannot hold
-    # the requested fat volume. We return the *raw* value (with units) and
-    # let the caller smooth-clamp it as part of the geometry blend, so the
-    # downstream `effective_fat` and the axes blend share a single Heaviside.
-    return (root1 + root2 - T3) * u"m"
+    # Find uniform fat thickness X such that the outer prolate spheroid
+    # (semi-axes a+X, b+X, b+X, a = axis_ratio_b*b) has volume V_total.
+    # Solves f(X) = (a+X)(b+X)² = (3/4π)*V_total via Newton's method.
+    # f is strictly monotone (f'(X) > 0 for all X > -b), so there is exactly
+    # one non-negative root. Fixed 10 iterations reaches machine precision
+    # without branching, which keeps Enzyme AD well-behaved. Replaces the
+    # Cardano formula which silently returns the wrong root when the
+    # discriminant is negative (casus irreducibilis).
+    b      = semi_minor_flesh
+    a      = axis_ratio_b * b
+    target = (3.0 / (4.0 * π)) * (flesh_volume + fat_volume)
+    X      = 0.0
+    for _ in 1:10
+        bX = b + X
+        aX = a + X
+        X -= (aX * bX^2 - target) / (bX^2 + 2 * aX * bX)
+    end
+    return max(0.0, X) * u"m"
 end
 
 # Surface area
