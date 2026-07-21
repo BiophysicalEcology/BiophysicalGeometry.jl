@@ -121,16 +121,19 @@ flesh_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometr
 
 # Composition
 
-attachment_surfaces(::Plate) = (:top, :bottom, :side_a, :side_b, :side_c, :side_d)
+attachment_surfaces(::Plate) = (Top, Bottom, SideA, SideB, SideC, SideD)
 
-function _plate_outer(body::AbstractBody)
-    gl = body.geometry.length
-    if haskey(gl, :length_fur)
-        (gl.length_fur, gl.width_fur, gl.height_fur)
-    else
-        (gl.length_skin, gl.width_skin, gl.height_skin)
-    end
-end
+# Outer (insulation-aware) dimensions (L, W, H). Insulation-dispatched.
+outer_dims(sh::Plate, body::AbstractBody) =
+    outer_dims(sh, outer_insulation(insulation(body)), body)
+outer_dims(::Plate, ::Union{Naked,Fat}, body::AbstractBody) =
+    (L = body.geometry.length.length_skin,
+     W = body.geometry.length.width_skin,
+     H = body.geometry.length.height_skin)
+outer_dims(::Plate, ::Fur, body::AbstractBody) =
+    (L = body.geometry.length.length_fur,
+     W = body.geometry.length.width_fur,
+     H = body.geometry.length.height_fur)
 
 # Skin-level dimensions — used for flesh-anchored attachment positions.
 function _plate_skin(body::AbstractBody)
@@ -138,85 +141,82 @@ function _plate_skin(body::AbstractBody)
     (gl.length_skin, gl.width_skin, gl.height_skin)
 end
 
-function surface_area(::Plate, body::AbstractBody, ::Val{:top})
-    L, W, _ = _plate_outer(body); L * W
+function surface_area(sh::Plate, body::AbstractBody, ::Top)
+    d = outer_dims(sh, body); d.L * d.W
 end
-surface_area(sh::Plate, body::AbstractBody, ::Val{:bottom}) = surface_area(sh, body, Val(:top))
-function surface_area(::Plate, body::AbstractBody, ::Val{:side_a})
-    _, W, H = _plate_outer(body); W * H
+surface_area(sh::Plate, body::AbstractBody, ::Bottom) = surface_area(sh, body, Top())
+function surface_area(sh::Plate, body::AbstractBody, ::SideA)
+    d = outer_dims(sh, body); d.W * d.H
 end
-surface_area(sh::Plate, body::AbstractBody, ::Val{:side_b}) = surface_area(sh, body, Val(:side_a))
-function surface_area(::Plate, body::AbstractBody, ::Val{:side_c})
-    L, _, H = _plate_outer(body); L * H
+surface_area(sh::Plate, body::AbstractBody, ::SideB) = surface_area(sh, body, SideA())
+function surface_area(sh::Plate, body::AbstractBody, ::SideC)
+    d = outer_dims(sh, body); d.L * d.H
 end
-surface_area(sh::Plate, body::AbstractBody, ::Val{:side_d}) = surface_area(sh, body, Val(:side_c))
+surface_area(sh::Plate, body::AbstractBody, ::SideD) = surface_area(sh, body, SideC())
 
-function validate_position(::Plate, body::AbstractBody, ::Val{S}, pos) where {S}
-    L, W, H = _plate_skin(body)
-    if S === :top || S === :bottom
-        issetequal(keys(pos), (:x, :y)) || error(":$S needs (x, y); got $(keys(pos))")
-        abs(pos.x) ≤ L/2 || error(":$S x out of range ±$(L/2): $(pos.x)")
-        abs(pos.y) ≤ W/2 || error(":$S y out of range ±$(W/2): $(pos.y)")
-    elseif S === :side_a || S === :side_b
-        issetequal(keys(pos), (:y, :z)) || error(":$S needs (y, z); got $(keys(pos))")
-        abs(pos.y) ≤ W/2 || error(":$S y out of range ±$(W/2): $(pos.y)")
-        abs(pos.z) ≤ H/2 || error(":$S z out of range ±$(H/2): $(pos.z)")
-    elseif S === :side_c || S === :side_d
-        issetequal(keys(pos), (:x, :z)) || error(":$S needs (x, z); got $(keys(pos))")
-        abs(pos.x) ≤ L/2 || error(":$S x out of range ±$(L/2): $(pos.x)")
-        abs(pos.z) ≤ H/2 || error(":$S z out of range ±$(H/2): $(pos.z)")
-    else
-        error("Plate has no surface :$S; valid: $(attachment_surfaces(shape(body)))")
-    end
+function validate_range(::Plate, body::AbstractBody, loc::Union{Top,Bottom})
+    L, W, _ = _plate_skin(body)
+    abs(loc.x) ≤ L/2 || error("$(typeof(loc)) x out of range ±$(L/2): $(loc.x)")
+    abs(loc.y) ≤ W/2 || error("$(typeof(loc)) y out of range ±$(W/2): $(loc.y)")
+end
+function validate_range(::Plate, body::AbstractBody, loc::Union{SideA,SideB})
+    _, W, H = _plate_skin(body)
+    abs(loc.y) ≤ W/2 || error("$(typeof(loc)) y out of range ±$(W/2): $(loc.y)")
+    abs(loc.z) ≤ H/2 || error("$(typeof(loc)) z out of range ±$(H/2): $(loc.z)")
+end
+function validate_range(::Plate, body::AbstractBody, loc::Union{SideC,SideD})
+    L, _, H = _plate_skin(body)
+    abs(loc.x) ≤ L/2 || error("$(typeof(loc)) x out of range ±$(L/2): $(loc.x)")
+    abs(loc.z) ≤ H/2 || error("$(typeof(loc)) z out of range ±$(H/2): $(loc.z)")
 end
 
-function surface_point(::Plate, body::AbstractBody, ::Val{:top}, pos)
-    _, _, H = _plate_skin(body); (pos.x, pos.y, H/2)
+function surface_point(::Plate, body::AbstractBody, loc::Top)
+    _, _, H = _plate_skin(body); (loc.x, loc.y, H/2)
 end
-function surface_point(::Plate, body::AbstractBody, ::Val{:bottom}, pos)
-    _, _, H = _plate_skin(body); (pos.x, pos.y, -H/2)
+function surface_point(::Plate, body::AbstractBody, loc::Bottom)
+    _, _, H = _plate_skin(body); (loc.x, loc.y, -H/2)
 end
-function surface_point(::Plate, body::AbstractBody, ::Val{:side_a}, pos)
-    L, _, _ = _plate_skin(body); (L/2, pos.y, pos.z)
+function surface_point(::Plate, body::AbstractBody, loc::SideA)
+    L, _, _ = _plate_skin(body); (L/2, loc.y, loc.z)
 end
-function surface_point(::Plate, body::AbstractBody, ::Val{:side_b}, pos)
-    L, _, _ = _plate_skin(body); (-L/2, pos.y, pos.z)
+function surface_point(::Plate, body::AbstractBody, loc::SideB)
+    L, _, _ = _plate_skin(body); (-L/2, loc.y, loc.z)
 end
-function surface_point(::Plate, body::AbstractBody, ::Val{:side_c}, pos)
-    _, W, _ = _plate_skin(body); (pos.x, W/2, pos.z)
+function surface_point(::Plate, body::AbstractBody, loc::SideC)
+    _, W, _ = _plate_skin(body); (loc.x, W/2, loc.z)
 end
-function surface_point(::Plate, body::AbstractBody, ::Val{:side_d}, pos)
-    _, W, _ = _plate_skin(body); (pos.x, -W/2, pos.z)
+function surface_point(::Plate, body::AbstractBody, loc::SideD)
+    _, W, _ = _plate_skin(body); (loc.x, -W/2, loc.z)
 end
 
-surface_normal(::Plate, ::AbstractBody, ::Val{:top},    _) = ( 0.0,  0.0,  1.0)
-surface_normal(::Plate, ::AbstractBody, ::Val{:bottom}, _) = ( 0.0,  0.0, -1.0)
-surface_normal(::Plate, ::AbstractBody, ::Val{:side_a}, _) = ( 1.0,  0.0,  0.0)
-surface_normal(::Plate, ::AbstractBody, ::Val{:side_b}, _) = (-1.0,  0.0,  0.0)
-surface_normal(::Plate, ::AbstractBody, ::Val{:side_c}, _) = ( 0.0,  1.0,  0.0)
-surface_normal(::Plate, ::AbstractBody, ::Val{:side_d}, _) = ( 0.0, -1.0,  0.0)
+surface_normal(::Plate, ::AbstractBody, ::Top)    = ( 0.0,  0.0,  1.0)
+surface_normal(::Plate, ::AbstractBody, ::Bottom) = ( 0.0,  0.0, -1.0)
+surface_normal(::Plate, ::AbstractBody, ::SideA)  = ( 1.0,  0.0,  0.0)
+surface_normal(::Plate, ::AbstractBody, ::SideB)  = (-1.0,  0.0,  0.0)
+surface_normal(::Plate, ::AbstractBody, ::SideC)  = ( 0.0,  1.0,  0.0)
+surface_normal(::Plate, ::AbstractBody, ::SideD)  = ( 0.0, -1.0,  0.0)
 
-function surface_centroid(::Plate, body::AbstractBody, ::Val{:top})
+function surface_centroid(::Plate, body::AbstractBody, ::Top)
     L, _, H = _plate_skin(body); (zero(L), zero(L), H/2)
 end
-function surface_centroid(::Plate, body::AbstractBody, ::Val{:bottom})
+function surface_centroid(::Plate, body::AbstractBody, ::Bottom)
     L, _, H = _plate_skin(body); (zero(L), zero(L), -H/2)
 end
-function surface_centroid(::Plate, body::AbstractBody, ::Val{:side_a})
+function surface_centroid(::Plate, body::AbstractBody, ::SideA)
     L, _, _ = _plate_skin(body); (L/2, zero(L), zero(L))
 end
-function surface_centroid(::Plate, body::AbstractBody, ::Val{:side_b})
+function surface_centroid(::Plate, body::AbstractBody, ::SideB)
     L, _, _ = _plate_skin(body); (-L/2, zero(L), zero(L))
 end
-function surface_centroid(::Plate, body::AbstractBody, ::Val{:side_c})
+function surface_centroid(::Plate, body::AbstractBody, ::SideC)
     _, W, _ = _plate_skin(body); (zero(W), W/2, zero(W))
 end
-function surface_centroid(::Plate, body::AbstractBody, ::Val{:side_d})
+function surface_centroid(::Plate, body::AbstractBody, ::SideD)
     _, W, _ = _plate_skin(body); (zero(W), -W/2, zero(W))
 end
-surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:top})    = ( 0.0,  0.0,  1.0)
-surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:bottom}) = ( 0.0,  0.0, -1.0)
-surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_a}) = ( 1.0,  0.0,  0.0)
-surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_b}) = (-1.0,  0.0,  0.0)
-surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_c}) = ( 0.0,  1.0,  0.0)
-surface_centroid_normal(::Plate, ::AbstractBody, ::Val{:side_d}) = ( 0.0, -1.0,  0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Top)    = ( 0.0,  0.0,  1.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Bottom) = ( 0.0,  0.0, -1.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideA)  = ( 1.0,  0.0,  0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideB)  = (-1.0,  0.0,  0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideC)  = ( 0.0,  1.0,  0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideD)  = ( 0.0, -1.0,  0.0)

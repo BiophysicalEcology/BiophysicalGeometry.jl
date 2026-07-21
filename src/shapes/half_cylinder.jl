@@ -136,29 +136,33 @@ flesh_radius(::HalfCylinder, ::CompositeInsulation, body) = body.geometry.length
 
 # Composition
 
-attachment_surfaces(::HalfCylinder) = (:end_a, :end_b, :lateral, :flat)
+attachment_surfaces(::HalfCylinder) = (EndA, EndB, Lateral, Flat)
 
-_halfcyl_outer_length(body) =
-    haskey(body.geometry.length, :length_fur) ? body.geometry.length.length_fur : body.geometry.length.length_skin
+# Outer (insulation-aware) dimensions. `r` matches insulation_radius(body).
+outer_dims(sh::HalfCylinder, body::AbstractBody) =
+    outer_dims(sh, outer_insulation(insulation(body)), body)
+outer_dims(::HalfCylinder, ::Union{Naked,Fat}, body::AbstractBody) =
+    (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
+outer_dims(::HalfCylinder, ::Fur, body::AbstractBody) =
+    (r = body.geometry.length.radius_fur,  L = body.geometry.length.length_fur)
 
 # Fur axial half-thickness (0 for naked); fur extends past the flesh by this on each end.
-_halfcyl_fur_pad(body) = haskey(body.geometry.length, :length_fur) ?
-    (body.geometry.length.length_fur - body.geometry.length.length_skin) / 2 :
-    zero(body.geometry.length.length_skin)
+_halfcyl_fur_pad(body) =
+    (outer_dims(shape(body), body).L - body.geometry.length.length_skin) / 2
 
 # Per-surface areas. Outer (insulation-aware) for the curved/end faces;
 # skin level for the flat face so two halves join cleanly under FullCover.
-function surface_area(::HalfCylinder, body::AbstractBody, ::Val{:end_a})
+function surface_area(::HalfCylinder, body::AbstractBody, ::EndA)
     R = insulation_radius(body)
     π * R^2 / 2
 end
-surface_area(sh::HalfCylinder, body::AbstractBody, ::Val{:end_b}) =
-    surface_area(sh, body, Val(:end_a))
-function surface_area(::HalfCylinder, body::AbstractBody, ::Val{:lateral})
-    R = insulation_radius(body)
-    π * R * _halfcyl_outer_length(body)
+surface_area(sh::HalfCylinder, body::AbstractBody, ::EndB) =
+    surface_area(sh, body, EndA())
+function surface_area(sh::HalfCylinder, body::AbstractBody, ::Lateral)
+    d = outer_dims(sh, body)
+    π * d.r * d.L
 end
-function surface_area(::HalfCylinder, body::AbstractBody, ::Val{:flat})
+function surface_area(::HalfCylinder, body::AbstractBody, ::Flat)
     r = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     2 * r * L
@@ -170,65 +174,63 @@ end
 # overhang past z=0 / z=length_skin is part of the outer mesh and counted
 # in surface_area, but bears no attachments.
 
-function validate_position(::HalfCylinder, body::AbstractBody, ::Val{:end_a}, pos)
-    issetequal(keys(pos), (:r, :φ)) || error(":end_a needs (r, φ); got $(keys(pos))")
+function validate_range(::HalfCylinder, body::AbstractBody, loc::EndA)
     R = body.geometry.length.radius_skin
-    pos.r ≥ zero(pos.r) && pos.r ≤ R || error(":end_a r out of range [0, $R]: $(pos.r)")
-    0 ≤ pos.φ ≤ π || error(":end_a φ out of range [0, π]: $(pos.φ)")
+    loc.r ≥ zero(loc.r) && loc.r ≤ R || error("EndA r out of range [0, $R]: $(loc.r)")
+    0 ≤ loc.φ ≤ π || error("EndA φ out of range [0, π]: $(loc.φ)")
 end
-validate_position(::HalfCylinder, body::AbstractBody, ::Val{:end_b}, pos) =
-    validate_position(shape(body), body, Val(:end_a), pos)
-function validate_position(::HalfCylinder, body::AbstractBody, ::Val{:lateral}, pos)
-    issetequal(keys(pos), (:z, :φ)) || error(":lateral needs (z, φ); got $(keys(pos))")
+validate_range(sh::HalfCylinder, body::AbstractBody, loc::EndB) =
+    validate_range(sh, body, EndA(loc.r, loc.φ))
+function validate_range(::HalfCylinder, body::AbstractBody, loc::Lateral)
     L = body.geometry.length.length_skin
-    pos.z ≥ zero(pos.z) && pos.z ≤ L || error(":lateral z out of range [0, $L]: $(pos.z)")
-    0 ≤ pos.φ ≤ π || error(":lateral φ out of range [0, π]: $(pos.φ)")
+    loc.z ≥ zero(loc.z) && loc.z ≤ L || error("Lateral z out of range [0, $L]: $(loc.z)")
+    0 ≤ loc.φ ≤ π || error("Lateral φ out of range [0, π]: $(loc.φ)")
 end
-function validate_position(::HalfCylinder, body::AbstractBody, ::Val{:flat}, pos)
-    issetequal(keys(pos), (:z, :x)) || error(":flat needs (z, x); got $(keys(pos))")
+# For HalfCylinder, Flat uses (u=z, v=x).
+function validate_range(::HalfCylinder, body::AbstractBody, loc::Flat)
     r = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    pos.z ≥ zero(pos.z) && pos.z ≤ L || error(":flat z out of range [0, $L]: $(pos.z)")
-    abs(pos.x) ≤ r || error(":flat x out of range ±$r: $(pos.x)")
+    loc.u ≥ zero(loc.u) && loc.u ≤ L || error("Flat z out of range [0, $L]: $(loc.u)")
+    abs(loc.v) ≤ r || error("Flat x out of range ±$r: $(loc.v)")
 end
 
-surface_point(::HalfCylinder, body::AbstractBody, ::Val{:end_a}, pos) =
-    (pos.r * cos(pos.φ), pos.r * sin(pos.φ), zero(pos.r))
-surface_point(::HalfCylinder, body::AbstractBody, ::Val{:end_b}, pos) =
-    (pos.r * cos(pos.φ), pos.r * sin(pos.φ), body.geometry.length.length_skin)
-function surface_point(::HalfCylinder, body::AbstractBody, ::Val{:lateral}, pos)
+surface_point(::HalfCylinder, body::AbstractBody, loc::EndA) =
+    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), zero(loc.r))
+surface_point(::HalfCylinder, body::AbstractBody, loc::EndB) =
+    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), body.geometry.length.length_skin)
+function surface_point(::HalfCylinder, body::AbstractBody, loc::Lateral)
     R = body.geometry.length.radius_skin
-    (R * cos(pos.φ), R * sin(pos.φ), pos.z)
+    (R * cos(loc.φ), R * sin(loc.φ), loc.z)
 end
-function surface_point(::HalfCylinder, body::AbstractBody, ::Val{:flat}, pos)
-    (pos.x, zero(pos.x), pos.z)
+function surface_point(::HalfCylinder, body::AbstractBody, loc::Flat)
+    (loc.v, zero(loc.v), loc.u)
 end
 
-surface_normal(::HalfCylinder, ::AbstractBody, ::Val{:end_a}, _) = (0.0, 0.0, -1.0)
-surface_normal(::HalfCylinder, ::AbstractBody, ::Val{:end_b}, _) = (0.0, 0.0,  1.0)
-surface_normal(::HalfCylinder, ::AbstractBody, ::Val{:lateral}, pos) =
-    (cos(pos.φ), sin(pos.φ), 0.0)
-surface_normal(::HalfCylinder, ::AbstractBody, ::Val{:flat}, _) = (0.0, -1.0, 0.0)
+surface_normal(::HalfCylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
+surface_normal(::HalfCylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_normal(::HalfCylinder, ::AbstractBody, loc::Lateral) =
+    (cos(loc.φ), sin(loc.φ), 0.0)
+surface_normal(::HalfCylinder, ::AbstractBody, ::Flat) = (0.0, -1.0, 0.0)
 
 # Centroids — also at flesh level.
-function surface_centroid(::HalfCylinder, body::AbstractBody, ::Val{:end_a})
+function surface_centroid(::HalfCylinder, body::AbstractBody, ::EndA)
     R = body.geometry.length.radius_skin; (zero(R), R/2, zero(R))
 end
-function surface_centroid(::HalfCylinder, body::AbstractBody, ::Val{:end_b})
+function surface_centroid(::HalfCylinder, body::AbstractBody, ::EndB)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     (zero(R), R/2, L)
 end
-function surface_centroid(::HalfCylinder, body::AbstractBody, ::Val{:lateral})
+function surface_centroid(::HalfCylinder, body::AbstractBody, ::Lateral)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     (zero(R), R, L/2)
 end
-function surface_centroid(::HalfCylinder, body::AbstractBody, ::Val{:flat})
+function surface_centroid(::HalfCylinder, body::AbstractBody, ::Flat)
     L = body.geometry.length.length_skin
     (zero(L), zero(L), L/2)
 end
-surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Val{:end_a}) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Val{:end_b}) = (0.0, 0.0,  1.0)
-surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Val{:lateral}) = (0.0, 1.0, 0.0)
-surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Val{:flat}) = (0.0, -1.0, 0.0)
+surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
+surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Lateral) = (0.0, 1.0, 0.0)
+surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Flat) = (0.0, -1.0, 0.0)

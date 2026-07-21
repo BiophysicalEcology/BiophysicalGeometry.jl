@@ -26,7 +26,7 @@ struct Naked <: AbstractInsulation end
 
 """
     Fur <: AbstractInsulation
-    
+
     Fur(thickness)
 
 Insulation trait for an organism with fur.
@@ -40,7 +40,7 @@ end
 # TODO
 # """
 #     Feathers <: AbstractInsulation
-    
+
 #     Feathers(thickness)
 
 # Insulation trait for an organism with feathers.
@@ -53,7 +53,7 @@ end
 
 """
     Fat <: AbstractInsulation
-    
+
     Fat(fraction, density)
 
 Insulation trait for an organism with fat.
@@ -106,6 +106,7 @@ abstract type SolarOrientation <: AbstractGeometryPars end
 struct NormalToSun <: SolarOrientation end
 struct ParallelToSun <: SolarOrientation end
 struct Intermediate <: SolarOrientation end
+struct ZenithAngleVarying <: SolarOrientation end
 
 """
     Geometry
@@ -147,15 +148,6 @@ struct Body{S<:AbstractShape, I<:AbstractInsulation, G<:AbstractGeometryPars} <:
     geometry::G
 end
 
-abstract type SolarOrientation <: AbstractGeometryPars end
-
-struct NormalToSun <: SolarOrientation end
-struct ParallelToSun <: SolarOrientation end
-struct Intermediate <: SolarOrientation end
-struct ZenithAngleVarying <: SolarOrientation end
-
-# constructors and functions
-
 Body(shape::AbstractShape, insulation::AbstractInsulation) =
     Body(shape, insulation, geometry(shape, insulation))
 
@@ -190,13 +182,33 @@ solar zenith angle `θ` or a fixed [`SolarOrientation`](@ref) such as
 """
 silhouette_area(body::AbstractBody, θ) = silhouette_area(shape(body), insulation(body), body, θ)
 silhouette_area(body::AbstractBody) = silhouette_area(shape(body), insulation(body), body)
+
 # Orientation-specific implementations
 silhouette_area(body::AbstractBody, ::NormalToSun) = silhouette_area(body).normal
 silhouette_area(body::AbstractBody, ::ParallelToSun) = silhouette_area(body).parallel
 silhouette_area(body::AbstractBody, ::Intermediate) =
     (silhouette_area(body).normal + silhouette_area(body).parallel) * 0.5
 
+# Generic 3-arg fallback: zenith angle ignored for fixed orientations
+silhouette_area(body::AbstractBody, o::SolarOrientation, zenith_angle) = silhouette_area(body, o)
+
+# ZenithAngleVarying: compute from zenith angle using shape-specific 4-arg dispatch;
+# falls back to Intermediate() for shapes that don't implement silhouette_area(shape, ins, body, θ)
+function silhouette_area(body::AbstractBody, ::ZenithAngleVarying, zenith_angle)
+    sh  = shape(body)
+    ins = insulation(body)
+    θ   = uconvert(u"rad", zenith_angle)
+    if hasmethod(silhouette_area, (typeof(sh), typeof(ins), typeof(body), typeof(θ)))
+        return silhouette_area(sh, ins, body, θ)
+    end
+    return silhouette_area(body, Intermediate())
+end
+
 # Insulation area
+
+function insulation_area(fibre_diameter, fibre_density, skin)
+    π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)
+end
 
 # TODO make this 'insulation_area'
 function hair_area(fibre_diameter, fibre_density, skin)
@@ -223,7 +235,6 @@ skin_radius(body::AbstractBody) = skin_radius(shape(body), insulation(body), bod
 insulation_radius(body::AbstractBody) = insulation_radius(shape(body), insulation(body), body)
 flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), body)
 
-
 # Helpers for handling CompositeInsulation
 
 # for composite insulation cases (fat and fur/feathers)
@@ -249,69 +260,4 @@ function inner_insulation(ins::CompositeInsulation)
         # otherwise the last layer
         ins.layers[end]
     end
-end
-
-flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
-flesh_volume(ins::Union{Fat, CompositeInsulation}, body) = begin
-    fat = inner_insulation(body.insulation)
-    if body.geometry.length.fat > 0.0u"m"
-        body.geometry.volume - body.shape.mass * fat.fraction / fat.density
-    else
-        body.geometry.volume
-    end
-end
-flesh_volume(ins::Fur, body) = body.geometry.volume
-flesh_volume(ins::Naked, body) = body.geometry.volume
-
-# functions to get the appropriate radii
-skin_radius(body::AbstractBody) = skin_radius(shape(body), insulation(body), body)
-insulation_radius(body::AbstractBody) = insulation_radius(shape(body), insulation(body), body)
-flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), body)
-
-# functions to compute silhouette area as a function of zenith angle (passive) or 
-# orientation (thermoregulating)
-
-"""
-    silhouette_area(body::AbstractBody, θ)
-
-Calculates the silhouette (projected) area of an object given a solar zenith angle, θ.
-
-"""
-silhouette_area(body::AbstractBody, θ) = silhouette_area(shape(body), insulation(body), body, θ)
-
-"""
-    silhouette_area(body::AbstractBody, orientation)
-
-Calculates the silhouette (projected) area of an object given an orientation towards the sun (normal, parallel or inbetween).
-
-"""
-silhouette_area(body::AbstractBody) = silhouette_area(shape(body), insulation(body), body)
-
-# Orientation-specific implementations
-silhouette_area(body::AbstractBody, ::NormalToSun) =
-    silhouette_area(body).normal
-
-silhouette_area(body::AbstractBody, ::ParallelToSun) =
-    silhouette_area(body).parallel
-
-silhouette_area(body::AbstractBody, ::Intermediate) =
-    (silhouette_area(body).normal + silhouette_area(body).parallel) * 0.5
-
-# Generic 3-arg fallback: zenith angle ignored for fixed orientations
-silhouette_area(body::AbstractBody, o::SolarOrientation, zenith_angle) = silhouette_area(body, o)
-
-# ZenithAngleVarying: compute from zenith angle using shape-specific 4-arg dispatch;
-# falls back to Intermediate() for shapes that don't implement silhouette_area(shape, ins, body, θ)
-function silhouette_area(body::AbstractBody, ::ZenithAngleVarying, zenith_angle)
-    sh  = shape(body)
-    ins = insulation(body)
-    θ   = uconvert(u"rad", zenith_angle)
-    if hasmethod(silhouette_area, (typeof(sh), typeof(ins), typeof(body), typeof(θ)))
-        return silhouette_area(sh, ins, body, θ)
-    end
-    return silhouette_area(body, Intermediate())
-end
-
-function insulation_area(fibre_diameter, fibre_density, skin)
-    π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)
 end

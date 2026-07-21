@@ -148,92 +148,94 @@ insulation_radius(::Cone, ::CompositeInsulation, body) = body.geometry.length.ra
 flesh_radius(::Cone, ::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
 # Composition
+#
+# `EndA` is the base disc (z=0), `EndB` is the top disc (z=length_skin,
+# radius = top_ratio * radius_skin), `Lateral` is the slant surface.
 
-attachment_surfaces(::Cone) = (:base, :top, :lateral)
+attachment_surfaces(::Cone) = (EndA, EndB, Lateral)
 
-# Per-surface area (outer / fur-aware).
-_cone_outer_radius(body) = haskey(body.geometry.length, :radius_fur) ?
-    body.geometry.length.radius_fur : body.geometry.length.radius_skin
-_cone_outer_length(body) = haskey(body.geometry.length, :length_fur) ?
-    body.geometry.length.length_fur : body.geometry.length.length_skin
+# Outer (insulation-aware) dimensions.
+outer_dims(sh::Cone, body::AbstractBody) =
+    outer_dims(sh, outer_insulation(insulation(body)), body)
+outer_dims(::Cone, ::Union{Naked,Fat}, body::AbstractBody) =
+    (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
+outer_dims(::Cone, ::Fur, body::AbstractBody) =
+    (r = body.geometry.length.radius_fur,  L = body.geometry.length.length_fur)
 
-function surface_area(::Cone, body::AbstractBody, ::Val{:base})
-    R = _cone_outer_radius(body); π * R^2
+function surface_area(sh::Cone, body::AbstractBody, ::EndA)
+    d = outer_dims(sh, body); π * d.r^2
 end
-function surface_area(shape::Cone, body::AbstractBody, ::Val{:top})
-    R = _cone_outer_radius(body); π * (shape.top_ratio * R)^2
+function surface_area(sh::Cone, body::AbstractBody, ::EndB)
+    d = outer_dims(sh, body); π * (sh.top_ratio * d.r)^2
 end
-function surface_area(shape::Cone, body::AbstractBody, ::Val{:lateral})
-    R = _cone_outer_radius(body); L = _cone_outer_length(body)
-    r = shape.top_ratio * R
-    s = sqrt((R - r)^2 + L^2)
-    π * (R + r) * s
+function surface_area(sh::Cone, body::AbstractBody, ::Lateral)
+    d = outer_dims(sh, body)
+    r = sh.top_ratio * d.r
+    s = sqrt((d.r - r)^2 + d.L^2)
+    π * (d.r + r) * s
 end
 
-function validate_position(::Cone, body::AbstractBody, ::Val{:base}, pos)
-    issetequal(keys(pos), (:r, :φ)) || error(":base needs (r, φ); got $(keys(pos))")
+function validate_range(::Cone, body::AbstractBody, loc::EndA)
     R = body.geometry.length.radius_skin
-    pos.r ≥ zero(pos.r) && pos.r ≤ R || error(":base r out of range [0, $R]: $(pos.r)")
+    loc.r ≥ zero(loc.r) && loc.r ≤ R || error("EndA r out of range [0, $R]: $(loc.r)")
 end
-function validate_position(shape::Cone, body::AbstractBody, ::Val{:top}, pos)
-    issetequal(keys(pos), (:r, :φ)) || error(":top needs (r, φ); got $(keys(pos))")
+function validate_range(shape::Cone, body::AbstractBody, loc::EndB)
     Rt = shape.top_ratio * body.geometry.length.radius_skin
-    Rt > zero(Rt) || error(":top has zero radius (top_ratio=0); use a Disc(0) only")
-    pos.r ≥ zero(pos.r) && pos.r ≤ Rt || error(":top r out of range [0, $Rt]: $(pos.r)")
+    Rt > zero(Rt) || error("EndB has zero radius (top_ratio=0); use a Disc(0) only")
+    loc.r ≥ zero(loc.r) && loc.r ≤ Rt || error("EndB r out of range [0, $Rt]: $(loc.r)")
 end
-function validate_position(::Cone, body::AbstractBody, ::Val{:lateral}, pos)
-    issetequal(keys(pos), (:z, :φ)) || error(":lateral needs (z, φ); got $(keys(pos))")
+function validate_range(::Cone, body::AbstractBody, loc::Lateral)
     L = body.geometry.length.length_skin
-    pos.z ≥ zero(pos.z) && pos.z ≤ L || error(":lateral z out of range [0, $L]: $(pos.z)")
+    loc.z ≥ zero(loc.z) && loc.z ≤ L || error("Lateral z out of range [0, $L]: $(loc.z)")
 end
 
 # Attachment positions at flesh (skin) level.
-surface_point(::Cone, body::AbstractBody, ::Val{:base}, pos) =
-    (pos.r * cos(pos.φ), pos.r * sin(pos.φ), zero(pos.r))
-surface_point(::Cone, body::AbstractBody, ::Val{:top}, pos) =
-    (pos.r * cos(pos.φ), pos.r * sin(pos.φ), body.geometry.length.length_skin)
-function surface_point(shape::Cone, body::AbstractBody, ::Val{:lateral}, pos)
+surface_point(::Cone, body::AbstractBody, loc::EndA) =
+    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), zero(loc.r))
+surface_point(::Cone, body::AbstractBody, loc::EndB) =
+    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), body.geometry.length.length_skin)
+function surface_point(shape::Cone, body::AbstractBody, loc::Lateral)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     t = shape.top_ratio
-    rz = R * (1 - (1 - t) * pos.z / L)
-    (rz * cos(pos.φ), rz * sin(pos.φ), pos.z)
+    rz = R * (1 - (1 - t) * loc.z / L)
+    (rz * cos(loc.φ), rz * sin(loc.φ), loc.z)
 end
 
-surface_normal(::Cone, ::AbstractBody, ::Val{:base}, _) = (0.0, 0.0, -1.0)
-surface_normal(::Cone, ::AbstractBody, ::Val{:top}, _)  = (0.0, 0.0,  1.0)
-function surface_normal(shape::Cone, body::AbstractBody, ::Val{:lateral}, pos)
-    R = ustrip(u"m", body.geometry.length.radius_skin)
-    L = ustrip(u"m", body.geometry.length.length_skin)
-    t = shape.top_ratio
+surface_normal(::Cone, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
+surface_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+function surface_normal(shape::Cone, body::AbstractBody, loc::Lateral)
+    R = body.geometry.length.radius_skin
+    L = body.geometry.length.length_skin
     # Slant surface tangent direction has Δr = -(R - r) over Δz = L → outward
-    # normal is (radial)·(L/s) + (axial)·((R-r)/s).
-    Δr = R - t * R
-    s = sqrt(Δr^2 + L^2)
-    ((L/s) * cos(pos.φ), (L/s) * sin(pos.φ), Δr/s)
+    # normal is (radial)·(L/s) + (axial)·((R-r)/s). All quantities are
+    # lengths; each ratio is unitless — no ustrip needed.
+    Δr = R * (1 - shape.top_ratio)
+    s  = sqrt(Δr^2 + L^2)
+    (L/s * cos(loc.φ), L/s * sin(loc.φ), Δr/s)
 end
 
 # Centroids (FullCover).
-function surface_centroid(::Cone, body::AbstractBody, ::Val{:base})
+function surface_centroid(::Cone, body::AbstractBody, ::EndA)
     R = body.geometry.length.radius_skin; (zero(R), zero(R), zero(R))
 end
-function surface_centroid(::Cone, body::AbstractBody, ::Val{:top})
+function surface_centroid(::Cone, body::AbstractBody, ::EndB)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     (zero(R), zero(R), L)
 end
-function surface_centroid(shape::Cone, body::AbstractBody, ::Val{:lateral})
+function surface_centroid(shape::Cone, body::AbstractBody, ::Lateral)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     rz = R * (1 + shape.top_ratio) / 2  # midpoint radius
     (rz, zero(R), L/2)
 end
-surface_centroid_normal(::Cone, ::AbstractBody, ::Val{:base}) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::Cone, ::AbstractBody, ::Val{:top})  = (0.0, 0.0,  1.0)
-function surface_centroid_normal(shape::Cone, body::AbstractBody, ::Val{:lateral})
-    R = ustrip(u"m", body.geometry.length.radius_skin)
-    L = ustrip(u"m", body.geometry.length.length_skin)
-    Δr = R - shape.top_ratio * R
-    s = sqrt(Δr^2 + L^2)
+surface_centroid_normal(::Cone, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
+surface_centroid_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+function surface_centroid_normal(shape::Cone, body::AbstractBody, ::Lateral)
+    R = body.geometry.length.radius_skin
+    L = body.geometry.length.length_skin
+    Δr = R * (1 - shape.top_ratio)
+    s  = sqrt(Δr^2 + L^2)
     (L/s, 0.0, Δr/s)
 end

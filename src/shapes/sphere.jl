@@ -113,24 +113,21 @@ flesh_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geomet
 
 # Composition
 
-attachment_surfaces(::Sphere) = (:radial,)
+attachment_surfaces(::Sphere) = (Radial,)
 
-surface_area(::Sphere, body::AbstractBody, ::Val{:radial}) =
+surface_area(::Sphere, body::AbstractBody, ::Radial) =
     4 * π * insulation_radius(body)^2
 
-function validate_position(::Sphere, body::AbstractBody, ::Val{:radial}, pos)
-    issetequal(keys(pos), (:θ, :φ)) ||
-        error(":radial position needs (θ, φ); got $(keys(pos))")
-end
+validate_range(::Sphere, ::AbstractBody, ::Radial) = nothing
 
-function surface_point(::Sphere, body::AbstractBody, ::Val{:radial}, pos)
+function surface_point(::Sphere, body::AbstractBody, loc::Radial)
     R = skin_radius(body)
-    (R * sin(pos.θ) * cos(pos.φ), R * sin(pos.θ) * sin(pos.φ), R * cos(pos.θ))
+    (R * sin(loc.θ) * cos(loc.φ), R * sin(loc.θ) * sin(loc.φ), R * cos(loc.θ))
 end
-surface_normal(::Sphere, ::AbstractBody, ::Val{:radial}, pos) =
-    (sin(pos.θ) * cos(pos.φ), sin(pos.θ) * sin(pos.φ), cos(pos.θ))
+surface_normal(::Sphere, ::AbstractBody, loc::Radial) =
+    (sin(loc.θ) * cos(loc.φ), sin(loc.θ) * sin(loc.φ), cos(loc.θ))
 
-function surface_centroid(::Sphere, body::AbstractBody, ::Val{:radial})
+function surface_centroid(::Sphere, body::AbstractBody, ::Radial)
     R = skin_radius(body); (R, zero(R), zero(R))  # arbitrary point
 end
-surface_centroid_normal(::Sphere, ::AbstractBody, ::Val{:radial}) = (1.0, 0.0, 0.0)
+surface_centroid_normal(::Sphere, ::AbstractBody, ::Radial) = (1.0, 0.0, 0.0)

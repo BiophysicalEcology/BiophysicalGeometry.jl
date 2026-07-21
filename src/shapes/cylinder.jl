@@ -137,20 +137,28 @@ flesh_radius(shape::Cylinder, insulation::CompositeInsulation, body) = body.geom
 
 # Composition
 
-attachment_surfaces(::Cylinder) = (:end_a, :end_b, :lateral)
+attachment_surfaces(::Cylinder) = (EndA, EndB, Lateral)
 
-# Outer length: includes fur if present.
-_cylinder_outer_length(body::AbstractBody) =
-    haskey(body.geometry.length, :length_fur) ? body.geometry.length.length_fur : body.geometry.length.length_skin
+# Outer (insulation-aware) dimensions. Insulation-dispatched; no runtime
+# field-lookup. `r` matches insulation_radius(body); `L` is the axial extent
+# of the outer surface (skin + fur padding at each end).
+outer_dims(sh::Cylinder, body::AbstractBody) =
+    outer_dims(sh, outer_insulation(insulation(body)), body)
+outer_dims(::Cylinder, ::Union{Naked,Fat}, body::AbstractBody) =
+    (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
+outer_dims(::Cylinder, ::Fur, body::AbstractBody) =
+    (r = body.geometry.length.radius_fur,  L = body.geometry.length.length_fur)
 
 # Surface AREAS report the actual outer (insulation-aware) area. This drives
 # composition's patch-fits-surface validation and FullCover lookup.
-surface_area(::Cylinder, body::AbstractBody, ::Val{:end_a}) =
+surface_area(::Cylinder, body::AbstractBody, ::EndA) =
     π * insulation_radius(body)^2
-surface_area(::Cylinder, body::AbstractBody, ::Val{:end_b}) =
+surface_area(::Cylinder, body::AbstractBody, ::EndB) =
     π * insulation_radius(body)^2
-surface_area(::Cylinder, body::AbstractBody, ::Val{:lateral}) =
-    2 * π * insulation_radius(body) * _cylinder_outer_length(body)
+function surface_area(sh::Cylinder, body::AbstractBody, ::Lateral)
+    d = outer_dims(sh, body)
+    2 * π * d.r * d.L
+end
 
 # Attachment POSITIONS are anchored at flesh (skin) level so joins meet
 # flesh-to-flesh. Local frame: z=0 is the flesh end at -z, z=length_skin is
@@ -159,48 +167,46 @@ surface_area(::Cylinder, body::AbstractBody, ::Val{:lateral}) =
 # is part of the outer mesh (and counted in surface_area) but never bears
 # attachments.
 
-function validate_position(::Cylinder, body::AbstractBody, ::Val{:end_a}, pos)
-    issetequal(keys(pos), (:r, :φ)) || error(":end_a position needs (r, φ); got $(keys(pos))")
+function validate_range(::Cylinder, body::AbstractBody, loc::EndA)
     R = skin_radius(body)
-    pos.r ≥ zero(pos.r) && pos.r ≤ R ||
-        error(":end_a r out of range [0, $R]: got $(pos.r)")
+    loc.r ≥ zero(loc.r) && loc.r ≤ R ||
+        error("EndA r out of range [0, $R]: got $(loc.r)")
 end
-validate_position(::Cylinder, body::AbstractBody, ::Val{:end_b}, pos) =
-    validate_position(shape(body), body, Val(:end_a), pos)
+validate_range(sh::Cylinder, body::AbstractBody, loc::EndB) =
+    validate_range(sh, body, EndA(loc.r, loc.φ))
 
-function validate_position(::Cylinder, body::AbstractBody, ::Val{:lateral}, pos)
-    issetequal(keys(pos), (:z, :φ)) || error(":lateral position needs (z, φ); got $(keys(pos))")
+function validate_range(::Cylinder, body::AbstractBody, loc::Lateral)
     L = body.geometry.length.length_skin
-    pos.z ≥ zero(pos.z) && pos.z ≤ L ||
-        error(":lateral z out of range [0, $L]: got $(pos.z)")
+    loc.z ≥ zero(loc.z) && loc.z ≤ L ||
+        error("Lateral z out of range [0, $L]: got $(loc.z)")
 end
 
-surface_point(::Cylinder, body::AbstractBody, ::Val{:end_a}, pos) =
-    (pos.r * cos(pos.φ), pos.r * sin(pos.φ), zero(pos.r))
-surface_point(::Cylinder, body::AbstractBody, ::Val{:end_b}, pos) =
-    (pos.r * cos(pos.φ), pos.r * sin(pos.φ), body.geometry.length.length_skin)
-function surface_point(::Cylinder, body::AbstractBody, ::Val{:lateral}, pos)
+surface_point(::Cylinder, body::AbstractBody, loc::EndA) =
+    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), zero(loc.r))
+surface_point(::Cylinder, body::AbstractBody, loc::EndB) =
+    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), body.geometry.length.length_skin)
+function surface_point(::Cylinder, body::AbstractBody, loc::Lateral)
     R = skin_radius(body)
-    (R * cos(pos.φ), R * sin(pos.φ), pos.z)
+    (R * cos(loc.φ), R * sin(loc.φ), loc.z)
 end
 
-surface_normal(::Cylinder, ::AbstractBody, ::Val{:end_a}, _) = (0.0, 0.0, -1.0)
-surface_normal(::Cylinder, ::AbstractBody, ::Val{:end_b}, _) = (0.0, 0.0,  1.0)
-surface_normal(::Cylinder, ::AbstractBody, ::Val{:lateral}, pos) =
-    (cos(pos.φ), sin(pos.φ), 0.0)
+surface_normal(::Cylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
+surface_normal(::Cylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_normal(::Cylinder, ::AbstractBody, loc::Lateral) =
+    (cos(loc.φ), sin(loc.φ), 0.0)
 
 # Centroids (used by FullCover) — also at flesh level.
-function surface_centroid(::Cylinder, body::AbstractBody, ::Val{:end_a})
+function surface_centroid(::Cylinder, body::AbstractBody, ::EndA)
     R = skin_radius(body); (zero(R), zero(R), zero(R))
 end
-function surface_centroid(::Cylinder, body::AbstractBody, ::Val{:end_b})
+function surface_centroid(::Cylinder, body::AbstractBody, ::EndB)
     (zero(body.geometry.length.length_skin), zero(body.geometry.length.length_skin),
      body.geometry.length.length_skin)
 end
-function surface_centroid(::Cylinder, body::AbstractBody, ::Val{:lateral})
+function surface_centroid(::Cylinder, body::AbstractBody, ::Lateral)
     R = skin_radius(body); L = body.geometry.length.length_skin
     (R, zero(R), L/2)
 end
-surface_centroid_normal(::Cylinder, ::AbstractBody, ::Val{:end_a}) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::Cylinder, ::AbstractBody, ::Val{:end_b}) = (0.0, 0.0,  1.0)
-surface_centroid_normal(::Cylinder, ::AbstractBody, ::Val{:lateral}) = (1.0, 0.0, 0.0)
+surface_centroid_normal(::Cylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
+surface_centroid_normal(::Cylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_centroid_normal(::Cylinder, ::AbstractBody, ::Lateral) = (1.0, 0.0, 0.0)

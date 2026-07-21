@@ -124,103 +124,129 @@ _box_face_x(x, y1, y2, z1, z2) =
 
 # ── Per-shape outer mesh tiles ────────────────────────────────────────────
 #
-# Each returns a Vector of (X, Y, Z) matrix triplets in part-local cm
-# (multiplied by `sc`). Used by the Makie ext for plotting and by
-# silhouette.jl for rasterisation (with sc=1 to stay in metres).
+# Each `_part_outer_meshes` returns a Vector of (X, Y, Z) matrix triplets
+# in part-local metres scaled by `sc`. Used by the Makie ext for plotting
+# and by silhouette.jl for rasterisation (with sc=1 to stay in metres).
+#
+# Unit handling is confined to one boundary per shape: `_mesh_dims(shape,
+# body, sc)` reads dimensional fields off `body.geometry`, ustrips them
+# once, and returns a NamedTuple of plain `Float64` scaled by `sc`. The
+# mesh helpers (`_cylinder_tube`, `_ellipsoid_mesh`, etc.) know nothing
+# about units.
 
-_outer_length_cyl(body) =
-    haskey(body.geometry.length, :length_fur) ? body.geometry.length.length_fur : body.geometry.length.length_skin
+_ustrip_m(x, sc) = ustrip(u"m", x) * sc
 
-# Outer length, skin length, and per-end fur axial overhang (all in m·sc).
-# Cylinder/Cone/HalfCylinder share the convention that fur extends past
-# both flesh ends by the same amount.
-function _axial_extent(body, sc)
-    Lo = ustrip(u"m", _outer_length_cyl(body)) * sc
-    Ls = ustrip(u"m", body.geometry.length.length_skin) * sc
-    (Lo, Ls, (Lo - Ls) / 2)
+function _mesh_dims(sh::Cylinder, body, sc)
+    d = outer_dims(sh, body)
+    Lo = _ustrip_m(d.L, sc)
+    Ls = _ustrip_m(body.geometry.length.length_skin, sc)
+    (r = _ustrip_m(d.r, sc), Lo = Lo, Ls = Ls, pad = (Lo - Ls) / 2)
 end
 
-function _part_outer_meshes(::Cylinder, body, sc)
-    R = ustrip(u"m", insulation_radius(body)) * sc
-    Lo, _, pad = _axial_extent(body, sc)
-    z0 = -pad
-    [_cylinder_tube(R, Lo; z0=z0), _cylinder_cap(R, z0), _cylinder_cap(R, z0 + Lo)]
+function _mesh_dims(sh::Cone, body, sc)
+    d = outer_dims(sh, body)
+    Lo = _ustrip_m(d.L, sc)
+    Ls = _ustrip_m(body.geometry.length.length_skin, sc)
+    (r = _ustrip_m(d.r, sc), Lo = Lo, Ls = Ls, pad = (Lo - Ls) / 2)
 end
 
-function _part_outer_meshes(shape::Cone, body, sc)
-    R = ustrip(u"m", insulation_radius(body)) * sc
-    Lo, _, pad = _axial_extent(body, sc)
-    z0 = -pad
-    Rtop = shape.top_ratio * R
-    meshes = Any[_cone_tube(R, Rtop, Lo; z0=z0), _cylinder_cap(R, z0)]
+_mesh_dims(::Sphere, body, sc) = (r = _ustrip_m(insulation_radius(body), sc),)
+
+function _mesh_dims(sh::Ellipsoid, body, sc)
+    d = outer_dims(sh, body)
+    (a = _ustrip_m(d.a, sc), b = _ustrip_m(d.b, sc))  # prolate: c = b
+end
+
+function _mesh_dims(sh::Plate, body, sc)
+    d = outer_dims(sh, body)
+    (hL = _ustrip_m(d.L, sc) / 2,
+     hW = _ustrip_m(d.W, sc) / 2,
+     hH = _ustrip_m(d.H, sc) / 2)
+end
+
+function _mesh_dims(sh::HalfCylinder, body, sc)
+    d = outer_dims(sh, body)
+    Lo = _ustrip_m(d.L, sc)
+    Ls = _ustrip_m(body.geometry.length.length_skin, sc)
+    (r  = _ustrip_m(d.r, sc),
+     Lo = Lo, Ls = Ls, pad = (Lo - Ls) / 2,
+     r_skin = _ustrip_m(body.geometry.length.radius_skin, sc))
+end
+
+function _mesh_dims(sh::HalfEllipsoid, body, sc)
+    d = outer_dims(sh, body)
+    (a = _ustrip_m(d.a, sc),
+     b = _ustrip_m(d.b, sc),
+     a_skin = _ustrip_m(body.geometry.length.a_semi_major_skin, sc),
+     b_skin = _ustrip_m(body.geometry.length.b_semi_minor_skin, sc))
+end
+
+function _part_outer_meshes(sh::Cylinder, body, sc)
+    d  = _mesh_dims(sh, body, sc)
+    z0 = -d.pad
+    [_cylinder_tube(d.r, d.Lo; z0=z0), _cylinder_cap(d.r, z0), _cylinder_cap(d.r, z0 + d.Lo)]
+end
+
+function _part_outer_meshes(sh::Cone, body, sc)
+    d  = _mesh_dims(sh, body, sc)
+    z0 = -d.pad
+    Rtop = sh.top_ratio * d.r
+    meshes = Any[_cone_tube(d.r, Rtop, d.Lo; z0=z0), _cylinder_cap(d.r, z0)]
     if Rtop > 0
-        push!(meshes, _cylinder_cap(Rtop, z0 + Lo))
+        push!(meshes, _cylinder_cap(Rtop, z0 + d.Lo))
     end
     meshes
 end
 
-function _part_outer_meshes(::Sphere, body, sc)
-    R = ustrip(u"m", insulation_radius(body)) * sc
-    [_ellipsoid_mesh(R, R)]
+function _part_outer_meshes(sh::Sphere, body, sc)
+    d = _mesh_dims(sh, body, sc)
+    [_ellipsoid_mesh(d.r, d.r)]
 end
 
-function _part_outer_meshes(shape::Ellipsoid, body, sc)
-    gl = body.geometry.length
-    a = ustrip(u"m", haskey(gl, :a_semi_major_fur) ? gl.a_semi_major_fur : gl.a_semi_major_skin) * sc
-    b = ustrip(u"m", haskey(gl, :b_semi_minor_fur) ? gl.b_semi_minor_fur : gl.b_semi_minor_skin) * sc
-    c = b  # prolate
-    if shape.pole_a_truncation == 0
-        [_ellipsoid_mesh(a, b)]
+function _part_outer_meshes(sh::Ellipsoid, body, sc)
+    d = _mesh_dims(sh, body, sc)
+    if sh.pole_a_truncation == 0
+        [_ellipsoid_mesh(d.a, d.b)]
     else
-        x_ratio = 1 - shape.pole_a_truncation
-        [_ellipsoid_mesh_truncated(a, b, c, x_ratio),
-         _ellipsoid_pole_a_cap(a, b, c, x_ratio)]
+        x_ratio = 1 - sh.pole_a_truncation
+        [_ellipsoid_mesh_truncated(d.a, d.b, d.b, x_ratio),
+         _ellipsoid_pole_a_cap(d.a, d.b, d.b, x_ratio)]
     end
 end
 
-function _part_outer_meshes(::Plate, body, sc)
-    gl = body.geometry.length
-    L = ustrip(u"m", haskey(gl, :length_fur) ? gl.length_fur : gl.length_skin) * sc
-    W = ustrip(u"m", haskey(gl, :width_fur)  ? gl.width_fur  : gl.width_skin)  * sc
-    H = ustrip(u"m", haskey(gl, :height_fur) ? gl.height_fur : gl.height_skin) * sc
-    hL, hW, hH = L/2, W/2, H/2
-    [_box_face_z(-hL, hL, -hW, hW, -hH),
-     _box_face_z(-hL, hL, -hW, hW,  hH),
-     _box_face_y(-hL, hL, -hW, -hH, hH),
-     _box_face_y(-hL, hL,  hW, -hH, hH),
-     _box_face_x(-hL, -hW, hW, -hH, hH),
-     _box_face_x( hL, -hW, hW, -hH, hH)]
+function _part_outer_meshes(sh::Plate, body, sc)
+    d = _mesh_dims(sh, body, sc)
+    [_box_face_z(-d.hL, d.hL, -d.hW, d.hW, -d.hH),
+     _box_face_z(-d.hL, d.hL, -d.hW, d.hW,  d.hH),
+     _box_face_y(-d.hL, d.hL, -d.hW, -d.hH, d.hH),
+     _box_face_y(-d.hL, d.hL,  d.hW, -d.hH, d.hH),
+     _box_face_x(-d.hL, -d.hW, d.hW, -d.hH, d.hH),
+     _box_face_x( d.hL, -d.hW, d.hW, -d.hH, d.hH)]
 end
 
-function _part_outer_meshes(::HalfCylinder, body, sc)
-    R = ustrip(u"m", insulation_radius(body)) * sc
-    Lo, L_skin, pad = _axial_extent(body, sc)
-    r_skin = ustrip(u"m", body.geometry.length.radius_skin) * sc
-    z0 = -pad
-    [_half_cylinder_tube(R, Lo; z0=z0), _half_cylinder_cap(R, z0), _half_cylinder_cap(R, z0 + Lo),
-     _half_cylinder_flat(r_skin, L_skin; z0=0.0)]
+function _part_outer_meshes(sh::HalfCylinder, body, sc)
+    d  = _mesh_dims(sh, body, sc)
+    z0 = -d.pad
+    [_half_cylinder_tube(d.r, d.Lo; z0=z0),
+     _half_cylinder_cap(d.r, z0),
+     _half_cylinder_cap(d.r, z0 + d.Lo),
+     _half_cylinder_flat(d.r_skin, d.Ls; z0=0.0)]
 end
 
-function _part_outer_meshes(::HalfEllipsoid, body, sc)
-    gl = body.geometry.length
-    a = ustrip(u"m", haskey(gl, :a_semi_major_fur) ? gl.a_semi_major_fur : gl.a_semi_major_skin) * sc
-    b = ustrip(u"m", haskey(gl, :b_semi_minor_fur) ? gl.b_semi_minor_fur : gl.b_semi_minor_skin) * sc
-    a_skin = ustrip(u"m", gl.a_semi_major_skin) * sc
-    b_skin = ustrip(u"m", gl.b_semi_minor_skin) * sc
-    [_half_ellipsoid_dome_mesh(a, b), _half_ellipsoid_flat_mesh(a_skin, b_skin)]
+function _part_outer_meshes(sh::HalfEllipsoid, body, sc)
+    d = _mesh_dims(sh, body, sc)
+    [_half_ellipsoid_dome_mesh(d.a, d.b), _half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
 end
 
 # Each TriMesh face becomes one degenerate 2×2 grid (v1, v2, v3, v3) so it
 # slots into the existing parametric-grid pipeline (plotting + silhouette).
 function _part_outer_meshes(shape::TriMesh, body, sc)
     out = Vector{Tuple{Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}}()
+    _pt(v) = (_ustrip_m(v[1], sc), _ustrip_m(v[2], sc), _ustrip_m(v[3], sc))
     for (i, j, k) in shape.faces
-        v1 = shape.vertices[i]
-        v2 = shape.vertices[j]
-        v3 = shape.vertices[k]
-        x1 = ustrip(u"m", v1[1]) * sc; y1 = ustrip(u"m", v1[2]) * sc; z1 = ustrip(u"m", v1[3]) * sc
-        x2 = ustrip(u"m", v2[1]) * sc; y2 = ustrip(u"m", v2[2]) * sc; z2 = ustrip(u"m", v2[3]) * sc
-        x3 = ustrip(u"m", v3[1]) * sc; y3 = ustrip(u"m", v3[2]) * sc; z3 = ustrip(u"m", v3[3]) * sc
+        x1, y1, z1 = _pt(shape.vertices[i])
+        x2, y2, z2 = _pt(shape.vertices[j])
+        x3, y3, z3 = _pt(shape.vertices[k])
         push!(out, ([x1 x3; x2 x3],
                     [y1 y3; y2 y3],
                     [z1 z3; z2 z3]))
@@ -234,9 +260,9 @@ end
 # mesh coordinate arrays expressed in (m * sc) units; output in same units.
 function _transform_mesh(X, Y, Z, pose::Pose, sc)
     R = pose.rotation
-    tx = ustrip(u"m", pose.translation[1]) * sc
-    ty = ustrip(u"m", pose.translation[2]) * sc
-    tz = ustrip(u"m", pose.translation[3]) * sc
+    tx = _ustrip_m(pose.translation[1], sc)
+    ty = _ustrip_m(pose.translation[2], sc)
+    tz = _ustrip_m(pose.translation[3], sc)
     Xp = similar(X, Float64); Yp = similar(Y, Float64); Zp = similar(Z, Float64)
     @inbounds for i in eachindex(X)
         x, y, z = X[i], Y[i], Z[i]

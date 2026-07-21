@@ -19,17 +19,28 @@ mutable struct HalfEllipsoid{M,D,B,C} <: AbstractShape
     c::C
 end
 
+# Dome area for one half of a prolate spheroid (b = c assumed). The
+# formula uses sqrt / asin on dimensionless eccentricity, so this is the
+# one place we step out of Unitful — ustrip once, compute, re-wrap.
+function _half_dome_area(a, b, c)
+    am = ustrip(u"m", a); bm = ustrip(u"m", b); cm = ustrip(u"m", c)
+    dome = if abs(am - cm) < am * 1e-9
+        2 * π * bm^2  # half-sphere
+    else
+        e = sqrt(am^2 - cm^2) / am
+        π * bm^2 + π * (am * bm / e) * asin(e)
+    end
+    dome * u"m^2"
+end
+
 function geometry(shape::HalfEllipsoid, ::Naked)
     volume = shape.mass / shape.density
     b_semi_minor_skin = (3 * volume / (2π * shape.b))^(1/3)
     c_semi_minor_skin = b_semi_minor_skin
     a_semi_major_skin = b_semi_minor_skin * shape.b
-    a = ustrip(u"m", a_semi_major_skin)
-    b = ustrip(u"m", b_semi_minor_skin)
-    c = ustrip(u"m", c_semi_minor_skin)
-    half_dome = _half_ellipsoid_dome(a, b, c)
-    flat = π * b * c
-    total = (half_dome + flat) * u"m^2"
+    dome = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
+    flat = π * b_semi_minor_skin * c_semi_minor_skin
+    total = dome + flat
     characteristic_dimension = volume^(1/3)
     return Geometry(volume, characteristic_dimension,
                     (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin),
@@ -43,15 +54,9 @@ function geometry(shape::HalfEllipsoid, fur::Fur)
     a_semi_major_fur = a_semi_major_skin + fur.thickness
     b_semi_minor_fur = b_semi_minor_skin + fur.thickness
     c_semi_minor_fur = c_semi_minor_skin + fur.thickness
-    as = ustrip(u"m", a_semi_major_skin)
-    bs = ustrip(u"m", b_semi_minor_skin)
-    cs = ustrip(u"m", c_semi_minor_skin)
-    af = ustrip(u"m", a_semi_major_fur)
-    bf = ustrip(u"m", b_semi_minor_fur)
-    cf = ustrip(u"m", c_semi_minor_fur)
-    flat = π * bs * cs   # at skin level for FullCover correctness
-    total = (_half_ellipsoid_dome(af, bf, cf) + flat) * u"m^2"
-    skin  = (_half_ellipsoid_dome(as, bs, cs) + flat) * u"m^2"
+    flat = π * b_semi_minor_skin * c_semi_minor_skin  # skin level for FullCover
+    total = _half_dome_area(a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur)  + flat
+    skin  = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1/3) + fur.thickness
@@ -74,10 +79,8 @@ function geometry(shape::HalfEllipsoid, fat::Fat)
     end
     c_semi_minor_skin = b_semi_minor_skin
     a_semi_major_skin = b_semi_minor_skin * shape.b
-    a = ustrip(u"m", a_semi_major_skin)
-    b = ustrip(u"m", b_semi_minor_skin)
-    c = ustrip(u"m", c_semi_minor_skin)
-    total = (_half_ellipsoid_dome(a, b, c) + π * b * c) * u"m^2"
+    total = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) +
+            π * b_semi_minor_skin * c_semi_minor_skin
     characteristic_dimension = volume^(1/3)
     return Geometry(volume, characteristic_dimension,
                     (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat=fat_thickness),
@@ -100,15 +103,9 @@ function geometry(shape::HalfEllipsoid, fur::Fur, fat::Fat)
     a_semi_major_fur = a_semi_major_skin + fur.thickness
     b_semi_minor_fur = b_semi_minor_skin + fur.thickness
     c_semi_minor_fur = c_semi_minor_skin + fur.thickness
-    as = ustrip(u"m", a_semi_major_skin)
-    bs = ustrip(u"m", b_semi_minor_skin)
-    cs = ustrip(u"m", c_semi_minor_skin)
-    af = ustrip(u"m", a_semi_major_fur)
-    bf = ustrip(u"m", b_semi_minor_fur)
-    cf = ustrip(u"m", c_semi_minor_fur)
-    flat = π * bs * cs
-    total = (_half_ellipsoid_dome(af, bf, cf) + flat) * u"m^2"
-    skin  = (_half_ellipsoid_dome(as, bs, cs) + flat) * u"m^2"
+    flat  = π * b_semi_minor_skin * c_semi_minor_skin
+    total = _half_dome_area(a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur)  + flat
+    skin  = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1/3) + fur.thickness
@@ -116,16 +113,6 @@ function geometry(shape::HalfEllipsoid, fur::Fur, fat::Fat)
                     (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
                        a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat=fat_thickness),
                     SurfaceAreas(; total, skin, convection))
-end
-
-# Dome area for one half of a prolate spheroid (a > c, b = c assumed).
-# Inputs are dimensionless metres; output is dimensionless m².
-function _half_ellipsoid_dome(a, b, c)
-    if abs(a - c) < a * 1e-9
-        return 2 * π * b^2  # half-sphere
-    end
-    e = sqrt(a^2 - c^2) / a
-    return π * b^2 + π * (a * b / e) * asin(e)
 end
 
 # Silhouette area: half of full ellipsoid's, so two halves reproduce the
@@ -137,41 +124,13 @@ function silhouette_area(::HalfEllipsoid, a, b, c, θ)
     π * c * sqrt(b^2 * cos(θ)^2 + a^2 * sin(θ)^2) / 2
 end
 
-function silhouette_area(::HalfEllipsoid, ::Union{Naked,Fat}, body::AbstractBody)
-    a = body.geometry.length.a_semi_major_skin
-    b = body.geometry.length.b_semi_minor_skin
-    c = body.geometry.length.c_semi_minor_skin
-    (; normal = π * a * b / 2, parallel = π * b * c / 2)
+function silhouette_area(sh::HalfEllipsoid, ::AbstractInsulation, body::AbstractBody)
+    d = outer_dims(sh, body)
+    (; normal = π * d.a * d.b / 2, parallel = π * d.b * d.c / 2)
 end
-function silhouette_area(::HalfEllipsoid, ::Union{Fur,CompositeInsulation}, body::AbstractBody)
-    a = body.geometry.length.a_semi_major_fur
-    b = body.geometry.length.b_semi_minor_fur
-    c = body.geometry.length.c_semi_minor_fur
-    (; normal = π * a * b / 2, parallel = π * b * c / 2)
-end
-function silhouette_area(sh::HalfEllipsoid, ::Naked, body::AbstractBody, θ)
-    silhouette_area(sh,
-        body.geometry.length.a_semi_major_skin,
-        body.geometry.length.b_semi_minor_skin,
-        body.geometry.length.c_semi_minor_skin, θ)
-end
-function silhouette_area(sh::HalfEllipsoid, ::Fur, body::AbstractBody, θ)
-    silhouette_area(sh,
-        body.geometry.length.a_semi_major_fur,
-        body.geometry.length.b_semi_minor_fur,
-        body.geometry.length.c_semi_minor_fur, θ)
-end
-function silhouette_area(sh::HalfEllipsoid, ::Fat, body::AbstractBody, θ)
-    silhouette_area(sh,
-        body.geometry.length.a_semi_major_skin,
-        body.geometry.length.b_semi_minor_skin,
-        body.geometry.length.c_semi_minor_skin, θ)
-end
-function silhouette_area(sh::HalfEllipsoid, ::CompositeInsulation, body::AbstractBody, θ)
-    silhouette_area(sh,
-        body.geometry.length.a_semi_major_fur,
-        body.geometry.length.b_semi_minor_fur,
-        body.geometry.length.c_semi_minor_fur, θ)
+function silhouette_area(sh::HalfEllipsoid, ::AbstractInsulation, body::AbstractBody, θ)
+    d = outer_dims(sh, body)
+    silhouette_area(sh, d.a, d.b, d.c, θ)
 end
 
 # Radii — same dispatch as Ellipsoid.
@@ -191,17 +150,19 @@ flesh_radius(::HalfEllipsoid, ::CompositeInsulation, body) = body.geometry.lengt
 
 # Composition
 
-attachment_surfaces(::HalfEllipsoid) = (:dome, :flat)
+attachment_surfaces(::HalfEllipsoid) = (Dome, Flat)
 
-# Outer (insulation-aware) semi-axes of the dome — drives surface_area.
-function _halfellip_outer(body::AbstractBody)
-    gl = body.geometry.length
-    if haskey(gl, :a_semi_major_fur)
-        (gl.a_semi_major_fur, gl.b_semi_minor_fur, gl.c_semi_minor_fur)
-    else
-        (gl.a_semi_major_skin, gl.b_semi_minor_skin, gl.c_semi_minor_skin)
-    end
-end
+# Outer (insulation-aware) semi-axes of the dome. Insulation-dispatched.
+outer_dims(sh::HalfEllipsoid, body::AbstractBody) =
+    outer_dims(sh, outer_insulation(insulation(body)), body)
+outer_dims(::HalfEllipsoid, ::Union{Naked,Fat}, body::AbstractBody) =
+    (a = body.geometry.length.a_semi_major_skin,
+     b = body.geometry.length.b_semi_minor_skin,
+     c = body.geometry.length.c_semi_minor_skin)
+outer_dims(::HalfEllipsoid, ::Fur, body::AbstractBody) =
+    (a = body.geometry.length.a_semi_major_fur,
+     b = body.geometry.length.b_semi_minor_fur,
+     c = body.geometry.length.c_semi_minor_fur)
 
 # Skin-level semi-axes — drives flesh-anchored attachment positions.
 function _halfellip_skin(body::AbstractBody)
@@ -210,56 +171,57 @@ function _halfellip_skin(body::AbstractBody)
 end
 
 # Loose bound for dome attachments.
-surface_area(::HalfEllipsoid, body::AbstractBody, ::Val{:dome}) =
+surface_area(::HalfEllipsoid, body::AbstractBody, ::Dome) =
     body.geometry.area.total
 
 # Flat at skin level so two halves with mixed insulation join cleanly.
-function surface_area(::HalfEllipsoid, body::AbstractBody, ::Val{:flat})
+function surface_area(::HalfEllipsoid, body::AbstractBody, ::Flat)
     π * body.geometry.length.b_semi_minor_skin * body.geometry.length.c_semi_minor_skin
 end
 
-function validate_position(::HalfEllipsoid, ::AbstractBody, ::Val{:dome}, pos)
-    issetequal(keys(pos), (:α, :β)) ||
-        error(":dome needs (α, β); got $(keys(pos))")
-    0 ≤ pos.α ≤ π || error(":dome α out of range [0, π]: $(pos.α)")
-    0 ≤ pos.β ≤ π || error(":dome β out of range [0, π]: $(pos.β)")
+function validate_range(::HalfEllipsoid, ::AbstractBody, loc::Dome)
+    0 ≤ loc.α ≤ π || error("Dome α out of range [0, π]: $(loc.α)")
+    0 ≤ loc.β ≤ π || error("Dome β out of range [0, π]: $(loc.β)")
 end
-function validate_position(::HalfEllipsoid, body::AbstractBody, ::Val{:flat}, pos)
-    issetequal(keys(pos), (:x, :y)) || error(":flat needs (x, y); got $(keys(pos))")
+# For HalfEllipsoid, Flat uses (u=x, v=y).
+function validate_range(::HalfEllipsoid, body::AbstractBody, loc::Flat)
     a = body.geometry.length.a_semi_major_skin
     b = body.geometry.length.b_semi_minor_skin
-    abs(pos.x) ≤ a || error(":flat x out of range ±$a: $(pos.x)")
-    abs(pos.y) ≤ b || error(":flat y out of range ±$b: $(pos.y)")
-    rel = (pos.x / a)^2 + (pos.y / b)^2
-    rel ≤ 1 + 1e-9 || error(":flat (x,y) outside ellipse boundary")
+    abs(loc.u) ≤ a || error("Flat x out of range ±$a: $(loc.u)")
+    abs(loc.v) ≤ b || error("Flat y out of range ±$b: $(loc.v)")
+    rel = (loc.u / a)^2 + (loc.v / b)^2
+    rel ≤ 1 + 1e-9 || error("Flat (x,y) outside ellipse boundary")
 end
 
-function surface_point(::HalfEllipsoid, body::AbstractBody, ::Val{:dome}, pos)
+function surface_point(::HalfEllipsoid, body::AbstractBody, loc::Dome)
     a, b, c = _halfellip_skin(body)
-    (a * cos(pos.α), b * sin(pos.α) * cos(pos.β), c * sin(pos.α) * sin(pos.β))
+    (a * cos(loc.α), b * sin(loc.α) * cos(loc.β), c * sin(loc.α) * sin(loc.β))
 end
-function surface_point(::HalfEllipsoid, body::AbstractBody, ::Val{:flat}, pos)
-    (pos.x, pos.y, zero(pos.x))
+function surface_point(::HalfEllipsoid, body::AbstractBody, loc::Flat)
+    (loc.u, loc.v, zero(loc.u))
 end
 
-function surface_normal(::HalfEllipsoid, body::AbstractBody, ::Val{:dome}, pos)
+function surface_normal(::HalfEllipsoid, body::AbstractBody, loc::Dome)
     a, b, c = _halfellip_skin(body)
-    nx = cos(pos.α) / ustrip(u"m", a)
-    ny = sin(pos.α) * cos(pos.β) / ustrip(u"m", b)
-    nz = sin(pos.α) * sin(pos.β) / ustrip(u"m", c)
+    # Gradient of (x/a)² + (y/b)² + (z/c)² = 1 is (2x/a², 2y/b², 2z/c²).
+    # Scale each component by a common length (b·c, a·c, a·b) so units
+    # cancel: multiply top and bottom by a·b·c to get a unitless vector.
+    nx = cos(loc.α)            * (b * c)
+    ny = sin(loc.α) * cos(loc.β) * (a * c)
+    nz = sin(loc.α) * sin(loc.β) * (a * b)
     n = sqrt(nx^2 + ny^2 + nz^2)
     (nx / n, ny / n, nz / n)
 end
-surface_normal(::HalfEllipsoid, ::AbstractBody, ::Val{:flat}, _) = (0.0, 0.0, -1.0)
+surface_normal(::HalfEllipsoid, ::AbstractBody, ::Flat) = (0.0, 0.0, -1.0)
 
 # Centroids — flesh level.
-function surface_centroid(::HalfEllipsoid, body::AbstractBody, ::Val{:dome})
+function surface_centroid(::HalfEllipsoid, body::AbstractBody, ::Dome)
     a, _, c = _halfellip_skin(body)
     (zero(a), zero(a), c)  # top of the dome
 end
-function surface_centroid(::HalfEllipsoid, body::AbstractBody, ::Val{:flat})
+function surface_centroid(::HalfEllipsoid, body::AbstractBody, ::Flat)
     a = body.geometry.length.a_semi_major_skin
     (zero(a), zero(a), zero(a))
 end
-surface_centroid_normal(::HalfEllipsoid, ::AbstractBody, ::Val{:dome}) = (0.0, 0.0, 1.0)
-surface_centroid_normal(::HalfEllipsoid, ::AbstractBody, ::Val{:flat}) = (0.0, 0.0, -1.0)
+surface_centroid_normal(::HalfEllipsoid, ::AbstractBody, ::Dome) = (0.0, 0.0, 1.0)
+surface_centroid_normal(::HalfEllipsoid, ::AbstractBody, ::Flat) = (0.0, 0.0, -1.0)

@@ -4,6 +4,26 @@ using Test
 
 const ρ = 1000.0u"kg/m^3"
 
+# Per-test part tags. Users define singleton types for each part they want
+# to reference in a CompositeBody. There is no shared registry — each test
+# defines what it needs.
+struct Dorsal end
+struct Ventral end
+struct Torso end
+struct Head end
+struct LegFL end
+struct LegFR end
+struct LegBL end
+struct LegBR end
+struct OnlyPart end
+struct SnowmanTop end
+struct SnowmanBottom end
+struct PartA end
+struct PartB end
+struct Big end
+struct Small end
+struct Frog end
+
 @testset "HalfCylinder geometry" begin
     h = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
     full = Body(Cylinder(20u"kg", ρ, 3.0), Naked())
@@ -30,15 +50,15 @@ end
 end
 
 @testset "Dorsal/ventral torso == full cylinder" begin
-    dorsal  = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
-    ventral = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
+    dorsal_body  = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
+    ventral_body = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
     torso = CompositeBody(;
-        parts = (; dorsal, ventral),
+        parts = (Dorsal() => dorsal_body, Ventral() => ventral_body),
         joins = (
-            Join(:dorsal,  Attachment(:flat, (;), FullCover()),
-                 :ventral, Attachment(:flat, (;), FullCover())),
+            Join(Dorsal(),  Attachment(Flat(), FullCover()),
+                 Ventral(), Attachment(Flat(), FullCover())),
         ),
-        root = :dorsal,
+        root = Dorsal(),
     )
     full = Body(Cylinder(20u"kg", ρ, 3.0), Naked())
     @test total_area(torso) ≈ total_area(full)
@@ -46,15 +66,15 @@ end
 end
 
 @testset "Dorsal/ventral torso == full ellipsoid" begin
-    dorsal  = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), Naked())
-    ventral = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), Naked())
+    dorsal_body  = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), Naked())
+    ventral_body = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), Naked())
     torso = CompositeBody(;
-        parts = (; dorsal, ventral),
+        parts = (Dorsal() => dorsal_body, Ventral() => ventral_body),
         joins = (
-            Join(:dorsal,  Attachment(:flat, (;), FullCover()),
-                 :ventral, Attachment(:flat, (;), FullCover())),
+            Join(Dorsal(),  Attachment(Flat(), FullCover()),
+                 Ventral(), Attachment(Flat(), FullCover())),
         ),
-        root = :dorsal,
+        root = Dorsal(),
     )
     full = Body(Ellipsoid(10u"kg", ρ, 1.5, 1.0), Naked())
     @test total_area(torso) ≈ total_area(full)
@@ -63,19 +83,19 @@ end
 
 @testset "Dorsal furred, ventral naked" begin
     fur = Fur(0.01u"m", 30u"μm", 3000u"cm^-2")
-    dorsal  = Body(HalfCylinder(10u"kg", ρ, 3.0), fur)
-    ventral = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
+    dorsal_body  = Body(HalfCylinder(10u"kg", ρ, 3.0), fur)
+    ventral_body = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
     torso = CompositeBody(;
-        parts = (; dorsal, ventral),
+        parts = (Dorsal() => dorsal_body, Ventral() => ventral_body),
         joins = (
-            Join(:dorsal,  Attachment(:flat, (;), FullCover()),
-                 :ventral, Attachment(:flat, (;), FullCover())),
+            Join(Dorsal(),  Attachment(Flat(), FullCover()),
+                 Ventral(), Attachment(Flat(), FullCover())),
         ),
-        root = :dorsal,
+        root = Dorsal(),
     )
     # Sum of unjoined parts minus 2× the (matching) flat area.
-    flat = 2 * dorsal.geometry.length.radius_skin * dorsal.geometry.length.length_skin
-    @test total_area(torso) ≈ total_area(dorsal) + total_area(ventral) - 2*flat
+    flat = 2 * dorsal_body.geometry.length.radius_skin * dorsal_body.geometry.length.length_skin
+    @test total_area(torso) ≈ total_area(dorsal_body) + total_area(ventral_body) - 2*flat
 end
 
 @testset "Dog example" begin
@@ -87,20 +107,27 @@ end
     r_head_attach = 0.04u"m"
 
     dog = CompositeBody(;
-        parts = (; body, head, leg_fl=leg, leg_fr=leg, leg_bl=leg, leg_br=leg),
-        joins = (
-            Join(:body, Attachment(:end_a,   (r=0.0u"m", φ=0.0),         Disc(r_head_attach)),
-                 :head, Attachment(:pole_a,  (;),                         Disc(r_head_attach))),
-            Join(:body, Attachment(:lateral, (z=0.2*L_body, φ=π/2 - π/6), Disc(r_leg)),
-                 :leg_fl, Attachment(:end_a, (r=0.0u"m", φ=0.0),          Disc(r_leg))),
-            Join(:body, Attachment(:lateral, (z=0.2*L_body, φ=-π/2 + π/6), Disc(r_leg)),
-                 :leg_fr, Attachment(:end_a, (r=0.0u"m", φ=0.0),          Disc(r_leg))),
-            Join(:body, Attachment(:lateral, (z=0.8*L_body, φ=π/2 - π/6), Disc(r_leg)),
-                 :leg_bl, Attachment(:end_a, (r=0.0u"m", φ=0.0),          Disc(r_leg))),
-            Join(:body, Attachment(:lateral, (z=0.8*L_body, φ=-π/2 + π/6), Disc(r_leg)),
-                 :leg_br, Attachment(:end_a, (r=0.0u"m", φ=0.0),          Disc(r_leg))),
+        parts = (
+            Torso() => body,
+            Head()  => head,
+            LegFL() => leg,
+            LegFR() => leg,
+            LegBL() => leg,
+            LegBR() => leg,
         ),
-        root = :body,
+        joins = (
+            Join(Torso(), Attachment(EndA(0.0u"m", 0.0),                Disc(r_head_attach)),
+                 Head(),  Attachment(PoleA(),                            Disc(r_head_attach))),
+            Join(Torso(), Attachment(Lateral(0.2*L_body, π/2 - π/6),    Disc(r_leg)),
+                 LegFL(), Attachment(EndA(0.0u"m", 0.0),                 Disc(r_leg))),
+            Join(Torso(), Attachment(Lateral(0.2*L_body, -π/2 + π/6),   Disc(r_leg)),
+                 LegFR(), Attachment(EndA(0.0u"m", 0.0),                 Disc(r_leg))),
+            Join(Torso(), Attachment(Lateral(0.8*L_body, π/2 - π/6),    Disc(r_leg)),
+                 LegBL(), Attachment(EndA(0.0u"m", 0.0),                 Disc(r_leg))),
+            Join(Torso(), Attachment(Lateral(0.8*L_body, -π/2 + π/6),   Disc(r_leg)),
+                 LegBR(), Attachment(EndA(0.0u"m", 0.0),                 Disc(r_leg))),
+        ),
+        root = Torso(),
     )
 
     sum_parts = total_area(body) + total_area(head) + 4 * total_area(leg)
@@ -113,74 +140,59 @@ end
     expected_fl_x = R_body * cos(π/2 - π/6)
     expected_fl_y = R_body * sin(π/2 - π/6)
     expected_fl_z = 0.2 * L_body
-    @test dog.poses.leg_fl.translation[1] ≈ expected_fl_x atol=1e-9*u"m"
-    @test dog.poses.leg_fl.translation[2] ≈ expected_fl_y atol=1e-9*u"m"
+    leg_fl_pose = BiophysicalGeometry._lookup(dog.poses, LegFL())
+    @test leg_fl_pose.translation[1] ≈ expected_fl_x atol=1e-9*u"m"
+    @test leg_fl_pose.translation[2] ≈ expected_fl_y atol=1e-9*u"m"
 
-    # Skin radius/insulation_radius delegate to the root part.
+    # Skin radius / insulation_radius delegate to the root part.
     @test skin_radius(dog) == skin_radius(body)
     @test insulation_radius(dog) == insulation_radius(body)
 end
 
 @testset "Validation" begin
-    a = Body(Cylinder(1u"kg", ρ, 2.0), Naked())
-    b = Body(Cylinder(1u"kg", ρ, 2.0), Naked())
-
-    # Unknown surface name.
-    @test_throws ErrorException CompositeBody(;
-        parts = (; a, b),
-        joins = (Join(:a, Attachment(:bogus, (z=0.0u"m", φ=0.0), Disc(0.001u"m")),
-                      :b, Attachment(:end_a, (r=0.0u"m", φ=0.0), Disc(0.001u"m"))),),
-        root = :a,
-    )
-
-    # Position with wrong field set.
-    @test_throws ErrorException CompositeBody(;
-        parts = (; a, b),
-        joins = (Join(:a, Attachment(:lateral, (foo=0.0u"m",), Disc(0.001u"m")),
-                      :b, Attachment(:end_a, (r=0.0u"m", φ=0.0), Disc(0.001u"m"))),),
-        root = :a,
-    )
+    a_body = Body(Cylinder(1u"kg", ρ, 2.0), Naked())
+    b_body = Body(Cylinder(1u"kg", ρ, 2.0), Naked())
 
     # Patch radius too large for the surface.
     @test_throws ErrorException CompositeBody(;
-        parts = (; a, b),
-        joins = (Join(:a, Attachment(:end_a, (r=0.0u"m", φ=0.0), Disc(10.0u"m")),
-                      :b, Attachment(:end_a, (r=0.0u"m", φ=0.0), Disc(10.0u"m"))),),
-        root = :a,
+        parts = (PartA() => a_body, PartB() => b_body),
+        joins = (Join(PartA(), Attachment(EndA(0.0u"m", 0.0), Disc(10.0u"m")),
+                      PartB(), Attachment(EndA(0.0u"m", 0.0), Disc(10.0u"m"))),),
+        root = PartA(),
     )
 
     # Mismatched FullCover areas (different sizes).
-    big = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
-    small = Body(HalfCylinder(1u"kg",  ρ, 3.0), Naked())
+    big_body = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
+    small_body = Body(HalfCylinder(1u"kg",  ρ, 3.0), Naked())
     @test_throws ErrorException CompositeBody(;
-        parts = (; big, small),
-        joins = (Join(:big,   Attachment(:flat, (;), FullCover()),
-                      :small, Attachment(:flat, (;), FullCover())),),
-        root = :big,
+        parts = (Big() => big_body, Small() => small_body),
+        joins = (Join(Big(),   Attachment(Flat(), FullCover()),
+                      Small(), Attachment(Flat(), FullCover())),),
+        root = Big(),
     )
 
     # Empirical shape (LeopardFrog) cannot be joined.
-    frog = Body(LeopardFrog(0.04u"kg", ρ), Naked())
+    frog_body = Body(LeopardFrog(0.04u"kg", ρ), Naked())
     @test_throws ErrorException CompositeBody(;
-        parts = (; frog, b),
-        joins = (Join(:frog, Attachment(:end_a, (r=0.0u"m", φ=0.0), Disc(0.001u"m")),
-                      :b,    Attachment(:end_a, (r=0.0u"m", φ=0.0), Disc(0.001u"m"))),),
-        root = :frog,
+        parts = (Frog() => frog_body, PartB() => b_body),
+        joins = (Join(Frog(),  Attachment(EndA(0.0u"m", 0.0), Disc(0.001u"m")),
+                      PartB(), Attachment(EndA(0.0u"m", 0.0), Disc(0.001u"m"))),),
+        root = Frog(),
     )
 end
 
 @testset "Single-part composite is identity" begin
-    only = Body(Cylinder(2u"kg", ρ, 2.0), Naked())
-    cb = CompositeBody(; parts = (; only), joins = (), root = :only)
-    @test total_area(cb) ≈ total_area(only)
-    @test flesh_volume(cb) ≈ flesh_volume(only)
-    @test skin_radius(cb) == skin_radius(only)
+    only_body = Body(Cylinder(2u"kg", ρ, 2.0), Naked())
+    cb = CompositeBody(; parts = (OnlyPart() => only_body,), joins = (), root = OnlyPart())
+    @test total_area(cb) ≈ total_area(only_body)
+    @test flesh_volume(cb) ≈ flesh_volume(only_body)
+    @test skin_radius(cb) == skin_radius(only_body)
 end
 
 @testset "silhouette_rasterized" begin
     # Sphere of radius r → silhouette is π·r² regardless of sun direction.
     sph = Body(Sphere(1u"kg", ρ), Naked())
-    cb = CompositeBody(; parts = (; sph), joins = (), root = :sph)
+    cb = CompositeBody(; parts = (OnlyPart() => sph,), joins = (), root = OnlyPart())
     R = skin_radius(sph)
     expected = π * R^2
     A1 = silhouette_rasterized(cb, (1.0, 0.0, 0.0); resolution=256)
@@ -199,10 +211,10 @@ end
     s1 = Body(Sphere(1u"kg", ρ), Naked())
     s2 = Body(Sphere(1u"kg", ρ), Naked())
     snowman = CompositeBody(;
-        parts = (; s1, s2),
-        joins = (Join(:s1, Attachment(:radial, (θ=0.0, φ=0.0), Disc(0.001u"m")),
-                      :s2, Attachment(:radial, (θ=0.0, φ=0.0), Disc(0.001u"m"))),),
-        root = :s1,
+        parts = (SnowmanBottom() => s1, SnowmanTop() => s2),
+        joins = (Join(SnowmanBottom(), Attachment(Radial(0.0, 0.0), Disc(0.001u"m")),
+                      SnowmanTop(),    Attachment(Radial(0.0, 0.0), Disc(0.001u"m"))),),
+        root = SnowmanBottom(),
     )
     Aalong  = silhouette_rasterized(snowman, (0.0, 0.0, 1.0); resolution=256)
     Across  = silhouette_rasterized(snowman, (1.0, 0.0, 0.0); resolution=256)

@@ -11,22 +11,22 @@ import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh,
     _half_cylinder_tube, _half_cylinder_cap, _half_cylinder_flat,
     _half_ellipsoid_dome_mesh, _half_ellipsoid_flat_mesh,
     _cone_tube, _box_face_x, _box_face_y, _box_face_z,
-    _part_outer_meshes, _transform_mesh
+    _part_outer_meshes, _transform_mesh, _lookup, outer_dims
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 
-_get(gl, sym, fallback) = hasproperty(gl, sym) ? getproperty(gl, sym) : fallback
-_pu(x) = Float32(ustrip(u"cm", x))
+# Two ways units leave this module:
+#   `_pu(x)`      → Float32 cm, for Point2f coordinates in 2-D recipes.
+#   `_m(x, sc)`   → Float64 m·sc, for 3-D drawing that uses the caller's
+#                   `sc` scale factor.
+_pu(x)      = Float32(ustrip(u"cm", x))
+_m(x, sc)   = ustrip(u"m", x) * sc
+
 _radii(body) = (flesh=flesh_radius(body), skin=skin_radius(body), ins=insulation_radius(body))
 
-function _scaled_radii(body, sc)
-    r = _radii(body)
-    (flesh=ustrip(u"m", r.flesh) * sc,
-     skin =ustrip(u"m", r.skin)  * sc,
-     ins  =ustrip(u"m", r.ins)   * sc)
-end
+_scaled_radii(body, sc) = map(x -> _m(x, sc), _radii(body))
 
 _layer_flags(r) = (fat=r.skin > r.flesh + 1e-9, fur=r.ins > r.skin + 1e-9)
 
@@ -79,13 +79,12 @@ end
 # 3-D SHAPE DISPATCH
 # ══════════════════════════════════════════════════════════════════════════════
 
-function _draw_cutaway_shape!(p, ::Cylinder, body, sc, cols)
+function _draw_cutaway_shape!(p, sh::Cylinder, body, sc, cols)
     r  = _scaled_radii(body, sc)
     fl = _layer_flags(r)
 
-    gl     = body.geometry.length
-    L_s    = ustrip(u"m", gl.length_skin) * sc
-    L_i    = ustrip(u"m", _get(gl, :length_fur, gl.length_skin)) * sc
+    L_s    = _m(body.geometry.length.length_skin, sc)
+    L_i    = _m(outer_dims(sh, body).L, sc)
     z0_fur = -(L_i - L_s) / 2
 
     _draw_cylinder!(p, r.flesh, L_s, cols.flesh)
@@ -111,20 +110,21 @@ function _draw_cutaway_shape!(p, shape::TriMesh, body, sc, cols)
     end
 end
 
-function _draw_cutaway_shape!(p, shape::Plate, body, sc, cols)
+function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
     r  = _scaled_radii(body, sc)
     fl = _layer_flags(r)
 
     gl   = body.geometry.length
-    hw_s = ustrip(u"m", gl.width_skin)  / 2 * sc
-    hl_s = ustrip(u"m", gl.length_skin) / 2 * sc
-    hh_s = ustrip(u"m", gl.height_skin) / 2 * sc
-    hw_i = ustrip(u"m", _get(gl, :width_fur,  gl.width_skin))  / 2 * sc
-    hl_i = ustrip(u"m", _get(gl, :length_fur, gl.length_skin)) / 2 * sc
-    hh_i = ustrip(u"m", _get(gl, :height_fur, gl.height_skin)) / 2 * sc
+    di   = outer_dims(sh, body)
+    hw_s = _m(gl.width_skin,  sc) / 2
+    hl_s = _m(gl.length_skin, sc) / 2
+    hh_s = _m(gl.height_skin, sc) / 2
+    hw_i = _m(di.W, sc) / 2
+    hl_i = _m(di.L, sc) / 2
+    hh_i = _m(di.H, sc) / 2
     hw_f = r.flesh
-    hl_f = hw_f * Float64(shape.b)
-    hh_f = hl_f / Float64(shape.c)
+    hl_f = hw_f * Float64(sh.b)
+    hh_f = hl_f / Float64(sh.c)
 
     _draw_box_faces!(p, hl_f, hw_f, hh_f, cols.flesh; full=true)
     fl.fat && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat)
@@ -139,8 +139,9 @@ end
 _part_color(body, cols) = body.insulation isa Naked ? cols.flesh : cols.fur
 
 function _draw_composite!(p, b::CompositeBody, sc, cols)
-    for (key, part) in pairs(b.parts)
-        pose = b.poses[key]
+    for pair in b.parts
+        part = pair.second
+        pose = _lookup(b.poses, pair.first)
         col = _part_color(part, cols)
         for mesh in _part_outer_meshes(part.shape, part, sc)
             _draw_surface!(p, _transform_mesh(mesh..., pose, sc), col)
@@ -153,8 +154,9 @@ function _composite_bbox(b::CompositeBody, sc)
     xmin, xmax = Inf, -Inf
     ymin, ymax = Inf, -Inf
     zmin, zmax = Inf, -Inf
-    for (key, part) in pairs(b.parts)
-        pose = b.poses[key]
+    for pair in b.parts
+        part = pair.second
+        pose = _lookup(b.poses, pair.first)
         for grid in _part_outer_meshes(part.shape, part, sc)
             X, Y, Z = _transform_mesh(grid..., pose, sc)
             xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
@@ -204,11 +206,10 @@ _layer!(target, pts, col) = poly!(target, pts; color=col, strokecolor=col, strok
 # 2-D SECTION LAYER DISPATCH
 # ══════════════════════════════════════════════════════════════════════════════
 
-function _section_layers(::Cylinder, body, mode, r, cols)
-    gl   = body.geometry.length
+function _section_layers(sh::Cylinder, body, mode, r, cols)
     r_f, r_s, r_i = r.flesh, r.skin, r.ins
-    hl_s = gl.length_skin / 2
-    hl_i = _get(gl, :length_fur, gl.length_skin) / 2
+    hl_s = body.geometry.length.length_skin / 2
+    hl_i = outer_dims(sh, body).L / 2
     if mode === :long
         [
             (r_i > r_s, () -> _rect_pts(r_i, hl_i), cols.fur),
@@ -224,17 +225,18 @@ function _section_layers(::Cylinder, body, mode, r, cols)
     end
 end
 
-function _section_layers(shape::Plate, body, mode, r, cols)
+function _section_layers(sh::Plate, body, mode, r, cols)
     gl   = body.geometry.length
+    di   = outer_dims(sh, body)
     r_f, r_s, r_i = r.flesh, r.skin, r.ins
     if mode === :long
         d_s = (gl.length_skin / 2, gl.height_skin / 2)
-        d_i = (_get(gl, :length_fur, gl.length_skin) / 2, _get(gl, :height_fur, gl.height_skin) / 2)
-        d_f = (r_f * shape.b, r_f * shape.b / shape.c)
+        d_i = (di.L / 2, di.H / 2)
+        d_f = (r_f * sh.b, r_f * sh.b / sh.c)
     else
         d_s = (gl.width_skin / 2, gl.height_skin / 2)
-        d_i = (_get(gl, :width_fur, gl.width_skin) / 2, _get(gl, :height_fur, gl.height_skin) / 2)
-        d_f = (r_f, (r_f * shape.b) / shape.c)
+        d_i = (di.W / 2, di.H / 2)
+        d_f = (r_f, (r_f * sh.b) / sh.c)
     end
     [
         (r_i > r_s, () -> _rect_pts(d_i...), cols.fur),
@@ -258,19 +260,18 @@ end
 # 2-D AXIS LIMIT DISPATCH
 # ══════════════════════════════════════════════════════════════════════════════
 
-function _section_limits(::Cylinder, body, r, pad)
-    gl   = body.geometry.length
-    hl_i = _get(gl, :length_fur, gl.length_skin) / 2
+function _section_limits(sh::Cylinder, body, r, pad)
+    hl_i = outer_dims(sh, body).L / 2
     ri   = _pu(r.ins) * (1 + pad)
     li   = _pu(hl_i)  * (1 + pad)
     _limits(ri, li, ri, li)
 end
 
-function _section_limits(::Plate, body, r, pad)
-    gl   = body.geometry.length
-    hl_i = _get(gl, :length_fur, gl.length_skin) / 2
-    hh_i = _get(gl, :height_fur, gl.height_skin) / 2
-    hw_i = _get(gl, :width_fur,  gl.width_skin)  / 2
+function _section_limits(sh::Plate, body, r, pad)
+    di   = outer_dims(sh, body)
+    hl_i = di.L / 2
+    hh_i = di.H / 2
+    hw_i = di.W / 2
     _limits(_pu(hl_i) * (1 + pad), _pu(hh_i) * (1 + pad),
             _pu(hw_i) * (1 + pad), _pu(hh_i) * (1 + pad))
 end

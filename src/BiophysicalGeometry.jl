@@ -9,9 +9,11 @@ export AbstractInsulation, CompositeInsulation, Naked, Fur, Fat
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 export SurfaceAreas
 export CompositeBody, Join, Attachment, Disc, FullCover, AbstractAttachmentShape, Pose
+export AbstractSurface, EndA, EndB, Lateral, Flat, Dome, PoleA, PoleB, Equator, Radial
+export Top, Bottom, SideA, SideB, SideC, SideD
 export attachment_surfaces
 
-export geometry, shape, insulation
+export geometry, shape, insulation, outer_dims
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
 export surface_area, silhouette_area, silhouette_rasterized, SilhouetteResult
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying

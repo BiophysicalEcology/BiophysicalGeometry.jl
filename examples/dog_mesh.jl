@@ -76,7 +76,8 @@ println("density      = ", mesh_shape.density)
 
 # Wrap in a single-part CompositeBody so we can use the interactive
 # rasterised-silhouette plot.
-dog = CompositeBody(; parts = (; body), joins = (), root = :body)
+struct DogBody end
+dog = CompositeBody(; parts = (DogBody() => body,), joins = (), root = DogBody())
 
 fig = plot_body_silhouette(dog; resolution = 128)
 screen = display(fig)

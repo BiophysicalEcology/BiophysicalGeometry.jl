@@ -99,8 +99,9 @@ function silhouette_rasterized(body::CompositeBody, sun_direction::NTuple{3,<:Re
     # Collect 2D triangles + bbox first, then rasterise.
     tris = NTuple{3, NTuple{2, Float64}}[]
     xmin, xmax, ymin, ymax = Inf, -Inf, Inf, -Inf
-    for (key, part) in pairs(body.parts)
-        pose = body.poses[key]
+    for pair in body.parts
+        part = pair.second
+        pose = _lookup(body.poses, pair.first)
         for grid in _part_outer_meshes(part.shape, part, 1.0)  # sc=1 → metres
             X, Y, Z = _transform_mesh(grid..., pose, 1.0)
             for tri in _each_triangle(X, Y, Z)
