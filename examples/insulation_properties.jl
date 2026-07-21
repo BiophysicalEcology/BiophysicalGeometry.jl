@@ -53,28 +53,28 @@ ins_labels = ["Naked", "Fat", "Fur", "Fur + Fat"]
 
 function draw_area_comparison!(ax, shape, insulations, labels)
     total_vec = Float64[]
-    skin_vec  = Float64[]
-    evap_vec  = Float64[]
+    skin_vec = Float64[]
+    evap_vec = Float64[]
 
     for ins in insulations
         body = Body(shape, ins)
         push!(total_vec, ustrip(u"cm^2", total_area(body)))
-        push!(skin_vec,  ustrip(u"cm^2", skin_area(body)))
-        push!(evap_vec,  ustrip(u"cm^2", evaporation_area(body)))
+        push!(skin_vec, ustrip(u"cm^2", skin_area(body)))
+        push!(evap_vec, ustrip(u"cm^2", evaporation_area(body)))
     end
 
-    xs    = 1:length(insulations)
+    xs = 1:length(insulations)
     width = 0.26
 
     barplot!(ax, xs .- width, total_vec; width, color=:steelblue,
              label="Total (outer surface)")
-    barplot!(ax, xs,          skin_vec;  width, color=:salmon,
+    barplot!(ax, xs, skin_vec;  width, color=:salmon,
              label="Skin (under insulation)")
     barplot!(ax, xs .+ width, evap_vec;  width, color=:olivedrab,
              label="Evaporation (skin − hair)")
 
     ax.xticks = (collect(xs), labels)
-    ax.title  = "Cylinder surface areas by insulation type  (mass = $(shape.mass))"
+    ax.title = "Cylinder surface areas by insulation type  (mass = $(shape.mass))"
     ax.xlabel = "Insulation configuration"
     ax.ylabel = "Area (cm²)"
     axislegend(ax; position=:lt, labelsize=9, framevisible=false)
@@ -84,13 +84,13 @@ end
 # ── Panel 4: Silhouette area vs. solar zenith angle ───────────────────────────
 
 function draw_silhouette_vs_zenith!(ax, shape, insulations, labels)
-    colours    = [:grey50, :goldenrod, :sienna, :firebrick]
+    colours = [:grey50, :goldenrod, :sienna, :firebrick]
     linestyles = [:solid, :dash, :dot, :dashdot]
-    θ_deg      = LinRange(0.0, 90.0, 181)
+    θ_deg = LinRange(0.0, 90.0, 181)
 
     for (ins, lbl, col, ls) in zip(insulations, labels, colours, linestyles)
         body = Body(shape, ins)
-        sil  = [ustrip(u"cm^2",
+        sil = [ustrip(u"cm^2",
                        silhouette_area(body, ZenithAngleVarying(), θ * u"°"))
                 for θ in θ_deg]
         lines!(ax, θ_deg, sil; color=col, linestyle=ls, linewidth=2, label=lbl)
@@ -98,10 +98,10 @@ function draw_silhouette_vs_zenith!(ax, shape, insulations, labels)
 
     vlines!(ax, [0.0];  color=:black, linestyle=:dot, linewidth=0.8)
     vlines!(ax, [90.0]; color=:black, linestyle=:dot, linewidth=0.8)
-    text!(ax,  2.0, 0.5; text="Normal\nto sun", fontsize=8, align=(:left,  :bottom))
+    text!(ax, 2.0, 0.5; text="Normal\nto sun", fontsize=8, align=(:left, :bottom))
     text!(ax, 88.0, 0.5; text="Parallel\nto sun", fontsize=8, align=(:right, :bottom))
 
-    ax.title  = "Cylinder silhouette area vs. solar zenith angle"
+    ax.title = "Cylinder silhouette area vs. solar zenith angle"
     ax.xlabel = "Solar zenith angle θ (°)"
     ax.ylabel = "Silhouette area (cm²)"
     axislegend(ax; position=:rt, labelsize=9, framevisible=false)

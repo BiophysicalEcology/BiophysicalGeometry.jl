@@ -168,7 +168,7 @@ function _mesh_dims(sh::HalfCylinder, body, sc)
     d = outer_dims(sh, body)
     Lo = _ustrip_m(d.L, sc)
     Ls = _ustrip_m(body.geometry.length.length_skin, sc)
-    (r  = _ustrip_m(d.r, sc),
+    (r = _ustrip_m(d.r, sc),
      Lo = Lo, Ls = Ls, pad = (Lo - Ls) / 2,
      r_skin = _ustrip_m(body.geometry.length.radius_skin, sc))
 end
@@ -182,13 +182,13 @@ function _mesh_dims(sh::HalfEllipsoid, body, sc)
 end
 
 function _part_outer_meshes(sh::Cylinder, body, sc)
-    d  = _mesh_dims(sh, body, sc)
+    d = _mesh_dims(sh, body, sc)
     z0 = -d.pad
     [_cylinder_tube(d.r, d.Lo; z0=z0), _cylinder_cap(d.r, z0), _cylinder_cap(d.r, z0 + d.Lo)]
 end
 
 function _part_outer_meshes(sh::Cone, body, sc)
-    d  = _mesh_dims(sh, body, sc)
+    d = _mesh_dims(sh, body, sc)
     z0 = -d.pad
     Rtop = sh.top_ratio * d.r
     meshes = Any[_cone_tube(d.r, Rtop, d.Lo; z0=z0), _cylinder_cap(d.r, z0)]
@@ -217,15 +217,15 @@ end
 function _part_outer_meshes(sh::Plate, body, sc)
     d = _mesh_dims(sh, body, sc)
     [_box_face_z(-d.hL, d.hL, -d.hW, d.hW, -d.hH),
-     _box_face_z(-d.hL, d.hL, -d.hW, d.hW,  d.hH),
+     _box_face_z(-d.hL, d.hL, -d.hW, d.hW, d.hH),
      _box_face_y(-d.hL, d.hL, -d.hW, -d.hH, d.hH),
-     _box_face_y(-d.hL, d.hL,  d.hW, -d.hH, d.hH),
+     _box_face_y(-d.hL, d.hL, d.hW, -d.hH, d.hH),
      _box_face_x(-d.hL, -d.hW, d.hW, -d.hH, d.hH),
      _box_face_x( d.hL, -d.hW, d.hW, -d.hH, d.hH)]
 end
 
 function _part_outer_meshes(sh::HalfCylinder, body, sc)
-    d  = _mesh_dims(sh, body, sc)
+    d = _mesh_dims(sh, body, sc)
     z0 = -d.pad
     [_half_cylinder_tube(d.r, d.Lo; z0=z0),
      _half_cylinder_cap(d.r, z0),
@@ -282,9 +282,9 @@ function _each_triangle(X, Y, Z)
     out = Vector{NTuple{3, NTuple{3, Float64}}}(undef, 2 * (nrow - 1) * (ncol - 1))
     k = 0
     @inbounds for j in 1:ncol-1, i in 1:nrow-1
-        v00 = (X[i,j],     Y[i,j],     Z[i,j])
-        v10 = (X[i+1,j],   Y[i+1,j],   Z[i+1,j])
-        v01 = (X[i,j+1],   Y[i,j+1],   Z[i,j+1])
+        v00 = (X[i,j], Y[i,j], Z[i,j])
+        v10 = (X[i+1,j], Y[i+1,j], Z[i+1,j])
+        v01 = (X[i,j+1], Y[i,j+1], Z[i,j+1])
         v11 = (X[i+1,j+1], Y[i+1,j+1], Z[i+1,j+1])
         k += 1; out[k] = (v00, v10, v01)
         k += 1; out[k] = (v10, v11, v01)

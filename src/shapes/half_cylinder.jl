@@ -35,7 +35,7 @@ function geometry(shape::HalfCylinder, fur::Fur)
     length_fur = length_skin + 2 * fur.thickness
     flat_area = 2 * radius_skin * length_skin
     total = π * radius_fur * length_fur + π * radius_fur^2 + flat_area
-    skin  = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
+    skin = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness
@@ -71,7 +71,7 @@ function geometry(shape::HalfCylinder, fur::Fur, fat::Fat)
     fat_thickness = radius_skin - radius_flesh
     flat_area = 2 * radius_skin * length_skin
     total = π * radius_fur * length_fur + π * radius_fur^2 + flat_area
-    skin  = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
+    skin = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness
@@ -144,7 +144,7 @@ outer_dims(sh::HalfCylinder, body::AbstractBody) =
 outer_dims(::HalfCylinder, ::Union{Naked,Fat}, body::AbstractBody) =
     (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
 outer_dims(::HalfCylinder, ::Fur, body::AbstractBody) =
-    (r = body.geometry.length.radius_fur,  L = body.geometry.length.length_fur)
+    (r = body.geometry.length.radius_fur, L = body.geometry.length.length_fur)
 
 # Fur axial half-thickness (0 for naked); fur extends past the flesh by this on each end.
 _halfcyl_fur_pad(body) =
@@ -207,7 +207,7 @@ function surface_point(::HalfCylinder, body::AbstractBody, loc::Flat)
 end
 
 surface_normal(::HalfCylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_normal(::HalfCylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_normal(::HalfCylinder, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
 surface_normal(::HalfCylinder, ::AbstractBody, loc::Lateral) =
     (cos(loc.φ), sin(loc.φ), 0.0)
 surface_normal(::HalfCylinder, ::AbstractBody, ::Flat) = (0.0, -1.0, 0.0)
@@ -231,6 +231,6 @@ function surface_centroid(::HalfCylinder, body::AbstractBody, ::Flat)
     (zero(L), zero(L), L/2)
 end
 surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
 surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Lateral) = (0.0, 1.0, 0.0)
 surface_centroid_normal(::HalfCylinder, ::AbstractBody, ::Flat) = (0.0, -1.0, 0.0)

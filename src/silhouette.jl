@@ -40,9 +40,9 @@ function _rasterize_triangle!(covered, p1, p2, p3, x0, y0, dx, dy, n)
     ymin_f = min(p1[2], p2[2], p3[2])
     ymax_f = max(p1[2], p2[2], p3[2])
     imin = max(1, floor(Int, (xmin_f - x0) / dx) + 1)
-    imax = min(n, ceil(Int,  (xmax_f - x0) / dx))
+    imax = min(n, ceil(Int, (xmax_f - x0) / dx))
     jmin = max(1, floor(Int, (ymin_f - y0) / dy) + 1)
-    jmax = min(n, ceil(Int,  (ymax_f - y0) / dy))
+    jmax = min(n, ceil(Int, (ymax_f - y0) / dy))
 
     @inbounds for j in jmin:jmax
         y = y0 + (j - 0.5) * dy
@@ -99,9 +99,9 @@ function silhouette_rasterized(body::CompositeBody, sun_direction::NTuple{3,<:Re
     # Collect 2D triangles + bbox first, then rasterise.
     tris = NTuple{3, NTuple{2, Float64}}[]
     xmin, xmax, ymin, ymax = Inf, -Inf, Inf, -Inf
-    for pair in body.parts
-        part = pair.second
-        pose = _lookup(body.poses, pair.first)
+    for name in propertynames(body.parts)
+        part = getfield(body.parts, name)
+        pose = getfield(body.poses, name)
         for grid in _part_outer_meshes(part.shape, part, 1.0)  # sc=1 → metres
             X, Y, Z = _transform_mesh(grid..., pose, 1.0)
             for tri in _each_triangle(X, Y, Z)

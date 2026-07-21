@@ -47,13 +47,13 @@ function build_dog_mesh()
 
     # Body: a horizontal box, x = head/tail axis.
     add_box!((0.00u"m", -0.10u"m", 0.40u"m"),
-             (0.60u"m",  0.10u"m", 0.60u"m"))
+             (0.60u"m", 0.10u"m", 0.60u"m"))
     # Head: a slightly smaller box just in front of the body.
     add_box!((0.60u"m", -0.09u"m", 0.43u"m"),
-             (0.82u"m",  0.09u"m", 0.65u"m"))
+             (0.82u"m", 0.09u"m", 0.65u"m"))
     # Tail: a thin stub at the back.
     add_box!((-0.20u"m", -0.025u"m", 0.50u"m"),
-             ( 0.00u"m",  0.025u"m", 0.55u"m"))
+             ( 0.00u"m", 0.025u"m", 0.55u"m"))
     # Four legs hanging down from the body to the ground (z=0).
     for (x, y) in ((0.10, -0.07), (0.10, 0.07),
                    (0.50, -0.07), (0.50, 0.07))
@@ -76,8 +76,7 @@ println("density      = ", mesh_shape.density)
 
 # Wrap in a single-part CompositeBody so we can use the interactive
 # rasterised-silhouette plot.
-struct DogBody end
-dog = CompositeBody(; parts = (DogBody() => body,), joins = (), root = DogBody())
+dog = CompositeBody(; parts = (; dog=body), joins = ())
 
 fig = plot_body_silhouette(dog; resolution = 128)
 screen = display(fig)

@@ -39,7 +39,7 @@ end
 # which calls silhouette_area(shape, insulation, body) and expects a (; normal, parallel) NamedTuple.
 function silhouette_area(shape::DesertIguana, ::Naked, ::AbstractBody)
     mass_g = Unitful.uconvert(u"g", shape.mass)
-    normal   = Unitful.uconvert(u"m^2", (3.798 * Unitful.ustrip(mass_g) ^ 0.683)u"cm^2")
+    normal = Unitful.uconvert(u"m^2", (3.798 * Unitful.ustrip(mass_g) ^ 0.683)u"cm^2")
     parallel = Unitful.uconvert(u"m^2", (0.694 * Unitful.ustrip(mass_g) ^ 0.743)u"cm^2")
     return (; normal, parallel)
 end

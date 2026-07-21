@@ -16,16 +16,6 @@ using GLMakie
 
 import BiophysicalGeometry: Cylinder, Sphere, Ellipsoid, HalfCylinder
 
-# Part tags for this composite. Each part is identified by its own
-# singleton type — no Symbols anywhere.
-struct Dorsal end
-struct Ventral end
-struct LegFL end
-struct LegFR end
-struct LegBL end
-struct LegBR end
-struct Head end
-
 GLMakie.activate!()
 
 # ── Parameters ────────────────────────────────────────────────────────────────
@@ -64,8 +54,8 @@ r_leg  = skin_radius(leg_body)
 
 # Lay the body horizontal. The HalfCylinder local frame has axis along +z and
 # bulge along +y, so we want:
-#   - dorsal local +z (length axis)  → world +x  (head/tail direction)
-#   - dorsal local +y (dorsal bulge) → world +z  (dorsal side up)
+# - dorsal local +z (length axis)  → world +x  (head/tail direction)
+# - dorsal local +y (dorsal bulge) → world +z  (dorsal side up)
 # Columns of the rotation matrix are the world-frame images of the local axes.
 R_horizontal = [0.0  0.0  1.0;
                 1.0  0.0  0.0;
@@ -88,36 +78,34 @@ leg_φ_right = π/2 - 0.35
 head_disc = 0.7 * min(r_body, head_body.geometry.length.b_semi_minor_skin)
 
 dog = CompositeBody(;
-    parts = (
-        Dorsal()  => dorsal_body,
-        Ventral() => ventral_body,
-        LegFL()   => leg_body,
-        LegFR()   => leg_body,
-        LegBL()   => leg_body,
-        LegBR()   => leg_body,
-        Head()    => head_body,
+    parts = (;
+        dorsal = dorsal_body,
+        ventral = ventral_body,
+        head = head_body,
+        leg_fl = leg_body,
+        leg_fr = leg_body,
+        leg_bl = leg_body,
+        leg_br = leg_body,
     ),
     joins = (
         # Dorsal/ventral split. The twist around the joint axis is the 6th DOF
         # left free by the surface-normal alignment; -π/2 keeps ventral's
         # length-axis parallel to dorsal's instead of rotated by 90°.
-        Join(Dorsal(),  Attachment(Flat(), FullCover()),
-             Ventral(), Attachment(Flat(), FullCover());
-             twist=-π/2),
+        Join(dorsal = Attachment(Flat(), FullCover()),
+             ventral = Attachment(Flat(), FullCover()); twist=-π/2),
         # Head onto dorsal's far end-cap, centred.
-        Join(Dorsal(), Attachment(EndB(0.0u"m", 0.0), Disc(head_disc)),
-             Head(),   Attachment(PoleA(),           Disc(head_disc))),
+        Join(dorsal = Attachment(EndB(0.0u"m", 0.0), Disc(head_disc)),
+             head = Attachment(PoleA(), Disc(head_disc))),
         # Four legs onto ventral's lateral. On the Cone, EndA is the base.
-        Join(Ventral(), Attachment(Lateral(leg_z_front, leg_φ_left),  Disc(r_leg)),
-             LegFL(),   Attachment(EndA(0.0u"m", 0.0),                Disc(r_leg))),
-        Join(Ventral(), Attachment(Lateral(leg_z_front, leg_φ_right), Disc(r_leg)),
-             LegFR(),   Attachment(EndA(0.0u"m", 0.0),                Disc(r_leg))),
-        Join(Ventral(), Attachment(Lateral(leg_z_back,  leg_φ_left),  Disc(r_leg)),
-             LegBL(),   Attachment(EndA(0.0u"m", 0.0),                Disc(r_leg))),
-        Join(Ventral(), Attachment(Lateral(leg_z_back,  leg_φ_right), Disc(r_leg)),
-             LegBR(),   Attachment(EndA(0.0u"m", 0.0),                Disc(r_leg))),
+        Join(ventral = Attachment(Lateral(leg_z_front, leg_φ_left), Disc(r_leg)),
+             leg_fl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
+        Join(ventral = Attachment(Lateral(leg_z_front, leg_φ_right), Disc(r_leg)),
+             leg_fr = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
+        Join(ventral = Attachment(Lateral(leg_z_back, leg_φ_left), Disc(r_leg)),
+             leg_bl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
+        Join(ventral = Attachment(Lateral(leg_z_back, leg_φ_right), Disc(r_leg)),
+             leg_br = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
     ),
-    root = Dorsal(),
     root_pose = root_pose,
 )
 

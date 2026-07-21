@@ -55,8 +55,8 @@ function geometry(shape::HalfEllipsoid, fur::Fur)
     b_semi_minor_fur = b_semi_minor_skin + fur.thickness
     c_semi_minor_fur = c_semi_minor_skin + fur.thickness
     flat = π * b_semi_minor_skin * c_semi_minor_skin  # skin level for FullCover
-    total = _half_dome_area(a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur)  + flat
-    skin  = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
+    total = _half_dome_area(a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur) + flat
+    skin = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1/3) + fur.thickness
@@ -103,9 +103,9 @@ function geometry(shape::HalfEllipsoid, fur::Fur, fat::Fat)
     a_semi_major_fur = a_semi_major_skin + fur.thickness
     b_semi_minor_fur = b_semi_minor_skin + fur.thickness
     c_semi_minor_fur = c_semi_minor_skin + fur.thickness
-    flat  = π * b_semi_minor_skin * c_semi_minor_skin
-    total = _half_dome_area(a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur)  + flat
-    skin  = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
+    flat = π * b_semi_minor_skin * c_semi_minor_skin
+    total = _half_dome_area(a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur) + flat
+    skin = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1/3) + fur.thickness
@@ -206,7 +206,7 @@ function surface_normal(::HalfEllipsoid, body::AbstractBody, loc::Dome)
     # Gradient of (x/a)² + (y/b)² + (z/c)² = 1 is (2x/a², 2y/b², 2z/c²).
     # Scale each component by a common length (b·c, a·c, a·b) so units
     # cancel: multiply top and bottom by a·b·c to get a unitless vector.
-    nx = cos(loc.α)            * (b * c)
+    nx = cos(loc.α) * (b * c)
     ny = sin(loc.α) * cos(loc.β) * (a * c)
     nz = sin(loc.α) * sin(loc.β) * (a * b)
     n = sqrt(nx^2 + ny^2 + nz^2)

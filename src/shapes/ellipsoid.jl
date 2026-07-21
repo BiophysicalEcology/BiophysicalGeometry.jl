@@ -55,14 +55,14 @@ function geometry(shape::Ellipsoid, fur::Fur)
     a_semi_major_fur = a_semi_major_skin + fur.thickness
     b_semi_minor_fur = b_semi_minor_skin + fur.thickness
     c_semi_minor_fur = c_semi_minor_skin + fur.thickness
-    total = _prolate_area(a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur)
-    skin  = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
+    total = _prolate_area(a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur)
+    skin = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness
     return Geometry(volume, characteristic_dimension,
                     (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-                       a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur),
+                       a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur),
                     SurfaceAreas(; total, skin, convection))
 end
 function geometry(shape::Ellipsoid, fat::Fat)
@@ -111,14 +111,14 @@ function geometry(shape::Ellipsoid, fur::Fur, fat::Fat)
     a_semi_major_fur = a_semi_major_skin + fur.thickness
     b_semi_minor_fur = b_semi_minor_skin + fur.thickness
     c_semi_minor_fur = c_semi_minor_skin + fur.thickness
-    total = _prolate_area(a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur)
-    skin  = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
+    total = _prolate_area(a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur)
+    skin = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness
     return Geometry(volume, characteristic_dimension,
                     (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-                       a_semi_major_fur,  b_semi_minor_fur,  c_semi_minor_fur, fat),
+                       a_semi_major_fur, b_semi_minor_fur, c_semi_minor_fur, fat),
                     SurfaceAreas(; total, skin, convection))
 end
 
@@ -150,7 +150,7 @@ function _prolate_fat_layer_m(flesh_volume, fat_volume, shape_b, semi_minor_fles
     T1a = (-B)^3 / (27 * A^3)
     T1b = (B * C) / (6 * A^2)
     T1c = D / (2 * A)
-    T1  = T1a + T1b - T1c
+    T1 = T1a + T1b - T1c
 
     T2a = T1^2
     T2b = ((C / (3*A)) - (B^2) / (9 * A^2))^3

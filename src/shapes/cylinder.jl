@@ -147,7 +147,7 @@ outer_dims(sh::Cylinder, body::AbstractBody) =
 outer_dims(::Cylinder, ::Union{Naked,Fat}, body::AbstractBody) =
     (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
 outer_dims(::Cylinder, ::Fur, body::AbstractBody) =
-    (r = body.geometry.length.radius_fur,  L = body.geometry.length.length_fur)
+    (r = body.geometry.length.radius_fur, L = body.geometry.length.length_fur)
 
 # Surface AREAS report the actual outer (insulation-aware) area. This drives
 # composition's patch-fits-surface validation and FullCover lookup.
@@ -191,7 +191,7 @@ function surface_point(::Cylinder, body::AbstractBody, loc::Lateral)
 end
 
 surface_normal(::Cylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_normal(::Cylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_normal(::Cylinder, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
 surface_normal(::Cylinder, ::AbstractBody, loc::Lateral) =
     (cos(loc.φ), sin(loc.φ), 0.0)
 
@@ -208,5 +208,5 @@ function surface_centroid(::Cylinder, body::AbstractBody, ::Lateral)
     (R, zero(R), L/2)
 end
 surface_centroid_normal(::Cylinder, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::Cylinder, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_centroid_normal(::Cylinder, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
 surface_centroid_normal(::Cylinder, ::AbstractBody, ::Lateral) = (1.0, 0.0, 0.0)

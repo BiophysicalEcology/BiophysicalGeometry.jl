@@ -239,27 +239,58 @@ end
 # ── Join ──────────────────────────────────────────────────────────────────
 
 """
-    Join(parent_tag, parent_attachment, child_tag, child_attachment; twist=0.0)
+    Join(; twist=0.0, <parent_name>=parent_attachment, <child_name>=child_attachment)
 
-A connection between two parts of a `CompositeBody`, identified by
-singleton tag types provided by the user (e.g. user defines
-`struct Torso end; struct Head end` and passes `Torso()`, `Head()` here).
+A connection between two parts of a `CompositeBody`. The two keyword
+argument names are the names of the parent and child parts (matching keys
+of the `parts` NamedTuple passed to `CompositeBody`); their values are
+`Attachment`s. Order matters — the first-listed part is the parent, the
+second is the child.
+
 `twist` (radians) sets the rotation about the joint axis — the 6th DOF
-that two anti-aligned surface normals don't fix.
+that two anti-aligned surface normals don't fix. `twist` is a reserved
+kwarg name; a part cannot be named `twist`.
+
+The names are lifted into `Join`'s type parameters (`Parent`, `Child`),
+so no `Symbol` value ever appears in the composition machinery at runtime.
+
+# Example
+
+    Join(torso = Attachment(EndA(0.0u"m", 0.0), Disc(r)),
+         head = Attachment(PoleA(), Disc(r)))
 """
-struct Join{PT, CT, A1<:Attachment, A2<:Attachment, T<:Real}
-    parent::PT
+struct Join{Parent, Child, A1<:Attachment, A2<:Attachment, T<:Real}
     parent_attachment::A1
-    child::CT
     child_attachment::A2
     twist::T
 end
-Join(parent, pa::Attachment, child, ca::Attachment; twist=0.0) =
-    Join(parent, pa, child, ca, twist)
 
-# Reverse a join (parent/child swapped, twist negated).
-_reverse_join(j::Join) =
-    Join(j.child, j.child_attachment, j.parent, j.parent_attachment, -j.twist)
+# Kwarg constructor. `twist` is reserved; the remaining two kwargs are the
+# named parent/child attachments. Their names are lifted into the type
+# parameters `Parent` and `Child` — Symbols only ever exist in types.
+function Join(; twist::Real=0.0, kwargs...)
+    nt = NamedTuple(kwargs)
+    _make_join(nt, twist)
+end
+
+function _make_join(nt::NamedTuple{Names, Vals}, twist) where {Names, Vals}
+    length(Names) == 2 ||
+        error("Join needs exactly two named attachments (parent then child); got $(length(Names)): $Names")
+    Vals <: NTuple{2, Attachment} ||
+        error("Join arguments must be `Attachment`s (got $(Vals.parameters[1]) and $(Vals.parameters[2]))")
+    P = Names[1]; C = Names[2]
+    P === C && error("Join cannot connect a part to itself (`$P`)")
+    Join{P, C, Vals.parameters[1], Vals.parameters[2], typeof(twist)}(nt[1], nt[2], twist)
+end
+
+# Reverse a join (parent/child swapped, twist negated). Names swap in the
+# type parameters; attachments and twist swap in the fields.
+_reverse_join(j::Join{P, C, A1, A2}) where {P, C, A1, A2} =
+    Join{C, P, A2, A1, typeof(-j.twist)}(j.child_attachment, j.parent_attachment, -j.twist)
+
+# Part name accessors — pull from the type parameters, so constant-folded.
+_parent(::Join{P}) where {P} = P
+_child(::Join{P, C}) where {P, C} = C
 
 # ── Pose ──────────────────────────────────────────────────────────────────
 
@@ -444,75 +475,35 @@ function validate_attachment(body::AbstractBody, att::Attachment)
     return nothing
 end
 
-# ── Typed parts container helpers ─────────────────────────────────────────
+# ── Parts / poses machinery ───────────────────────────────────────────────
 #
-# `parts` is a Tuple of `Pair{Tag, Body}`; `poses` is a Tuple of
-# `Pair{Tag, Pose}`. Tags are user-defined singleton types. Lookup by tag
-# instance uses a generated function so the position is resolved at compile
-# time — no Symbol, no Dict, no runtime search.
+# `parts` is a `NamedTuple` — user writes `(; torso=body, head=head_body,
+# ...)`. `poses` mirrors it. Part names live only as `Symbol` type
+# parameters of the NamedTuple and of `Join{Parent, Child}`; no `Symbol`
+# ever appears as a runtime value in the composition machinery.
+#
+# Lookups are plain `getfield(nt, P)` where `P` comes from a
+# `where`-bound type parameter — Julia constant-folds those.
 
-"""
-    _lookup(entries::Tuple, tag) -> value
-
-Return `entries[i].second` where `entries[i].first isa typeof(tag)`.
-Type-stable via `@generated`.
-"""
-@generated function _lookup(entries::Tuple, ::T) where {T}
-    for (i, ptype) in enumerate(entries.parameters)
-        if ptype <: Pair && T <: ptype.parameters[1]
-            return :(entries[$i].second)
-        end
-    end
-    :(error("no entry for tag ", $T))
-end
-
-@generated function _has_tag(entries::Tuple, ::Type{T}) where {T}
-    for ptype in entries.parameters
-        if ptype <: Pair && T === ptype.parameters[1]
-            return :(true)
-        end
-    end
-    :(false)
-end
-
-# Extract all first-elements of a Tuple of Pairs.
-_tags(::Tuple{}) = ()
-_tags(entries::Tuple) = (entries[1].first, _tags(Base.tail(entries))...)
-
-function validate_parts(parts::Tuple)
+function validate_parts(parts::NamedTuple)
     isempty(parts) && error("CompositeBody must have at least one part")
-    for pair in parts
-        pair isa Pair || error("parts must be Pairs (tag => Body); got $(typeof(pair))")
-        pair.second isa AbstractBody ||
-            error("part value must be AbstractBody; got $(typeof(pair.second))")
-        pair.second isa CompositeBody &&
-            error("nested CompositeBody is not supported")
+    for (name, body) in pairs(parts)
+        body isa AbstractBody ||
+            error("part `$name` must be an AbstractBody; got $(typeof(body))")
+        body isa CompositeBody &&
+            error("part `$name` is a nested CompositeBody, which is not supported")
     end
-    # No duplicate tag types.
-    _check_unique_tags(map(p -> typeof(p.first), parts))
     return nothing
 end
 
-function _check_unique_tags(tag_types::Tuple)
-    seen = Set{DataType}()
-    for T in tag_types
-        T in seen && error("duplicate part tag type $T in parts")
-        push!(seen, T)
-    end
-end
-
-function validate_join(parts::Tuple, j::Join)
-    _has_tag(parts, typeof(j.parent)) ||
-        error("CompositeBody has no part with tag $(typeof(j.parent))")
-    _has_tag(parts, typeof(j.child)) ||
-        error("CompositeBody has no part with tag $(typeof(j.child))")
-    typeof(j.parent) === typeof(j.child) &&
-        error("Join cannot connect a part to itself ($(typeof(j.parent)))")
-    p = _lookup(parts, j.parent); c = _lookup(parts, j.child)
-    validate_attachment(p, j.parent_attachment)
-    validate_attachment(c, j.child_attachment)
-    Ap = patch_area(p, j.parent_attachment)
-    Ac = patch_area(c, j.child_attachment)
+function validate_join(parts::NamedTuple, j::Join{P, C}) where {P, C}
+    haskey(parts, P) || error("CompositeBody has no part named `$P`")
+    haskey(parts, C) || error("CompositeBody has no part named `$C`")
+    pb = getfield(parts, P); cb = getfield(parts, C)
+    validate_attachment(pb, j.parent_attachment)
+    validate_attachment(cb, j.child_attachment)
+    Ap = patch_area(pb, j.parent_attachment)
+    Ac = patch_area(cb, j.child_attachment)
     rel = abs(Ap - Ac) / max(Ap, Ac)
     if rel > 1e-6
         ps, cs = j.parent_attachment.shape, j.child_attachment.shape
@@ -529,30 +520,30 @@ function validate_join(parts::Tuple, j::Join)
     return nothing
 end
 
-# ── Covered area accumulator (Dict-free) ──────────────────────────────────
+# ── Covered area accumulator ──────────────────────────────────────────────
+#
+# Folds over `joins` — each join already knows its two endpoint names in
+# its type parameters. Start with zero areas per part, and for each join
+# add the two patch areas into the corresponding entries.
 
-covered_areas(parts::Tuple, joins::Tuple) =
-    map(parts) do pair
-        tag = pair.first
-        body = pair.second
-        A0 = zero(body.geometry.area.total)
-        pair.first => _sum_patches_for_tag(A0, body, tag, joins)
-    end
+covered_areas(parts::NamedTuple, joins::Tuple) =
+    _fold_cov(parts, _zero_cov(parts), joins)
 
-_sum_patches_for_tag(acc, body, tag, ::Tuple{}) = acc
-function _sum_patches_for_tag(acc, body, tag, joins::Tuple)
-    j = joins[1]
-    acc2 = acc
-    if typeof(j.parent) === typeof(tag)
-        acc2 += patch_area(body, j.parent_attachment)
-    end
-    if typeof(j.child) === typeof(tag)
-        acc2 += patch_area(body, j.child_attachment)
-    end
-    _sum_patches_for_tag(acc2, body, tag, Base.tail(joins))
+_zero_cov(parts::NamedTuple) = map(b -> zero(b.geometry.area.total), parts)
+
+_fold_cov(parts, cov, ::Tuple{}) = cov
+_fold_cov(parts, cov, joins::Tuple) =
+    _fold_cov(parts, _add_join_cov(parts, cov, joins[1]), Base.tail(joins))
+
+function _add_join_cov(parts::NamedTuple, cov::NamedTuple, j::Join{P, C}) where {P, C}
+    p_area = patch_area(getfield(parts, P), j.parent_attachment)
+    c_area = patch_area(getfield(parts, C), j.child_attachment)
+    cov = merge(cov, NamedTuple{(P,)}((getfield(cov, P) + p_area,)))
+    cov = merge(cov, NamedTuple{(C,)}((getfield(cov, C) + c_area,)))
+    cov
 end
 
-# ── Pose tree solver (Dict-free, tuple-recursive) ─────────────────────────
+# ── Pose tree solver ──────────────────────────────────────────────────────
 #
 # Each child's world pose is determined by its parent's world pose and the
 # join: position the child so the two attachment points coincide, orient
@@ -596,50 +587,40 @@ function _child_pose(parent_body, parent_pose::Pose, child_body, j::Join)
     return Pose(t, R)
 end
 
-# Apply one join, given the current `poses` accumulator (Tuple of Pairs).
+# Apply one join, given the current `poses` NamedTuple accumulator.
 # Requires exactly one endpoint of `j` to already be in `poses`.
-function _apply_join(parts::Tuple, j::Join{PT,CT}, poses::Tuple) where {PT,CT}
-    parent_known = _has_tag(poses, PT)
-    child_known  = _has_tag(poses, CT)
+function _apply_join(parts::NamedTuple, j::Join{P, C}, poses::NamedTuple) where {P, C}
+    parent_known = haskey(poses, P)
+    child_known = haskey(poses, C)
     if parent_known && !child_known
-        pb = _lookup(parts, j.parent)
-        cb = _lookup(parts, j.child)
-        parent_pose = _lookup(poses, j.parent)
-        cp = _child_pose(pb, parent_pose, cb, j)
-        return (poses..., j.child => cp)
+        cp = _child_pose(getfield(parts, P), getfield(poses, P),
+                         getfield(parts, C), j)
+        return merge(poses, NamedTuple{(C,)}((cp,)))
     elseif child_known && !parent_known
-        pb = _lookup(parts, j.parent)
-        cb = _lookup(parts, j.child)
-        child_pose = _lookup(poses, j.child)
         rj = _reverse_join(j)
-        pp = _child_pose(cb, child_pose, pb, rj)
-        return (poses..., j.parent => pp)
+        pp = _child_pose(getfield(parts, C), getfield(poses, C),
+                         getfield(parts, P), rj)
+        return merge(poses, NamedTuple{(P,)}((pp,)))
     elseif parent_known && child_known
-        # Cycle — the extra join is a constraint we don't validate here;
-        # skip to keep tree structure.
+        # Cycle — extra join carries a constraint we don't validate here.
         return poses
     else
-        error("Join $(typeof(j.parent)) ↔ $(typeof(j.child)) has neither " *
-              "endpoint reachable from root yet — reorder joins so a " *
-              "connected endpoint comes first.")
+        error("Join `$P` ↔ `$C` has neither endpoint reachable from root " *
+              "yet — reorder joins so a connected endpoint comes first.")
     end
 end
 
-# Recursively fold joins into the poses tuple. Type-stable via tuple recursion.
-_fold_joins(parts::Tuple, ::Tuple{}, poses::Tuple) = poses
-_fold_joins(parts::Tuple, joins::Tuple, poses::Tuple) =
+# Tuple-recursive fold of joins into a growing poses NamedTuple.
+_fold_joins(parts, ::Tuple{}, poses) = poses
+_fold_joins(parts, joins::Tuple, poses) =
     _fold_joins(parts, Base.tail(joins), _apply_join(parts, joins[1], poses))
 
-function solve_poses(parts::Tuple, joins::Tuple, root_tag, root_pose::Pose)
-    _has_tag(parts, typeof(root_tag)) ||
-        error("root $(typeof(root_tag)) is not among the parts")
-    poses = (root_tag => root_pose,)
+function solve_poses(parts::NamedTuple, joins::Tuple, root::Symbol, root_pose::Pose)
+    poses = NamedTuple{(root,)}((root_pose,))
     poses = _fold_joins(parts, joins, poses)
     if length(poses) != length(parts)
-        visited_types = Set{DataType}(map(p -> typeof(p.first), poses))
-        missing_types = filter(t -> !(t in visited_types),
-                               collect(map(p -> typeof(p.first), parts)))
-        error("parts not reachable from root $(typeof(root_tag)) via joins: $missing_types")
+        missing_names = filter(n -> !(n in propertynames(poses)), propertynames(parts))
+        error("parts not reachable from root `$root` via joins: $missing_names")
     end
     return poses
 end
@@ -650,92 +631,85 @@ _length_unit(b::AbstractBody) = zero(b.geometry.characteristic_dimension)
 # ── CompositeBody ─────────────────────────────────────────────────────────
 
 """
-    CompositeBody(; parts, joins, root)
+    CompositeBody(; parts, joins)
 
-A multi-part organism: a Tuple of `tag => Body` pairs joined by `Join`s.
-Tags are user-defined singleton types (e.g. `struct Torso end`, then
-pass `Torso()`). `root` is the kinematic root tag and serves as the
-"primary" part for scalar accessors (`skin_radius`,
-`characteristic_dimension`, …) that aren't defined for a composite as a
-whole.
+A multi-part organism: a `NamedTuple` of `Body` parts connected by
+`Join`s.
+
+`parts` is a NamedTuple like `(; torso=body, head=head_body, leg_fl=leg,
+leg_fr=leg, ...)` — the keys are ordinary Julia identifiers, never
+`Symbol` literals with a colon. The first-listed part is the kinematic
+`root` and serves as the "primary" part for scalar accessors
+(`skin_radius`, `characteristic_dimension`, …) that aren't defined for a
+composite as a whole. Reorder `parts` to change the root.
+
+`joins` is a Tuple of `Join`s. Each `Join(<parent_name>=..., <child_name>=...)`
+takes exactly two attachment kwargs whose names match keys of `parts`.
+Joins must be given in an order such that, when processed left-to-right,
+at least one endpoint of each join has already been reached from `root`
+(any DFS/BFS ordering works).
 
 The constructor validates each `Join` (surface types, coordinate ranges,
-patch sizes) and derives world-frame `poses` for every part by walking
-the join tree from `root`.
+patch sizes) and derives world-frame `poses` for every part.
 """
-struct CompositeBody{P<:Tuple, J<:Tuple, R, RP<:Tuple} <: AbstractBody
+struct CompositeBody{Root, P<:NamedTuple, J<:Tuple, RP<:NamedTuple} <: AbstractBody
     parts::P
     joins::J
-    root::R
     poses::RP
 end
 
-function CompositeBody(; parts, joins, root,
+function CompositeBody(; parts::NamedTuple, joins,
                          root_pose::Union{Pose,Nothing} = nothing)
-    parts_t = parts isa Tuple ? parts : Tuple(parts)
+    validate_parts(parts)
     joins_t = joins isa Tuple ? joins : Tuple(joins)
-    validate_parts(parts_t)
-    _has_tag(parts_t, typeof(root)) ||
-        error("root $(typeof(root)) is not among parts $(map(p -> typeof(p.first), parts_t))")
     for j in joins_t
-        validate_join(parts_t, j)
+        validate_join(parts, j)
     end
-    rp = root_pose === nothing ?
-         identity_pose(typeof(_length_unit(_lookup(parts_t, root)))) : root_pose
-    poses = solve_poses(parts_t, joins_t, root, rp)
-    CompositeBody(parts_t, joins_t, root, poses)
+    root = first(propertynames(parts))
+    root_body = getfield(parts, root)
+    rp = root_pose === nothing ? identity_pose(typeof(_length_unit(root_body))) : root_pose
+    poses = solve_poses(parts, joins_t, root, rp)
+    CompositeBody{root, typeof(parts), typeof(joins_t), typeof(poses)}(parts, joins_t, poses)
 end
 
 # ── Accessors that delegate to root ───────────────────────────────────────
 
-shape(b::CompositeBody)      = shape(_lookup(b.parts, b.root))
-insulation(b::CompositeBody) = insulation(_lookup(b.parts, b.root))
-geometry(b::CompositeBody)   = geometry(_lookup(b.parts, b.root))
+_root_part(b::CompositeBody{Root}) where {Root} = getfield(b.parts, Root)
 
-skin_radius(b::CompositeBody)       = skin_radius(_lookup(b.parts, b.root))
-insulation_radius(b::CompositeBody) = insulation_radius(_lookup(b.parts, b.root))
-flesh_radius(b::CompositeBody)      = flesh_radius(_lookup(b.parts, b.root))
+shape(b::CompositeBody) = shape(_root_part(b))
+insulation(b::CompositeBody) = insulation(_root_part(b))
+geometry(b::CompositeBody) = geometry(_root_part(b))
+
+skin_radius(b::CompositeBody) = skin_radius(_root_part(b))
+insulation_radius(b::CompositeBody) = insulation_radius(_root_part(b))
+flesh_radius(b::CompositeBody) = flesh_radius(_root_part(b))
 
 # ── Aggregate accessors over parts ────────────────────────────────────────
 
-# For each part in `parts`, subtract the covered area for that tag, then sum.
+# Sum an area-like accessor `f(body)` over all parts, subtracting the
+# per-part covered patch area (accounts for attached joints).
 function _sum_over_parts(f, b::CompositeBody)
     cov = covered_areas(b.parts, b.joins)
-    _sum_parts_impl(f, b.parts, cov)
+    sum(map((body, c) -> f(body) - c, values(b.parts), values(cov)))
 end
 
-_sum_parts_impl(f, ::Tuple{}, ::Tuple{}) =
-    error("cannot sum over zero parts")
-_sum_parts_impl(f, parts::Tuple{<:Pair}, cov::Tuple{<:Pair}) =
-    f(parts[1].second) - cov[1].second
-_sum_parts_impl(f, parts::Tuple, cov::Tuple) =
-    (f(parts[1].second) - cov[1].second) +
-    _sum_parts_impl(f, Base.tail(parts), Base.tail(cov))
-
-total_area(b::CompositeBody)       = _sum_over_parts(total_area, b)
-skin_area(b::CompositeBody)        = _sum_over_parts(skin_area, b)
+total_area(b::CompositeBody) = _sum_over_parts(total_area, b)
+skin_area(b::CompositeBody) = _sum_over_parts(skin_area, b)
 evaporation_area(b::CompositeBody) = _sum_over_parts(evaporation_area, b)
 
-# Simple sum (no covered-area accounting): flesh_volume.
-_sum_map(f, ::Tuple{}) = error("cannot sum over zero parts")
-_sum_map(f, parts::Tuple{<:Pair}) = f(parts[1].second)
-_sum_map(f, parts::Tuple) = f(parts[1].second) + _sum_map(f, Base.tail(parts))
-
-flesh_volume(b::CompositeBody) = _sum_map(flesh_volume, b.parts)
+flesh_volume(b::CompositeBody) = sum(map(flesh_volume, values(b.parts)))
 
 # Silhouette for a composite is the per-part sum — an *upper bound* that
 # ignores part-on-part shadowing. For accurate values, project all parts
 # together and rasterise: see `silhouette_rasterized`.
-_sil_normal(parts::Tuple{<:Pair})   = silhouette_area(parts[1].second).normal
-_sil_normal(parts::Tuple)           = silhouette_area(parts[1].second).normal + _sil_normal(Base.tail(parts))
-_sil_parallel(parts::Tuple{<:Pair}) = silhouette_area(parts[1].second).parallel
-_sil_parallel(parts::Tuple)         = silhouette_area(parts[1].second).parallel + _sil_parallel(Base.tail(parts))
+function silhouette_area(b::CompositeBody)
+    sils = map(silhouette_area, values(b.parts))
+    (; normal = sum(map(s -> s.normal, sils)),
+       parallel = sum(map(s -> s.parallel, sils)))
+end
 
-silhouette_area(b::CompositeBody) =
-    (; normal = _sil_normal(b.parts), parallel = _sil_parallel(b.parts))
-
-silhouette_area(b::CompositeBody, θ) = _sum_map(p -> silhouette_area(p, θ), b.parts)
-silhouette_area(b::CompositeBody, ::NormalToSun)   = silhouette_area(b).normal
+silhouette_area(b::CompositeBody, θ) = sum(map(p -> silhouette_area(p, θ), values(b.parts)))
+silhouette_area(b::CompositeBody, ::NormalToSun) = silhouette_area(b).normal
 silhouette_area(b::CompositeBody, ::ParallelToSun) = silhouette_area(b).parallel
-silhouette_area(b::CompositeBody, ::Intermediate)  =
+silhouette_area(b::CompositeBody, ::Intermediate) =
     (silhouette_area(b).normal + silhouette_area(b).parallel) * 0.5

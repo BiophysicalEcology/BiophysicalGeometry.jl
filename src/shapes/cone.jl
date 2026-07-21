@@ -160,7 +160,7 @@ outer_dims(sh::Cone, body::AbstractBody) =
 outer_dims(::Cone, ::Union{Naked,Fat}, body::AbstractBody) =
     (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
 outer_dims(::Cone, ::Fur, body::AbstractBody) =
-    (r = body.geometry.length.radius_fur,  L = body.geometry.length.length_fur)
+    (r = body.geometry.length.radius_fur, L = body.geometry.length.length_fur)
 
 function surface_area(sh::Cone, body::AbstractBody, ::EndA)
     d = outer_dims(sh, body); π * d.r^2
@@ -203,7 +203,7 @@ function surface_point(shape::Cone, body::AbstractBody, loc::Lateral)
 end
 
 surface_normal(::Cone, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
 function surface_normal(shape::Cone, body::AbstractBody, loc::Lateral)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
@@ -211,7 +211,7 @@ function surface_normal(shape::Cone, body::AbstractBody, loc::Lateral)
     # normal is (radial)·(L/s) + (axial)·((R-r)/s). All quantities are
     # lengths; each ratio is unitless — no ustrip needed.
     Δr = R * (1 - shape.top_ratio)
-    s  = sqrt(Δr^2 + L^2)
+    s = sqrt(Δr^2 + L^2)
     (L/s * cos(loc.φ), L/s * sin(loc.φ), Δr/s)
 end
 
@@ -231,11 +231,11 @@ function surface_centroid(shape::Cone, body::AbstractBody, ::Lateral)
     (rz, zero(R), L/2)
 end
 surface_centroid_normal(::Cone, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0,  1.0)
+surface_centroid_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
 function surface_centroid_normal(shape::Cone, body::AbstractBody, ::Lateral)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     Δr = R * (1 - shape.top_ratio)
-    s  = sqrt(Δr^2 + L^2)
+    s = sqrt(Δr^2 + L^2)
     (L/s, 0.0, Δr/s)
 end
