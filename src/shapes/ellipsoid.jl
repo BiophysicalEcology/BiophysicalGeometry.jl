@@ -28,7 +28,10 @@ end
 # everywhere. Used to blend the "no fat" and "with fat" geometry branches.
 @inline _smooth_step_meters(fat) = 0.5 * (1 + fat / sqrt(fat*fat + (1e-9u"m")^2))
 
-_ellipsoid_eccentricity(a, c) = sqrt(a^2 - c^2) / a
+# "a" is the axisymmetric (polar) axis, "c" (=b) the equatorial radius.
+# Prolate (a>c): eccentricity of the meridian ellipse about its major axis a.
+# Oblate (a<c): eccentricity about the equatorial major axis c instead.
+_ellipsoid_eccentricity(a, c) = a >= c ? sqrt(a^2 - c^2) / a : sqrt(c^2 - a^2) / c
 
 # Pass the (a, b, c, e) tuple into the unitless surface_area method.
 _ellipsoid_surface_args((a, b, c)::Tuple) = (
@@ -152,8 +155,13 @@ function surface_area(shape::Ellipsoid, a, b, c)
     p =  1.6075
     return(4 * π * (((a ^ p * b ^ p + a ^ p * c ^ p + b ^ p * c ^ p)) / 3) ^ (1 / p))
 end
+# Exact spheroid surface area (b=c, the equatorial radius; a the polar axis).
+# Prolate (a>c): standard prolate-spheroid formula. Oblate (a<c): the
+# analogous formula (log replaces asin).
 function surface_area(shape::Ellipsoid, a, b, c, e)
-    (2 * π * b ^ 2 + 2 * π * (a * b / e) * asin(e)) * u"m^2"
+    return a >= c ?
+        (2 * π * b ^ 2 + 2 * π * (a * b / e) * asin(e)) * u"m^2" :
+        (2 * π * b ^ 2 + π * (a ^ 2 / e) * log((1 + e) / (1 - e))) * u"m^2"
 end
 
 # Silhouette area
