@@ -10,10 +10,10 @@ top disc at `z = length_skin` with radius `top_ratio * radius_skin`.
 Insulation expands radii and length as for `Cylinder`; attachment positions
 stay at flesh level.
 """
-mutable struct Cone{M,D,B,T} <: AbstractShape
+mutable struct Cone{M,D,B,T} <: AbstractCylindrical
     mass::M
     density::D
-    b::B
+    axis_ratio_b::B
     top_ratio::T
 end
 Cone(mass, density, b) = Cone(mass, density, b, 0.0)
@@ -29,39 +29,39 @@ end
 function geometry(shape::Cone, ::Naked)
     volume = shape.mass / shape.density
     t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.b, t)
-    length_skin = 2 * shape.b * radius_skin
+    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
     total = surface_area(shape, radius_skin, length_skin)
     characteristic_dimension = volume^(1/3)
     return Geometry(volume, characteristic_dimension,
                     (; radius_skin, length_skin),
                     SurfaceAreas(; total))
 end
-function geometry(shape::Cone, fur::Fur)
+function geometry(shape::Cone, fur::FibrousLayer)
     volume = shape.mass / shape.density
     t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.b, t)
-    radius_fur = radius_skin + fur.thickness
-    length_skin = 2 * shape.b * radius_skin
-    length_fur = length_skin + 2 * fur.thickness
-    total = surface_area(shape, radius_fur, length_fur)
+    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
+    radius_fibrous = radius_skin + fur.thickness
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
+    length_fibrous = length_skin + 2 * fur.thickness
+    total = surface_area(shape, radius_fibrous, length_fibrous)
     skin = surface_area(shape, radius_skin, length_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1/3) + fur.thickness
     return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fur, length_skin, length_fur),
+                    (; radius_skin, radius_fibrous, length_skin, length_fibrous),
                     SurfaceAreas(; total, skin, convection))
 end
-function geometry(shape::Cone, fat::Fat)
+function geometry(shape::Cone, fat::FatLayer)
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
     t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.b, t)
-    length_skin = 2 * shape.b * radius_skin
-    radius_flesh = _cone_radius(flesh_volume, shape.b, t)
+    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
+    radius_flesh = _cone_radius(flesh_volume, shape.axis_ratio_b, t)
     fat_thickness = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin, length_skin)
     characteristic_dimension = volume^(1/3)
@@ -69,25 +69,25 @@ function geometry(shape::Cone, fat::Fat)
                     (; radius_skin, length_skin, fat=fat_thickness),
                     SurfaceAreas(; total))
 end
-function geometry(shape::Cone, fur::Fur, fat::Fat)
+function geometry(shape::Cone, fur::FibrousLayer, fat::FatLayer)
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
     t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.b, t)
-    radius_fur = radius_skin + fur.thickness
-    length_skin = 2 * shape.b * radius_skin
-    length_fur = length_skin + 2 * fur.thickness
-    radius_flesh = _cone_radius(flesh_volume, shape.b, t)
+    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
+    radius_fibrous = radius_skin + fur.thickness
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
+    length_fibrous = length_skin + 2 * fur.thickness
+    radius_flesh = _cone_radius(flesh_volume, shape.axis_ratio_b, t)
     fat_thickness = radius_skin - radius_flesh
-    total = surface_area(shape, radius_fur, length_fur)
+    total = surface_area(shape, radius_fibrous, length_fibrous)
     skin = surface_area(shape, radius_skin, length_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1/3) + fur.thickness
     return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fur, length_skin, length_fur, fat=fat_thickness),
+                    (; radius_skin, radius_fibrous, length_skin, length_fibrous, fat=fat_thickness),
                     SurfaceAreas(; total, skin, convection))
 end
 
@@ -109,42 +109,42 @@ function silhouette_area(::Cone, ::Naked, body::AbstractBody, θ)
     silhouette_area(shape(body), body.geometry.length.radius_skin,
                     body.geometry.length.length_skin, θ)
 end
-function silhouette_area(::Cone, ::Fat, body::AbstractBody, θ)
+function silhouette_area(::Cone, ::FatLayer, body::AbstractBody, θ)
     silhouette_area(shape(body), body.geometry.length.radius_skin,
                     body.geometry.length.length_skin, θ)
 end
-function silhouette_area(::Cone, ::Fur, body::AbstractBody, θ)
-    silhouette_area(shape(body), body.geometry.length.radius_fur,
-                    body.geometry.length.length_fur, θ)
+function silhouette_area(::Cone, ::FibrousLayer, body::AbstractBody, θ)
+    silhouette_area(shape(body), body.geometry.length.radius_fibrous,
+                    body.geometry.length.length_fibrous, θ)
 end
 function silhouette_area(::Cone, ::CompositeInsulation, body::AbstractBody, θ)
-    silhouette_area(shape(body), body.geometry.length.radius_fur,
-                    body.geometry.length.length_fur, θ)
+    silhouette_area(shape(body), body.geometry.length.radius_fibrous,
+                    body.geometry.length.length_fibrous, θ)
 end
-function silhouette_area(::Cone, ::Union{Naked,Fat}, body::AbstractBody)
+function silhouette_area(::Cone, ::Union{Naked,FatLayer}, body::AbstractBody)
     r = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     (; normal = r * L, parallel = π * r^2)
 end
-function silhouette_area(::Cone, ::Union{Fur,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fur
-    L = body.geometry.length.length_fur
+function silhouette_area(::Cone, ::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
+    r = body.geometry.length.radius_fibrous
+    L = body.geometry.length.length_fibrous
     (; normal = r * L, parallel = π * r^2)
 end
 
 # Radii — mirror Cylinder.
-skin_radius(::Cone, ::AbstractInsulation, body) = body.geometry.length.radius_skin
+skin_radius(::Cone, ::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
 
 insulation_radius(::Cone, ::Naked, body) = body.geometry.length.radius_skin
 flesh_radius(::Cone, ::Naked, body) = body.geometry.length.radius_skin
 
-insulation_radius(::Cone, ::Fur, body) = body.geometry.length.radius_fur
-flesh_radius(::Cone, ::Fur, body) = body.geometry.length.radius_skin
+insulation_radius(::Cone, ::FibrousLayer, body) = body.geometry.length.radius_fibrous
+flesh_radius(::Cone, ::FibrousLayer, body) = body.geometry.length.radius_skin
 
-insulation_radius(::Cone, ::Fat, body) = body.geometry.length.radius_skin
-flesh_radius(::Cone, ::Fat, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+insulation_radius(::Cone, ::FatLayer, body) = body.geometry.length.radius_skin
+flesh_radius(::Cone, ::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
-insulation_radius(::Cone, ::CompositeInsulation, body) = body.geometry.length.radius_fur
+insulation_radius(::Cone, ::CompositeInsulation, body) = body.geometry.length.radius_fibrous
 flesh_radius(::Cone, ::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
 # Composition
@@ -157,10 +157,10 @@ attachment_surfaces(::Cone) = (EndA, EndB, Lateral)
 # Outer (insulation-aware) dimensions.
 outer_dims(sh::Cone, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
-outer_dims(::Cone, ::Union{Naked,Fat}, body::AbstractBody) =
+outer_dims(::Cone, ::Union{Naked,FatLayer}, body::AbstractBody) =
     (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
-outer_dims(::Cone, ::Fur, body::AbstractBody) =
-    (r = body.geometry.length.radius_fur, L = body.geometry.length.length_fur)
+outer_dims(::Cone, ::FibrousLayer, body::AbstractBody) =
+    (r = body.geometry.length.radius_fibrous, L = body.geometry.length.length_fibrous)
 
 function surface_area(sh::Cone, body::AbstractBody, ::EndA)
     d = outer_dims(sh, body); π * d.r^2

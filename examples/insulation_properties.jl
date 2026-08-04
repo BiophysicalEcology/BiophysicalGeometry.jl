@@ -3,7 +3,7 @@
 # Visualises the properties of fur/fibre insulation as modelled in
 # BiophysicalGeometry.jl.  Four panels:
 #
-#   1. Fur schematic — side-view cartoon showing fibre diameter d, fur depth
+#   1. FibrousLayer schematic — side-view cartoon showing fibre diameter d, fur depth
 #      (thickness), fibre length L, and the inter-fibre spacing implied by N.
 #      When L > fur depth the fibres are drawn as tilted parallelograms.
 #
@@ -41,13 +41,13 @@ fibre_length     = 14.0u"mm"   # actual fibre length (may exceed fur depth → f
 fibre_diameter   = 30.0u"μm"
 fibre_density    = 3000u"cm^-2"
 
-fur  = Fur(insulation_depth, fibre_diameter, fibre_density)
-fat  = Fat(0.1, 901.0u"kg/m^3")
+fur  = FibrousLayer(insulation_depth, fibre_diameter, fibre_density)
+fat  = FatLayer(0.1, 901.0u"kg/m^3")
 comp = CompositeInsulation(fur, fat)
 
 cyl        = Cylinder(mass, density, b_ratio)
 ins_list   = [Naked(), fat, fur, comp]
-ins_labels = ["Naked", "Fat", "Fur", "Fur + Fat"]
+ins_labels = ["Naked", "FatLayer", "FibrousLayer", "FibrousLayer + FatLayer"]
 
 # ── Panel 3: Surface area comparison bar chart ────────────────────────────────
 
@@ -123,7 +123,7 @@ ax4 = Axis(fig[2, 2:3])
 draw_insulation_schematic!(ax1, fur; fibre_length)
 hm = draw_insulation_coverage!(ax2, fur)
 draw_area_comparison!(ax3, cyl, ins_list, ins_labels)
-draw_silhouette_vs_zenith!(ax4, cyl, [Naked(), fur, comp], ["Naked", "Fur", "Fur + Fat"])
+draw_silhouette_vs_zenith!(ax4, cyl, [Naked(), fur, comp], ["Naked", "FibrousLayer", "FibrousLayer + FatLayer"])
 
 Colorbar(fig[1, 3], hm; label="Coverage fraction f", width=14, labelsize=10)
 

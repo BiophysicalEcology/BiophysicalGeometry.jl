@@ -75,10 +75,10 @@ end
 # Insulation other than Naked is not (yet) modelled for free-form meshes —
 # growing fur uniformly outward needs vertex-normal displacement which is
 # out of scope for now.
-geometry(shape::TriMesh, ::Fur) =
-    error("TriMesh does not yet support Fur insulation; use Naked.")
-geometry(shape::TriMesh, ::Fat) =
-    error("TriMesh does not yet support Fat insulation; use Naked.")
+geometry(shape::TriMesh, ::FibrousLayer) =
+    error("TriMesh does not yet support FibrousLayer insulation; use Naked.")
+geometry(shape::TriMesh, ::FatLayer) =
+    error("TriMesh does not yet support FatLayer insulation; use Naked.")
 geometry(shape::TriMesh, ::CompositeInsulation) =
     error("TriMesh does not yet support composite insulation; use Naked.")
 
@@ -108,11 +108,11 @@ insulation_radius(::TriMesh, ::Naked, body::AbstractBody) =
 flesh_radius(::TriMesh, ::Naked, body::AbstractBody) =
     body.geometry.characteristic_dimension / 2
 
-skin_radius(::TriMesh, ::AbstractInsulation, ::AbstractBody) =
+skin_radius(::TriMesh, ::AbstractInsulationLayer, ::AbstractBody) =
     error("TriMesh does not yet support insulated bodies; use Naked.")
-insulation_radius(::TriMesh, ::AbstractInsulation, ::AbstractBody) =
+insulation_radius(::TriMesh, ::AbstractInsulationLayer, ::AbstractBody) =
     error("TriMesh does not yet support insulated bodies; use Naked.")
-flesh_radius(::TriMesh, ::AbstractInsulation, ::AbstractBody) =
+flesh_radius(::TriMesh, ::AbstractInsulationLayer, ::AbstractBody) =
     error("TriMesh does not yet support insulated bodies; use Naked.")
 
 # ── Composition opt-out ──────────────────────────────────────────────────

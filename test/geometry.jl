@@ -13,8 +13,8 @@ fibre_density = 3000u"cm^-2"
 fat_fraction = 0.1
 fat_density = 901.0u"kg/m^3"
 
-fur = Fur(fur_thickness, fibre_diameter, fibre_density)
-fat = Fat(fat_fraction, fat_density)
+fur = FibrousLayer(fur_thickness, fibre_diameter, fibre_density)
+fat = FatLayer(fat_fraction, fat_density)
 
 # plate
 shape = Plate(mass, density, shape_b, shape_c)

@@ -56,7 +56,7 @@ end
 end
 
 @testset "Dorsal furred, ventral naked" begin
-    fur = Fur(0.01u"m", 30u"μm", 3000u"cm^-2")
+    fur = FibrousLayer(0.01u"m", 30u"μm", 3000u"cm^-2")
     dorsal = Body(HalfCylinder(10u"kg", ρ, 3.0), fur)
     ventral = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
     torso = CompositeBody(;
@@ -108,6 +108,66 @@ end
     # Scalar accessors delegate to the root part (first in `parts`).
     @test skin_radius(dog) == skin_radius(torso)
     @test insulation_radius(dog) == insulation_radius(torso)
+end
+
+@testset "Join accessors" begin
+    torso = Body(Cylinder(20u"kg", ρ, 3.0), Naked())
+    leg   = Body(Cylinder(1u"kg", ρ, 5.0), Naked())
+    head  = Body(Ellipsoid(2u"kg", ρ, 1.5, 1.0), Naked())
+    L_torso = torso.geometry.length.length_skin
+    R_torso = skin_radius(torso)
+    r_leg  = skin_radius(leg)
+    r_head = 0.04u"m"
+
+    head_join = Join(torso = Attachment(EndA(0.0u"m", 0.0), Disc(r_head)),
+                     head = Attachment(PoleA(), Disc(r_head)))
+    leg_join  = Join(torso = Attachment(Lateral(0.2*L_torso, π/2), Disc(r_leg)),
+                     leg_fl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg)))
+    dog = CompositeBody(; parts = (; torso, head, leg_fl = leg),
+                          joins = (head_join, leg_join))
+
+    # join_partners — names from the type parameters.
+    @test join_partners(head_join) == (:torso, :head)
+    @test join_partners(leg_join)  == (:torso, :leg_fl)
+
+    # join_area — π r² for a Disc; parent/child agree by construction.
+    @test join_area(head_join, dog) ≈ π * r_head^2
+    @test join_area(leg_join, dog)  ≈ π * r_leg^2
+
+    # join_position — world centre of the interface (identity root pose).
+    hp = join_position(head_join, dog)             # torso EndA at r=0 → origin
+    @test hp[1] ≈ 0.0u"m" atol=1e-9u"m"
+    @test hp[2] ≈ 0.0u"m" atol=1e-9u"m"
+    @test hp[3] ≈ 0.0u"m" atol=1e-9u"m"
+    lp = join_position(leg_join, dog)              # torso Lateral at φ=π/2 → (0, R, 0.2L)
+    @test lp[1] ≈ 0.0u"m" atol=1e-9u"m"
+    @test lp[2] ≈ R_torso
+    @test lp[3] ≈ 0.2*L_torso
+
+    # internal_distance — closed forms per surface.
+    hd = internal_distance(head_join, dog)
+    @test hd.parent ≈ L_torso / 2                                  # cylinder centroid → end cap
+    @test hd.child  ≈ head.geometry.length.a_semi_major_skin       # ellipsoid centre → pole
+    ld = internal_distance(leg_join, dog)
+    @test ld.parent ≈ R_torso                                      # cylinder centroid → lateral
+    @test ld.child  ≈ leg.geometry.length.length_skin / 2
+
+    # Half-cylinder flat face: half-disc centroid sits 4R/(3π) off the plane.
+    dorsal = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
+    Rd = dorsal.geometry.length.radius_skin
+    @test internal_distance(dorsal, Flat()) ≈ 4Rd / (3π)
+
+    # Sphere: centroid → any surface point is the radius.
+    sph = Body(Sphere(2u"kg", ρ), Naked())
+    @test internal_distance(sph, Radial(0.0, 0.0)) ≈ skin_radius(sph)
+
+    # TriMesh has no thermal family — flesh_centroid falls through to the
+    # generic error, so a lumped-resistance path length fails loudly.
+    verts = [(0.0u"m",0.0u"m",0.0u"m"), (1.0u"m",0.0u"m",0.0u"m"),
+             (0.0u"m",1.0u"m",0.0u"m"), (0.0u"m",0.0u"m",1.0u"m")]
+    faces = [(1,3,2), (1,2,4), (1,4,3), (2,3,4)]
+    mesh_body = Body(TriMesh(verts, faces; mass=1u"kg"), Naked())
+    @test_throws ErrorException internal_distance(mesh_body, Radial(0.0, 0.0))
 end
 
 @testset "Validation" begin

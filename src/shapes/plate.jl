@@ -3,71 +3,71 @@
 
 A flat plate-shaped organism shape.
 """
-mutable struct Plate{M,D,B,C} <: AbstractShape
+mutable struct Plate{M,D,B,C} <: AbstractSlab
     mass::M
     density::D
-    b::B
-    c::C
+    axis_ratio_b::B
+    axis_ratio_c::C
 end
 
 function geometry(shape::Plate, ::Naked)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c 
+    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.axis_ratio_b
+    height_skin = length_skin / shape.axis_ratio_c 
     total = surface_area(shape, length_skin, width_skin, height_skin)
     characteristic_dimension = volume^(1 / 3) # width_skin * 2
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin), SurfaceAreas(; total))
 end
-function geometry(shape::Plate, fur::Fur)
+function geometry(shape::Plate, fur::FibrousLayer)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c 
-    length_fur = length_skin + fur.thickness * 2
-    width_fur = width_skin + fur.thickness * 2
-    height_fur = height_skin + fur.thickness * 2
-    total = surface_area(shape, length_fur, width_fur, height_fur)
+    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.axis_ratio_b
+    height_skin = length_skin / shape.axis_ratio_c 
+    length_fibrous = length_skin + fur.thickness * 2
+    width_fibrous = width_skin + fur.thickness * 2
+    height_fibrous = height_skin + fur.thickness * 2
+    total = surface_area(shape, length_fibrous, width_fibrous, height_fibrous)
     skin = surface_area(shape, length_skin, width_skin, height_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     fat = 0.0u"m"
-    characteristic_dimension = volume^(1 / 3) + fur.thickness # width_fur * 2
-    return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), SurfaceAreas(; total, skin, convection))
+    characteristic_dimension = volume^(1 / 3) + fur.thickness # width_fibrous * 2
+    return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fibrous, width_fibrous, height_fibrous, fat), SurfaceAreas(; total, skin, convection))
 end
-function geometry(shape::Plate, fat::Fat)
+function geometry(shape::Plate, fat::FatLayer)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c 
+    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.axis_ratio_b
+    height_skin = length_skin / shape.axis_ratio_c 
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    width_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3) / shape.b
+    width_flesh = (flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3) / shape.axis_ratio_b
     fat = (width_skin - width_flesh) / 2
     total = surface_area(shape, length_skin, width_skin, height_skin)
     characteristic_dimension = volume^(1 / 3) # width_skin * 2 
     return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, fat), SurfaceAreas(; total))
 end
-function geometry(shape::Plate, fur::Fur, fat::Fat)
+function geometry(shape::Plate, fur::FibrousLayer, fat::FatLayer)
     volume = shape.mass / shape.density
-    length_skin = (volume * shape.b * shape.c)^(1 / 3)
-    width_skin = length_skin / shape.b
-    height_skin = length_skin / shape.c
+    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    width_skin = length_skin / shape.axis_ratio_b
+    height_skin = length_skin / shape.axis_ratio_c
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     flesh_volume = volume - fat_volume
-    width_flesh = (flesh_volume * shape.b * shape.c)^(1 / 3) / shape.b
+    width_flesh = (flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3) / shape.axis_ratio_b
     fat = (width_skin - width_flesh) / 2
-    length_fur = length_skin + fur.thickness * 2
-    width_fur = width_skin + fur.thickness * 2
-    height_fur = height_skin + fur.thickness * 2
-    total = surface_area(shape, length_fur, width_fur, height_fur)
+    length_fibrous = length_skin + fur.thickness * 2
+    width_fibrous = width_skin + fur.thickness * 2
+    height_fibrous = height_skin + fur.thickness * 2
+    total = surface_area(shape, length_fibrous, width_fibrous, height_fibrous)
     skin = surface_area(shape, length_skin, width_skin, height_skin)
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness #width_fur * 2 
-    return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fur, width_fur, height_fur, fat), SurfaceAreas(; total, skin, convection))
+    characteristic_dimension = volume^(1 / 3) + fur.thickness #width_fibrous * 2 
+    return Geometry(volume, characteristic_dimension, (; length_skin, width_skin, height_skin, length_fibrous, width_fibrous, height_fibrous, fat), SurfaceAreas(; total, skin, convection))
 end
 
 # Surface area
@@ -82,7 +82,7 @@ surface_area(shape::Plate, length, width, height) = length * width * 2 + length 
 
 # Silhouette area
 
-function silhouette_area(shape::Plate, insulation::Union{Naked,Fat}, body::AbstractBody)
+function silhouette_area(shape::Plate, insulation::Union{Naked,FatLayer}, body::AbstractBody)
     length = body.geometry.length.length_skin
     width = body.geometry.length.width_skin
     height = body.geometry.length.height_skin
@@ -90,10 +90,10 @@ function silhouette_area(shape::Plate, insulation::Union{Naked,Fat}, body::Abstr
     parallel = min(length * width, length * height, height * width)
     return (; normal, parallel)
 end
-function silhouette_area(shape::Plate, insulation::Union{Fur,CompositeInsulation}, body::AbstractBody)
-    length = body.geometry.length.length_fur
-    width = body.geometry.length.width_fur
-    height = body.geometry.length.height_fur
+function silhouette_area(shape::Plate, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
+    length = body.geometry.length.length_fibrous
+    width = body.geometry.length.width_fibrous
+    height = body.geometry.length.height_fibrous
     normal = max(length * width, length * height, height * width)
     parallel = min(length * width, length * height, height * width)
     return (; normal, parallel)
@@ -101,22 +101,22 @@ end
 
 # Radius
 
-skin_radius(shape::Plate, insulation::AbstractInsulation, body) = body.geometry.length.width_skin / 2
+skin_radius(shape::Plate, insulation::AbstractInsulationLayer, body) = body.geometry.length.width_skin / 2
 
 # naked
 insulation_radius(shape::Plate, insulation::Naked, body) = body.geometry.length.width_skin / 2
 flesh_radius(shape::Plate, insulation::Naked, body) = body.geometry.length.width_skin / 2
 
 # fur
-insulation_radius(shape::Plate, insulation::Fur, body) = body.geometry.length.width_fur / 2
-flesh_radius(shape::Plate, insulation::Fur, body) = body.geometry.length.width_skin / 2
+insulation_radius(shape::Plate, insulation::FibrousLayer, body) = body.geometry.length.width_fibrous / 2
+flesh_radius(shape::Plate, insulation::FibrousLayer, body) = body.geometry.length.width_skin / 2
 
 # fat
-insulation_radius(shape::Plate, insulation::Fat, body) = body.geometry.length.width_skin / 2
-flesh_radius(shape::Plate, insulation::Fat, body) = body.geometry.length.width_skin / 2 - body.geometry.length.fat
+insulation_radius(shape::Plate, insulation::FatLayer, body) = body.geometry.length.width_skin / 2
+flesh_radius(shape::Plate, insulation::FatLayer, body) = body.geometry.length.width_skin / 2 - body.geometry.length.fat
 
 # fur plus fat
-insulation_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometry.length.width_fur / 2
+insulation_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometry.length.width_fibrous / 2
 flesh_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometry.length.width_skin / 2 - body.geometry.length.fat
 
 # Composition
@@ -126,14 +126,14 @@ attachment_surfaces(::Plate) = (Top, Bottom, SideA, SideB, SideC, SideD)
 # Outer (insulation-aware) dimensions (L, W, H). Insulation-dispatched.
 outer_dims(sh::Plate, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
-outer_dims(::Plate, ::Union{Naked,Fat}, body::AbstractBody) =
+outer_dims(::Plate, ::Union{Naked,FatLayer}, body::AbstractBody) =
     (L = body.geometry.length.length_skin,
      W = body.geometry.length.width_skin,
      H = body.geometry.length.height_skin)
-outer_dims(::Plate, ::Fur, body::AbstractBody) =
-    (L = body.geometry.length.length_fur,
-     W = body.geometry.length.width_fur,
-     H = body.geometry.length.height_fur)
+outer_dims(::Plate, ::FibrousLayer, body::AbstractBody) =
+    (L = body.geometry.length.length_fibrous,
+     W = body.geometry.length.width_fibrous,
+     H = body.geometry.length.height_fibrous)
 
 # Skin-level dimensions — used for flesh-anchored attachment positions.
 function _plate_skin(body::AbstractBody)

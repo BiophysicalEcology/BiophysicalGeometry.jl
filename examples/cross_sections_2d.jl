@@ -23,10 +23,10 @@ shape      = Cylinder(mass, density, 4.0)
 # shape    = Ellipsoid(mass, density, 4.0, 1.0)
 # shape    = Sphere(mass, density)
 
-insulation = CompositeInsulation(Fur(10.0u"mm", 30.0u"μm", 3000u"cm^-2"),
-                                  Fat(0.1, 901.0u"kg/m^3"))
-# insulation = Fur(10.0u"mm", 30.0u"μm", 3000u"cm^-2")
-# insulation = Fat(0.1, 901.0u"kg/m^3")
+insulation = CompositeInsulation(FibrousLayer(10.0u"mm", 30.0u"μm", 3000u"cm^-2"),
+                                  FatLayer(0.1, 901.0u"kg/m^3"))
+# insulation = FibrousLayer(10.0u"mm", 30.0u"μm", 3000u"cm^-2")
+# insulation = FatLayer(0.1, 901.0u"kg/m^3")
 # insulation = Naked()
 
 body = Body(shape, insulation)

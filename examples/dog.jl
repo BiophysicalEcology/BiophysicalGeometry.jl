@@ -32,21 +32,21 @@ leg_top_ratio = 0.4           # foot radius / shoulder radius
 m_leg        = m_leg_cyl * (1 + leg_top_ratio + leg_top_ratio^2) / 3
 m_head       = 2.0u"kg"
 
-dorsal_fur  = Fur(15.0u"mm", 30.0u"μm", 3000u"cm^-2")
-ventral_fur = Fur( 5.0u"mm", 30.0u"μm", 3000u"cm^-2")  # thinner belly fur
-limb_fur    = Fur( 8.0u"mm", 30.0u"μm", 3000u"cm^-2")  # legs + head
+dorsal_fibrous  = FibrousLayer(15.0u"mm", 30.0u"μm", 3000u"cm^-2")
+ventral_fibrous = FibrousLayer( 5.0u"mm", 30.0u"μm", 3000u"cm^-2")  # thinner belly fur
+limb_fibrous    = FibrousLayer( 8.0u"mm", 30.0u"μm", 3000u"cm^-2")  # legs + head
 
 # ── Parts ─────────────────────────────────────────────────────────────────────
-dorsal_body  = Body(HalfCylinder(m_total_body / 2, density, b_body), dorsal_fur)
-ventral_body = Body(HalfCylinder(m_total_body / 2, density, b_body), ventral_fur)
-leg_body     = Body(Cone(m_leg, density, b_leg, leg_top_ratio), limb_fur)
+dorsal_body  = Body(HalfCylinder(m_total_body / 2, density, b_body), dorsal_fibrous)
+ventral_body = Body(HalfCylinder(m_total_body / 2, density, b_body), ventral_fibrous)
+leg_body     = Body(Cone(m_leg, density, b_leg, leg_top_ratio), limb_fibrous)
 
 # Truncate the head's pole_a end so it joins the body flush rather than
 # touching at a single point. We pick the truncation so the cut-disc radius
 # equals the join Disc radius (head_disc = 0.7 · b_minor → cut disc has
 # y/z extents 0.7 · b_minor; that means pole_a_truncation = 1 - sqrt(1 - 0.49)).
 head_truncate = 1 - sqrt(1 - 0.7^2)
-head_body = Body(Ellipsoid(m_head, density, b_head, 1.0, head_truncate), limb_fur)
+head_body = Body(Ellipsoid(m_head, density, b_head, 1.0, head_truncate), limb_fibrous)
 
 L_body = dorsal_body.geometry.length.length_skin
 r_body = dorsal_body.geometry.length.radius_skin

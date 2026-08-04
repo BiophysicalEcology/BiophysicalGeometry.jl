@@ -85,11 +85,11 @@ function _draw_cutaway_shape!(p, sh::Cylinder, body, sc, cols)
 
     L_s = _m(body.geometry.length.length_skin, sc)
     L_i = _m(outer_dims(sh, body).L, sc)
-    z0_fur = -(L_i - L_s) / 2
+    z0_fibrous = -(L_i - L_s) / 2
 
     _draw_cylinder!(p, r.flesh, L_s, cols.flesh)
     fl.fat && _draw_cylinder!(p, r.skin, L_s, cols.fat; θ_end=3π/2)
-    fl.fur && _draw_cylinder!(p, r.ins, L_i, cols.fur; θ_end=3π/2, z0=z0_fur)
+    fl.fur && _draw_cylinder!(p, r.ins, L_i, cols.fur; θ_end=3π/2, z0=z0_fibrous)
 end
 
 function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
@@ -386,7 +386,7 @@ function BiophysicalGeometry.plot_body(body;
         [PolyElement(polycolor=flesh_col, strokecolor=:saddlebrown, strokewidth=1),
          PolyElement(polycolor=fat_col, strokecolor=:saddlebrown, strokewidth=1),
          PolyElement(polycolor=fur_col, strokecolor=:black, strokewidth=1)],
-        ["Flesh / muscle", "Subcutaneous fat", "Fur / insulation"];
+        ["Flesh / muscle", "Subcutaneous fat", "FibrousLayer / insulation"];
         orientation=:horizontal, framevisible=false)
     return fig
 end
@@ -546,7 +546,7 @@ function BiophysicalGeometry.plot_cross_sections(body;
         [PolyElement(polycolor=flesh_col, strokecolor=flesh_col, strokewidth=1),
          PolyElement(polycolor=fat_col, strokecolor=fat_col, strokewidth=1),
          PolyElement(polycolor=fur_col, strokecolor=fur_col, strokewidth=1)],
-        ["Flesh / muscle", "Subcutaneous fat", "Fur / fibre insulation"];
+        ["Flesh / muscle", "Subcutaneous fat", "FibrousLayer / fibre insulation"];
         orientation=:horizontal, framevisible=false)
     rowgap!(fig.layout, 8)
     colgap!(fig.layout, 30)
@@ -554,13 +554,13 @@ function BiophysicalGeometry.plot_cross_sections(body;
 end
 
 """
-    draw_insulation_schematic!(ax, fur::Fur; fibre_length=fur.thickness)
+    draw_insulation_schematic!(ax, fur::FibrousLayer; fibre_length=fur.thickness)
 
-Draw a side-view schematic of a `Fur` insulation layer into `ax`.  Fibre width
+Draw a side-view schematic of a `FibrousLayer` insulation layer into `ax`.  Fibre width
 is exaggerated for clarity.  When `fibre_length > fur.thickness` the fibres are
 drawn as tilted parallelograms.
 """
-function BiophysicalGeometry.draw_insulation_schematic!(ax, fur::Fur;
+function BiophysicalGeometry.draw_insulation_schematic!(ax, fur::FibrousLayer;
         fibre_length = fur.thickness)
 
     thick_mm = ustrip(u"mm", fur.thickness)
@@ -638,7 +638,7 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fur::Fur;
           text="spacing ≈ $(round(spacing_mm, digits=2)) mm  (N = $n_cm2 cm⁻²)",
           fontsize=8, align=(:center, :bottom), color=:darkgreen)
 
-    ax.title = "Fur schematic  (fibre width exaggerated for clarity)"
+    ax.title = "FibrousLayer schematic  (fibre width exaggerated for clarity)"
     ax.xlabel = "position (mm)"
     ax.ylabel = "height above skin (mm)"
     ylims!(ax, -skin_h * 5, thick_mm * 1.55)
@@ -647,13 +647,13 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fur::Fur;
 end
 
 """
-    draw_insulation_coverage!(ax, fur::Fur; d_range=LinRange(10,120,200), N_range=LinRange(200,9000,200))
+    draw_insulation_coverage!(ax, fur::FibrousLayer; d_range=LinRange(10,120,200), N_range=LinRange(200,9000,200))
 
 Draw a coverage-fraction heatmap (plasma colormap) with contour lines at f = 0.25,
 0.50, 0.75, 1.0, and mark the reference point for `fur`.  Returns the `Heatmap`
 object so the caller can attach a `Colorbar`.
 """
-function BiophysicalGeometry.draw_insulation_coverage!(ax, fur::Fur;
+function BiophysicalGeometry.draw_insulation_coverage!(ax, fur::FibrousLayer;
         d_range = LinRange(10.0, 120.0, 200),
         N_range = LinRange(200.0, 9000.0, 200))
 
@@ -690,20 +690,20 @@ function BiophysicalGeometry.draw_insulation_coverage!(ax, fur::Fur;
 end
 
 """
-    plot_insulation_properties(fur::Fur; fibre_length=fur.thickness, kwargs...) → Figure
+    plot_insulation_properties(fur::FibrousLayer; fibre_length=fur.thickness, kwargs...) → Figure
 
 Create a two-panel `Figure` showing a fur schematic and coverage heatmap for
-the supplied `Fur` object.  `fibre_length` may exceed `fur.thickness` to show
+the supplied `FibrousLayer` object.  `fibre_length` may exceed `fur.thickness` to show
 tilted fibres.  `d_range` and `N_range` control the heatmap axes (μm / cm⁻²).
 """
-function BiophysicalGeometry.plot_insulation_properties(fur::Fur;
+function BiophysicalGeometry.plot_insulation_properties(fur::FibrousLayer;
         fibre_length = fur.thickness,
         d_range = LinRange(10.0, 120.0, 200),
         N_range = LinRange(200.0, 9000.0, 200))
 
     fig = Figure(size=(900, 420), backgroundcolor=:white)
     Label(fig[0, 1:3],
-          "BiophysicalGeometry.jl — Fur Properties";
+          "BiophysicalGeometry.jl — FibrousLayer Properties";
           fontsize=14, font=:bold, padding=(0, 0, 8, 0))
     ax1 = Axis(fig[1, 1])
     ax2 = Axis(fig[1, 2])

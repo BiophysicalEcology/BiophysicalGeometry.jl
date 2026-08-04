@@ -8,30 +8,84 @@ Abstract supertype for the shape of the organism being modelled.
 """
 abstract type AbstractShape <: AbstractGeometryModel end
 
+# Physics-relevant family intermediates between `AbstractShape` and the
+# concrete shapes. Thermal consumers (HeatExchange) dispatch on these —
+# one method per family covers every concrete shape in it, and a new
+# concrete shape joins its family with no new physics methods.
+# `TriMesh` deliberately has no family: a thermal solve on a mesh errors
+# with a missing-method dispatch rather than silently using the wrong
+# correlation.
+
 """
-    AbstractInsulation
+    AbstractCylindrical <: AbstractShape
+
+Family of axial, circular-cross-section shapes (`Cylinder`, `HalfCylinder`,
+`Cone`) that share cylindrical thermal correlations.
+"""
+abstract type AbstractCylindrical <: AbstractShape end
+
+"""
+    AbstractSpherical <: AbstractShape
+
+Family of spherical shapes (`Sphere`) sharing spherical thermal correlations.
+"""
+abstract type AbstractSpherical <: AbstractShape end
+
+"""
+    AbstractEllipsoidal <: AbstractShape
+
+Family of ellipsoidal shapes (`Ellipsoid`, `HalfEllipsoid`) sharing
+ellipsoidal thermal correlations.
+"""
+abstract type AbstractEllipsoidal <: AbstractShape end
+
+"""
+    AbstractSlab <: AbstractShape
+
+Family of flat-plate shapes (`Plate`) sharing slab thermal correlations.
+"""
+abstract type AbstractSlab <: AbstractShape end
+
+"""
+    AbstractInsulationLayer
 
 Abstract supertype for the insulation of the organism being modelled.
 """
-abstract type AbstractInsulation <: AbstractGeometryModel end
+abstract type AbstractInsulationLayer <: AbstractGeometryModel end
 
 """
-    Naked <: AbstractInsulation
+    AbstractPorousLayer <: AbstractInsulationLayer
+
+Family of fibrous insulations (fur, feathers, hair) sharing radiative /
+conductive fibre-bed physics.
+"""
+abstract type AbstractPorousLayer <: AbstractInsulationLayer end
+
+"""
+    AbstractSolidLayer <: AbstractInsulationLayer
+
+Family of solid insulating layers (fat, muscle, skin) sharing
+lumped-conductive-shell physics.
+"""
+abstract type AbstractSolidLayer <: AbstractInsulationLayer end
+
+"""
+    Naked <: AbstractInsulationLayer
 
     Naked()
 
 Insulation trait for an organism without fur.
 """
-struct Naked <: AbstractInsulation end
+struct Naked <: AbstractInsulationLayer end
 
 """
-    Fur <: AbstractInsulation
+    FibrousLayer <: AbstractPorousLayer
 
-    Fur(thickness)
+    FibrousLayer(thickness, fibre_diameter, fibre_density)
 
-Insulation trait for an organism with fur.
+A porous insulation layer characterised by fibre geometry (fur, feathers, hair, wool).
 """
-struct Fur{T,D,R} <: AbstractInsulation
+struct FibrousLayer{T,D,R} <: AbstractPorousLayer
     thickness::T
     fibre_diameter::D
     fibre_density::R
@@ -39,42 +93,42 @@ end
 
 # TODO
 # """
-#     Feathers <: AbstractInsulation
+#     Feathers <: AbstractInsulationLayer
 
 #     Feathers(thickness)
 
 # Insulation trait for an organism with feathers.
 # """
-# struct Feathers{T,D,R} <: AbstractInsulation
+# struct Feathers{T,D,R} <: AbstractPorousLayer
 #     thickness::T
 #     fibre_diameter::D
 #     fibre_density::R
 # end
 
 """
-    Fat <: AbstractInsulation
+    FatLayer <: AbstractSolidLayer
 
-    Fat(fraction, density)
+    FatLayer(fraction, density)
 
-Insulation trait for an organism with fat.
+A solid insulation layer of subcutaneous fat.
 """
-struct Fat{F,D} <: AbstractInsulation
+struct FatLayer{F,D} <: AbstractSolidLayer
     fraction::F
     density::D
 end
 
 """
-    CompositeInsulation <: AbstractInsulation
+    CompositeInsulation <: AbstractInsulationLayer
 
     CompositeInsulation(layers)
 
 A composite of insulation layers (e.g., fur, fat) for an organism.
 """
-struct CompositeInsulation{T<:Tuple} <: AbstractInsulation
+struct CompositeInsulation{T<:Tuple} <: AbstractInsulationLayer
     layers::T
 end
-CompositeInsulation(i::AbstractInsulation) = CompositeInsulation((i,))
-CompositeInsulation(is::AbstractInsulation...) = CompositeInsulation((is...,))
+CompositeInsulation(i::AbstractInsulationLayer) = CompositeInsulation((i,))
+CompositeInsulation(is::AbstractInsulationLayer...) = CompositeInsulation((is...,))
 
 geometry(shape, ins::CompositeInsulation) = geometry(shape, ins.layers...)
 
@@ -137,18 +191,18 @@ surface_area(body::AbstractBody) = surface_area(shape(body), body)
 """
     Body <: AbstractBody
 
-    Body(shape::AbstractShape, insulation::AbstractInsulation)
-    Body(shape::AbstractShape, insulation::AbstractInsulation, geometry::AbstractGeometryPars)
+    Body(shape::AbstractShape, insulation::AbstractInsulationLayer)
+    Body(shape::AbstractShape, insulation::AbstractInsulationLayer, geometry::AbstractGeometryPars)
 
 Physical dimensions of a body or body part that may or may note be insulated.
 """
-struct Body{S<:AbstractShape, I<:AbstractInsulation, G<:AbstractGeometryPars} <: AbstractBody
+struct Body{S<:AbstractShape, I<:AbstractInsulationLayer, G<:AbstractGeometryPars} <: AbstractBody
     shape::S
     insulation::I
     geometry::G
 end
 
-Body(shape::AbstractShape, insulation::AbstractInsulation) =
+Body(shape::AbstractShape, insulation::AbstractInsulationLayer) =
     Body(shape, insulation, geometry(shape, insulation))
 
 # Surface areas
@@ -158,9 +212,9 @@ skin_area(body::AbstractBody) = skin_area(shape(body), insulation(body), body)
 evaporation_area(body::AbstractBody) = evaporation_area(shape(body), insulation(body), body)
 
 # Fallbacks - mostly these are the same for all shapes
-total_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.total
-skin_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.skin
-evaporation_area(shape::AbstractShape, insulation::AbstractInsulation, body::AbstractBody) = body.geometry.area.convection
+total_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.total
+skin_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.skin
+evaporation_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.convection
 
 # CompositeInsulation uses the outer layer
 total_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractBody) =
@@ -218,7 +272,7 @@ end
 # Volume
 
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
-function flesh_volume(ins::Union{Fat, CompositeInsulation}, body)
+function flesh_volume(ins::Union{FatLayer, CompositeInsulation}, body)
     fat = inner_insulation(body.insulation)
     if body.geometry.length.fat > zero(body.geometry.length.fat)
         body.geometry.volume - body.shape.mass * fat.fraction / fat.density
@@ -226,7 +280,7 @@ function flesh_volume(ins::Union{Fat, CompositeInsulation}, body)
         body.geometry.volume
     end
 end
-flesh_volume(ins::Fur, body) = body.geometry.volume
+flesh_volume(ins::FibrousLayer, body) = body.geometry.volume
 flesh_volume(ins::Naked, body) = body.geometry.volume
 
 # Radius
@@ -238,10 +292,10 @@ flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), b
 # Helpers for handling CompositeInsulation
 
 # for composite insulation cases (fat and fur/feathers)
-outer_insulation(ins::AbstractInsulation) = ins
+outer_insulation(ins::AbstractInsulationLayer) = ins
 function outer_insulation(ins::CompositeInsulation)
     # find fur layer if present
-    fur_layer = findlast(i -> i isa Fur, ins.layers)
+    fur_layer = findlast(i -> i isa FibrousLayer, ins.layers)
     if fur_layer !== nothing
         ins.layers[fur_layer]
     else
@@ -250,10 +304,10 @@ function outer_insulation(ins::CompositeInsulation)
     end
 end
 
-inner_insulation(ins::AbstractInsulation) = ins
+inner_insulation(ins::AbstractInsulationLayer) = ins
 function inner_insulation(ins::CompositeInsulation)
     # find fur layer if present
-    fat_layer = findfirst(i -> i isa Fat, ins.layers)
+    fat_layer = findfirst(i -> i isa FatLayer, ins.layers)
     if fat_layer !== nothing
         ins.layers[fat_layer]
     else

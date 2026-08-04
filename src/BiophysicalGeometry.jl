@@ -5,13 +5,16 @@ using Unitful
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
 export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, Cone, LeopardFrog, DesertIguana
 export HalfCylinder, HalfEllipsoid, TriMesh
-export AbstractInsulation, CompositeInsulation, Naked, Fur, Fat
+export AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab
+export AbstractInsulationLayer, CompositeInsulation, Naked, FibrousLayer, FatLayer
+export AbstractPorousLayer, AbstractSolidLayer
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 export SurfaceAreas
 export CompositeBody, Join, Attachment, Disc, FullCover, AbstractAttachmentShape, Pose
 export AbstractSurface, EndA, EndB, Lateral, Flat, Dome, PoleA, PoleB, Equator, Radial
 export Top, Bottom, SideA, SideB, SideC, SideD
 export attachment_surfaces
+export join_area, join_position, join_partners, internal_distance, flesh_centroid
 
 export geometry, shape, insulation, outer_dims
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
@@ -62,5 +65,6 @@ include("shapes/desert_iguana.jl")
 include("shapes/leopard_frog.jl")
 include("meshes.jl")
 include("silhouette.jl")
+include("joins.jl")
 
 end

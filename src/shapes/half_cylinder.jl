@@ -11,46 +11,46 @@ In local coordinates the axis lies along `+z`, the curved surface occupies
 The flat-face area is reported at *skin* level even when fur is present,
 so that two halves (mixed insulation) join cleanly with `FullCover`.
 """
-mutable struct HalfCylinder{M,D,B} <: AbstractShape
+mutable struct HalfCylinder{M,D,B} <: AbstractCylindrical
     mass::M
     density::D
-    b::B
+    axis_ratio_b::B
 end
 
 function geometry(shape::HalfCylinder, ::Naked)
     volume = shape.mass / shape.density
-    radius_skin = (volume / (π * shape.b))^(1 / 3)
-    length_skin = 2 * shape.b * radius_skin
+    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
     total = surface_area(shape, radius_skin, length_skin)
     characteristic_dimension = volume^(1 / 3)
     return Geometry(volume, characteristic_dimension,
                     (; radius_skin, length_skin),
                     SurfaceAreas(; total))
 end
-function geometry(shape::HalfCylinder, fur::Fur)
+function geometry(shape::HalfCylinder, fur::FibrousLayer)
     volume = shape.mass / shape.density
-    radius_skin = (volume / (π * shape.b))^(1 / 3)
-    radius_fur = radius_skin + fur.thickness
-    length_skin = 2 * shape.b * radius_skin
-    length_fur = length_skin + 2 * fur.thickness
+    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
+    radius_fibrous = radius_skin + fur.thickness
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
+    length_fibrous = length_skin + 2 * fur.thickness
     flat_area = 2 * radius_skin * length_skin
-    total = π * radius_fur * length_fur + π * radius_fur^2 + flat_area
+    total = π * radius_fibrous * length_fibrous + π * radius_fibrous^2 + flat_area
     skin = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness
     return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fur, length_skin, length_fur),
+                    (; radius_skin, radius_fibrous, length_skin, length_fibrous),
                     SurfaceAreas(; total, skin, convection))
 end
-function geometry(shape::HalfCylinder, fat::Fat)
+function geometry(shape::HalfCylinder, fat::FatLayer)
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    radius_skin = (volume / (π * shape.b))^(1 / 3)
-    length_skin = 2 * shape.b * radius_skin
-    radius_flesh = (flesh_volume / (π * shape.b))^(1 / 3)
+    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
+    radius_flesh = (flesh_volume / (π * shape.axis_ratio_b))^(1 / 3)
     fat_thickness = radius_skin - radius_flesh
     total = surface_area(shape, radius_skin, length_skin)
     characteristic_dimension = volume^(1 / 3)
@@ -58,25 +58,25 @@ function geometry(shape::HalfCylinder, fat::Fat)
                     (; radius_skin, length_skin, fat=fat_thickness),
                     SurfaceAreas(; total))
 end
-function geometry(shape::HalfCylinder, fur::Fur, fat::Fat)
+function geometry(shape::HalfCylinder, fur::FibrousLayer, fat::FatLayer)
     fat_mass = shape.mass * fat.fraction
     fat_volume = fat_mass / fat.density
     volume = shape.mass / shape.density
     flesh_volume = volume - fat_volume
-    radius_skin = (volume / (π * shape.b))^(1 / 3)
-    radius_fur = radius_skin + fur.thickness
-    length_skin = 2 * shape.b * radius_skin
-    length_fur = length_skin + 2 * fur.thickness
-    radius_flesh = (flesh_volume / (π * shape.b))^(1 / 3)
+    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
+    radius_fibrous = radius_skin + fur.thickness
+    length_skin = 2 * shape.axis_ratio_b * radius_skin
+    length_fibrous = length_skin + 2 * fur.thickness
+    radius_flesh = (flesh_volume / (π * shape.axis_ratio_b))^(1 / 3)
     fat_thickness = radius_skin - radius_flesh
     flat_area = 2 * radius_skin * length_skin
-    total = π * radius_fur * length_fur + π * radius_fur^2 + flat_area
+    total = π * radius_fibrous * length_fibrous + π * radius_fibrous^2 + flat_area
     skin = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
     area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
     convection = skin - area_hair
     characteristic_dimension = volume^(1 / 3) + fur.thickness
     return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fur, length_skin, length_fur, fat=fat_thickness),
+                    (; radius_skin, radius_fibrous, length_skin, length_fibrous, fat=fat_thickness),
                     SurfaceAreas(; total, skin, convection))
 end
 
@@ -93,45 +93,45 @@ function silhouette_area(::HalfCylinder, ::Naked, body::AbstractBody, θ)
     L = body.geometry.length.length_skin
     silhouette_area(shape(body), r, L, θ)
 end
-function silhouette_area(::HalfCylinder, ::Fat, body::AbstractBody, θ)
+function silhouette_area(::HalfCylinder, ::FatLayer, body::AbstractBody, θ)
     r = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     silhouette_area(shape(body), r, L, θ)
 end
-function silhouette_area(::HalfCylinder, ::Fur, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fur
-    L = body.geometry.length.length_fur
+function silhouette_area(::HalfCylinder, ::FibrousLayer, body::AbstractBody, θ)
+    r = body.geometry.length.radius_fibrous
+    L = body.geometry.length.length_fibrous
     silhouette_area(shape(body), r, L, θ)
 end
 function silhouette_area(::HalfCylinder, ::CompositeInsulation, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fur
-    L = body.geometry.length.length_fur
+    r = body.geometry.length.radius_fibrous
+    L = body.geometry.length.length_fibrous
     silhouette_area(shape(body), r, L, θ)
 end
-function silhouette_area(::HalfCylinder, ::Union{Naked,Fat}, body::AbstractBody)
+function silhouette_area(::HalfCylinder, ::Union{Naked,FatLayer}, body::AbstractBody)
     r = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     (; normal = r * L, parallel = π * r^2 / 2)
 end
-function silhouette_area(::HalfCylinder, ::Union{Fur,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fur
-    L = body.geometry.length.length_fur
+function silhouette_area(::HalfCylinder, ::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
+    r = body.geometry.length.radius_fibrous
+    L = body.geometry.length.length_fibrous
     (; normal = r * L, parallel = π * r^2 / 2)
 end
 
 # Radii — same dispatch as Cylinder.
-skin_radius(::HalfCylinder, ::AbstractInsulation, body) = body.geometry.length.radius_skin
+skin_radius(::HalfCylinder, ::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
 
 insulation_radius(::HalfCylinder, ::Naked, body) = body.geometry.length.radius_skin
 flesh_radius(::HalfCylinder, ::Naked, body) = body.geometry.length.radius_skin
 
-insulation_radius(::HalfCylinder, ::Fur, body) = body.geometry.length.radius_fur
-flesh_radius(::HalfCylinder, ::Fur, body) = body.geometry.length.radius_skin
+insulation_radius(::HalfCylinder, ::FibrousLayer, body) = body.geometry.length.radius_fibrous
+flesh_radius(::HalfCylinder, ::FibrousLayer, body) = body.geometry.length.radius_skin
 
-insulation_radius(::HalfCylinder, ::Fat, body) = body.geometry.length.radius_skin
-flesh_radius(::HalfCylinder, ::Fat, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+insulation_radius(::HalfCylinder, ::FatLayer, body) = body.geometry.length.radius_skin
+flesh_radius(::HalfCylinder, ::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
-insulation_radius(::HalfCylinder, ::CompositeInsulation, body) = body.geometry.length.radius_fur
+insulation_radius(::HalfCylinder, ::CompositeInsulation, body) = body.geometry.length.radius_fibrous
 flesh_radius(::HalfCylinder, ::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
 # Composition
@@ -141,12 +141,12 @@ attachment_surfaces(::HalfCylinder) = (EndA, EndB, Lateral, Flat)
 # Outer (insulation-aware) dimensions. `r` matches insulation_radius(body).
 outer_dims(sh::HalfCylinder, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
-outer_dims(::HalfCylinder, ::Union{Naked,Fat}, body::AbstractBody) =
+outer_dims(::HalfCylinder, ::Union{Naked,FatLayer}, body::AbstractBody) =
     (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
-outer_dims(::HalfCylinder, ::Fur, body::AbstractBody) =
-    (r = body.geometry.length.radius_fur, L = body.geometry.length.length_fur)
+outer_dims(::HalfCylinder, ::FibrousLayer, body::AbstractBody) =
+    (r = body.geometry.length.radius_fibrous, L = body.geometry.length.length_fibrous)
 
-# Fur axial half-thickness (0 for naked); fur extends past the flesh by this on each end.
+# FibrousLayer axial half-thickness (0 for naked); fur extends past the flesh by this on each end.
 _halfcyl_fur_pad(body) =
     (outer_dims(shape(body), body).L - body.geometry.length.length_skin) / 2
 
