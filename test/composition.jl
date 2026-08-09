@@ -42,6 +42,32 @@ end
     @test flesh_volume(torso) ≈ flesh_volume(full)
 end
 
+@testset "HalfSphere geometry" begin
+    # A half-sphere is the equal-axis half-ellipsoid; two of mass m reconstruct
+    # Sphere(2m). HalfSphere(m, ρ) shares the full Sphere(2m, ρ)'s skin radius.
+    h    = Body(HalfSphere(5u"kg", ρ), Naked())
+    full = Body(Sphere(10u"kg", ρ), Naked())
+    @test h isa Body{<:HalfEllipsoid}
+    @test h.geometry.length.b_semi_minor_skin ≈ full.geometry.length.radius_skin
+    @test flesh_volume(h) ≈ flesh_volume(full) / 2
+    # Half dome + flat ≈ total; the two domes reconstruct the full sphere's area.
+    flat = π * h.geometry.length.b_semi_minor_skin^2
+    @test total_area(h) - flat ≈ total_area(full) / 2
+end
+
+@testset "Dorsal/ventral head == full sphere" begin
+    dorsal  = Body(HalfSphere(5u"kg", ρ), Naked())
+    ventral = Body(HalfSphere(5u"kg", ρ), Naked())
+    head = CompositeBody(;
+        parts = (; dorsal, ventral),
+        joins = (Join(dorsal = Attachment(Flat(), FullCover()),
+                      ventral = Attachment(Flat(), FullCover())),),
+    )
+    full = Body(Sphere(10u"kg", ρ), Naked())
+    @test total_area(head) ≈ total_area(full)
+    @test flesh_volume(head) ≈ flesh_volume(full)
+end
+
 @testset "Dorsal/ventral torso == full ellipsoid" begin
     dorsal = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), Naked())
     ventral = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), Naked())

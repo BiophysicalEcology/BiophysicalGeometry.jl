@@ -19,6 +19,23 @@ mutable struct HalfEllipsoid{M,D,B,C} <: AbstractEllipsoidal
     axis_ratio_c::C
 end
 
+"""
+    HalfSphere(mass, density) -> HalfEllipsoid
+
+A hemisphere — the dome half of a sphere cut through its centre. A half-sphere is
+exactly the equal-axis half-ellipsoid, so this is a convenience constructor for
+`HalfEllipsoid(mass, density, 1.0, 1.0)` (the dome-area formula already carries an
+exact half-sphere branch), reusing all of `HalfEllipsoid`'s geometry, silhouette,
+meshing and composition machinery rather than duplicating it.
+
+Sized so that two `HalfSphere(mass, density)` joined at their flat faces reconstruct
+`Sphere(2*mass, density)`: a `HalfSphere(m/2, ρ)` has the same skin radius as
+`Sphere(m, ρ)`, and its two domes sum to the full sphere's surface area. This is the
+sphere counterpart of `HalfCylinder`, letting a spherical body take the genuine
+two-part (dorsal/ventral) decomposition.
+"""
+HalfSphere(mass, density) = HalfEllipsoid(mass, density, 1.0, 1.0)
+
 # Dome area for one half of a prolate spheroid (b = c assumed). The
 # formula uses sqrt / asin on dimensionless eccentricity, so this is the
 # one place we step out of Unitful — ustrip once, compute, re-wrap.

@@ -4,7 +4,7 @@ using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
 export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, Cone, LeopardFrog, DesertIguana
-export HalfCylinder, HalfEllipsoid, TriMesh
+export HalfCylinder, HalfEllipsoid, HalfSphere, TriMesh
 export AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab
 export AbstractInsulationLayer, CompositeInsulation, Naked, FibrousLayer, FatLayer
 export AbstractPorousLayer, AbstractSolidLayer
