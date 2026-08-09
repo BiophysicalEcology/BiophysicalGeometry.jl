@@ -241,3 +241,43 @@ end
     @test summed ≈ 2 * expected            # summed counts both spheres
     @test Aalong < summed                  # overlap → rasteriser < summed
 end
+
+@testset "silhouette_area_per_part (occlusion attribution)" begin
+    ρ = 1000.0u"kg/m^3"
+    sphere = Body(Sphere(1u"kg", ρ), Naked())
+    R = skin_radius(sphere)
+    expected = π * R^2
+
+    bottom = Body(Sphere(1u"kg", ρ), Naked())
+    top    = Body(Sphere(1u"kg", ρ), Naked())
+    snowman = CompositeBody(;
+        parts = (; bottom, top),
+        joins = (Join(bottom = Attachment(Radial(0.0, 0.0), Disc(0.001u"m")),
+                      top    = Attachment(Radial(0.0, 0.0), Disc(0.001u"m"))),),
+    )
+
+    # Along +z: the top sphere is nearer the source and fully shadows the bottom.
+    along = silhouette_area_per_part(snowman, (0.0, 0.0, 1.0); resolution=256)
+    @test abs(along.top - expected) / expected < 0.02
+    @test along.bottom / expected < 0.02                     # occluded → ~0
+    @test abs((along.top + along.bottom) -
+              silhouette_rasterized(snowman, (0.0, 0.0, 1.0))) / expected < 0.02  # sums to composite
+
+    # Across (+x): side by side, neither shadows the other.
+    across = silhouette_area_per_part(snowman, (1.0, 0.0, 0.0); resolution=256)
+    @test abs(across.top - expected) / expected < 0.02
+    @test abs(across.bottom - expected) / expected < 0.02
+
+    # view_partition: each sphere's hemisphere splits into sky / ground / the neighbour.
+    vp = view_partition(snowman; ndirections=400, resolution=96)
+    for k in (:top, :bottom)
+        e = vp[k]
+        @test e.sky + e.ground + sum(values(e.neighbours)) ≈ 1.0 atol = 1e-6   # exhausts the hemisphere
+    end
+    @test vp.top.sky > vp.top.ground            # top sphere faces the sky
+    @test vp.bottom.ground > vp.bottom.sky      # bottom sphere faces the ground
+    @test vp.top.sky ≈ 0.5 atol = 0.03          # outer hemisphere unobstructed
+    @test vp.bottom.ground ≈ 0.5 atol = 0.03
+    @test vp.top.neighbours.bottom > 0.02       # the tangent sphere blocks part of the inner hemisphere
+    @test vp.top.neighbours.bottom ≈ vp.bottom.neighbours.top atol = 0.02   # reciprocal
+end
