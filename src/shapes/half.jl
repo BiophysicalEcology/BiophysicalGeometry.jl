@@ -51,19 +51,20 @@ function _halfgeom(full, total, skin, fur::FibrousLayer)
     Geometry(vol, vol^(1 / 3) + fur.thickness, full.length, SurfaceAreas(; total, skin, convection))
 end
 
-# A half's surface is the parent's, halved, plus the flat cut face. The parent
-# area is already computed (`full.area.*`); only the flat face is family-specific.
-_flat_area(::Half{<:AbstractCylindrical}, l) = 2 * l.radius_skin * l.length_skin
-_flat_area(::Half{<:AbstractEllipsoidal}, l) = π * l.b_semi_minor_skin * l.c_semi_minor_skin
-_flat_area(::Half{<:AbstractSpherical},   l) = π * l.radius_skin^2
+# A half's surface is the parent's, halved, plus the cut face — the mirror plane
+# through the centre where the two halves join. The parent area is already
+# computed (`full.area.*`); only this cut face is family-specific.
+_cut_face_area(::Half{<:AbstractCylindrical}, l) = 2 * l.radius_skin * l.length_skin
+_cut_face_area(::Half{<:AbstractEllipsoidal}, l) = π * l.b_semi_minor_skin * l.c_semi_minor_skin
+_cut_face_area(::Half{<:AbstractSpherical},   l) = π * l.radius_skin^2
 
 function _halve(h::Half, full)
-    flat = _flat_area(h, full.length)
-    _halfgeom(full, full.area.total / 2 + flat)
+    cut_face = _cut_face_area(h, full.length)
+    _halfgeom(full, full.area.total / 2 + cut_face)
 end
 function _halve(h::Half, full, fur::FibrousLayer)
-    flat = _flat_area(h, full.length)
-    _halfgeom(full, full.area.total / 2 + flat, full.area.skin / 2 + flat, fur)
+    cut_face = _cut_face_area(h, full.length)
+    _halfgeom(full, full.area.total / 2 + cut_face, full.area.skin / 2 + cut_face, fur)
 end
 
 # ── Route-around-the-wrapper forwards ────────────────────────────────────
