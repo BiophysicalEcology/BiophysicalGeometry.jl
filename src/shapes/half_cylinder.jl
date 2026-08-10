@@ -84,55 +84,21 @@ end
 surface_area(::HalfCylinder, r, L) = π * r * L + π * r^2 + 2 * r * L
 
 # Silhouette area: half of the equivalent full cylinder's, so two halves
-# joined back together reproduce the full cylinder's silhouettes.
+# joined back together reproduce the full cylinder's silhouettes. `outer_dims`
+# picks skin- vs fibrous-level (r, L) so one wrapper per arity suffices.
 function silhouette_area(::HalfCylinder, r, L, θ)
     r * L * sin(θ) + (π * r^2 / 2) * cos(θ)
 end
-function silhouette_area(::HalfCylinder, ::Naked, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    L = body.geometry.length.length_skin
-    silhouette_area(shape(body), r, L, θ)
+function silhouette_area(sh::HalfCylinder, ::AbstractInsulationLayer, body::AbstractBody, θ)
+    d = outer_dims(sh, body)
+    silhouette_area(sh, d.r, d.L, θ)
 end
-function silhouette_area(::HalfCylinder, ::FatLayer, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    L = body.geometry.length.length_skin
-    silhouette_area(shape(body), r, L, θ)
-end
-function silhouette_area(::HalfCylinder, ::FibrousLayer, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fibrous
-    L = body.geometry.length.length_fibrous
-    silhouette_area(shape(body), r, L, θ)
-end
-function silhouette_area(::HalfCylinder, ::CompositeInsulation, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fibrous
-    L = body.geometry.length.length_fibrous
-    silhouette_area(shape(body), r, L, θ)
-end
-function silhouette_area(::HalfCylinder, ::Union{Naked,FatLayer}, body::AbstractBody)
-    r = body.geometry.length.radius_skin
-    L = body.geometry.length.length_skin
-    (; normal = r * L, parallel = π * r^2 / 2)
-end
-function silhouette_area(::HalfCylinder, ::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fibrous
-    L = body.geometry.length.length_fibrous
-    (; normal = r * L, parallel = π * r^2 / 2)
+function silhouette_area(sh::HalfCylinder, ::AbstractInsulationLayer, body::AbstractBody)
+    d = outer_dims(sh, body)
+    (; normal = d.r * d.L, parallel = π * d.r^2 / 2)
 end
 
-# Radii — same dispatch as Cylinder.
-skin_radius(::HalfCylinder, ::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
-
-insulation_radius(::HalfCylinder, ::Naked, body) = body.geometry.length.radius_skin
-flesh_radius(::HalfCylinder, ::Naked, body) = body.geometry.length.radius_skin
-
-insulation_radius(::HalfCylinder, ::FibrousLayer, body) = body.geometry.length.radius_fibrous
-flesh_radius(::HalfCylinder, ::FibrousLayer, body) = body.geometry.length.radius_skin
-
-insulation_radius(::HalfCylinder, ::FatLayer, body) = body.geometry.length.radius_skin
-flesh_radius(::HalfCylinder, ::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
-
-insulation_radius(::HalfCylinder, ::CompositeInsulation, body) = body.geometry.length.radius_fibrous
-flesh_radius(::HalfCylinder, ::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+# Radii come from the shared `AbstractCylindrical` dispatch in cylinder.jl.
 
 # Composition
 

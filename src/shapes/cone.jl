@@ -100,52 +100,22 @@ function surface_area(shape::Cone, R, L)
     π * R^2 + π * r^2 + π * (R + r) * s
 end
 
-# Silhouette: same shape as cylinder pattern, but the lateral profile is a
-# triangle (r·L) rather than a rectangle (2·r·L).
+# Silhouette: same shape as the cylinder pattern, but the lateral profile is a
+# triangle (r·L) rather than a rectangle (2·r·L). `outer_dims` picks skin- vs
+# fibrous-level (r, L) so one wrapper per arity covers all insulation kinds.
 function silhouette_area(::Cone, r, L, θ)
     r * L * sin(θ) + π * r^2 * cos(θ)
 end
-function silhouette_area(::Cone, ::Naked, body::AbstractBody, θ)
-    silhouette_area(shape(body), body.geometry.length.radius_skin,
-                    body.geometry.length.length_skin, θ)
+function silhouette_area(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody, θ)
+    d = outer_dims(sh, body)
+    silhouette_area(sh, d.r, d.L, θ)
 end
-function silhouette_area(::Cone, ::FatLayer, body::AbstractBody, θ)
-    silhouette_area(shape(body), body.geometry.length.radius_skin,
-                    body.geometry.length.length_skin, θ)
-end
-function silhouette_area(::Cone, ::FibrousLayer, body::AbstractBody, θ)
-    silhouette_area(shape(body), body.geometry.length.radius_fibrous,
-                    body.geometry.length.length_fibrous, θ)
-end
-function silhouette_area(::Cone, ::CompositeInsulation, body::AbstractBody, θ)
-    silhouette_area(shape(body), body.geometry.length.radius_fibrous,
-                    body.geometry.length.length_fibrous, θ)
-end
-function silhouette_area(::Cone, ::Union{Naked,FatLayer}, body::AbstractBody)
-    r = body.geometry.length.radius_skin
-    L = body.geometry.length.length_skin
-    (; normal = r * L, parallel = π * r^2)
-end
-function silhouette_area(::Cone, ::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fibrous
-    L = body.geometry.length.length_fibrous
-    (; normal = r * L, parallel = π * r^2)
+function silhouette_area(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody)
+    d = outer_dims(sh, body)
+    (; normal = d.r * d.L, parallel = π * d.r^2)
 end
 
-# Radii — mirror Cylinder.
-skin_radius(::Cone, ::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
-
-insulation_radius(::Cone, ::Naked, body) = body.geometry.length.radius_skin
-flesh_radius(::Cone, ::Naked, body) = body.geometry.length.radius_skin
-
-insulation_radius(::Cone, ::FibrousLayer, body) = body.geometry.length.radius_fibrous
-flesh_radius(::Cone, ::FibrousLayer, body) = body.geometry.length.radius_skin
-
-insulation_radius(::Cone, ::FatLayer, body) = body.geometry.length.radius_skin
-flesh_radius(::Cone, ::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
-
-insulation_radius(::Cone, ::CompositeInsulation, body) = body.geometry.length.radius_fibrous
-flesh_radius(::Cone, ::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+# Radii come from the shared `AbstractCylindrical` dispatch in cylinder.jl.
 
 # Composition
 #

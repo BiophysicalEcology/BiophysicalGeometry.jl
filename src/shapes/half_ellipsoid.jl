@@ -36,19 +36,11 @@ two-part (dorsal/ventral) decomposition.
 """
 HalfSphere(mass, density) = HalfEllipsoid(mass, density, 1.0, 1.0)
 
-# Dome area for one half of a prolate spheroid (b = c assumed). The
-# formula uses sqrt / asin on dimensionless eccentricity, so this is the
-# one place we step out of Unitful — ustrip once, compute, re-wrap.
-function _half_dome_area(a, b, c)
-    am = ustrip(u"m", a); bm = ustrip(u"m", b); cm = ustrip(u"m", c)
-    dome = if abs(am - cm) < am * 1e-9
-        2 * π * bm^2  # half-sphere
-    else
-        e = sqrt(am^2 - cm^2) / am
-        π * bm^2 + π * (am * bm / e) * asin(e)
-    end
-    dome * u"m^2"
-end
+# Dome area for one half of a prolate spheroid (b = c assumed). A dome is
+# exactly half the full spheroid's surface, so this reuses `_prolate_area`
+# (which already carries the ustrip / asin dance and the sphere-limit branch)
+# rather than repeating the eccentricity math.
+_half_dome_area(a, b, c) = _prolate_area(a, b, c) / 2
 
 function geometry(shape::HalfEllipsoid, ::Naked)
     volume = shape.mass / shape.density
@@ -150,20 +142,7 @@ function silhouette_area(sh::HalfEllipsoid, ::AbstractInsulationLayer, body::Abs
     silhouette_area(sh, d.a, d.b, d.c, θ)
 end
 
-# Radii — same dispatch as Ellipsoid.
-skin_radius(::HalfEllipsoid, ::AbstractInsulationLayer, body) = body.geometry.length.b_semi_minor_skin
-
-insulation_radius(::HalfEllipsoid, ::Naked, body) = body.geometry.length.b_semi_minor_skin
-flesh_radius(::HalfEllipsoid, ::Naked, body) = body.geometry.length.b_semi_minor_skin
-
-insulation_radius(::HalfEllipsoid, ::FibrousLayer, body) = body.geometry.length.b_semi_minor_fibrous
-flesh_radius(::HalfEllipsoid, ::FibrousLayer, body) = body.geometry.length.b_semi_minor_skin
-
-insulation_radius(::HalfEllipsoid, ::FatLayer, body) = body.geometry.length.b_semi_minor_skin
-flesh_radius(::HalfEllipsoid, ::FatLayer, body) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
-
-insulation_radius(::HalfEllipsoid, ::CompositeInsulation, body) = body.geometry.length.b_semi_minor_fibrous
-flesh_radius(::HalfEllipsoid, ::CompositeInsulation, body) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
+# Radii come from the shared `AbstractEllipsoidal` dispatch in ellipsoid.jl.
 
 # Composition
 

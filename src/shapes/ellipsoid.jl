@@ -32,8 +32,13 @@ _pole_a_radial_scale(s::Ellipsoid) = sqrt(max(0.0, 1 - _pole_a_x_ratio(s)^2))
 # an area.
 function _prolate_area(a, b, c)
     am = ustrip(u"m", a); bm = ustrip(u"m", b); cm = ustrip(u"m", c)
-    e = sqrt(am^2 - cm^2) / am
-    (2 * π * bm^2 + 2 * π * (am * bm / e) * asin(e)) * u"m^2"
+    area = if abs(am - cm) < am * 1e-9
+        4 * π * bm^2                       # sphere limit: a == c ⇒ e → 0, asin(e)/e → 1
+    else
+        e = sqrt(am^2 - cm^2) / am
+        2 * π * bm^2 + 2 * π * (am * bm / e) * asin(e)
+    end
+    area * u"m^2"
 end
 
 function geometry(shape::Ellipsoid, ::Naked)
@@ -193,25 +198,27 @@ function silhouette_area(sh::Ellipsoid, ::AbstractInsulationLayer, body::Abstrac
     silhouette_area(sh, d.a, d.b, d.c, θ)
 end
 
-# Radius
+# Radius — shared by every ellipsoidal shape (`Ellipsoid`, `HalfEllipsoid`);
+# all store the same `b_semi_minor_skin` / `b_semi_minor_fibrous` / `fat`
+# fields, so the dispatch lives once on the family type.
 
-skin_radius(shape::Ellipsoid, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
+skin_radius(::AbstractEllipsoidal, ::AbstractInsulationLayer, body) = body.geometry.length.b_semi_minor_skin
 
 # naked
-insulation_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
-flesh_radius(shape::Ellipsoid, insulation::Naked, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
+insulation_radius(::AbstractEllipsoidal, ::Naked, body) = body.geometry.length.b_semi_minor_skin
+flesh_radius(::AbstractEllipsoidal, ::Naked, body) = body.geometry.length.b_semi_minor_skin
 
 # fur
-insulation_radius(shape::Ellipsoid, insulation::FibrousLayer, body::AbstractBody) = body.geometry.length.b_semi_minor_fibrous
-flesh_radius(shape::Ellipsoid, insulation::FibrousLayer, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
+insulation_radius(::AbstractEllipsoidal, ::FibrousLayer, body) = body.geometry.length.b_semi_minor_fibrous
+flesh_radius(::AbstractEllipsoidal, ::FibrousLayer, body) = body.geometry.length.b_semi_minor_skin
 
 # fat
-insulation_radius(shape::Ellipsoid, insulation::FatLayer, body::AbstractBody) = body.geometry.length.b_semi_minor_skin
-flesh_radius(shape::Ellipsoid, insulation::FatLayer, body::AbstractBody) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
+insulation_radius(::AbstractEllipsoidal, ::FatLayer, body) = body.geometry.length.b_semi_minor_skin
+flesh_radius(::AbstractEllipsoidal, ::FatLayer, body) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
 
 # fur and fat
-insulation_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_fibrous
-flesh_radius(shape::Ellipsoid, insulation::CompositeInsulation, body::AbstractBody) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
+insulation_radius(::AbstractEllipsoidal, ::CompositeInsulation, body) = body.geometry.length.b_semi_minor_fibrous
+flesh_radius(::AbstractEllipsoidal, ::CompositeInsulation, body) = body.geometry.length.b_semi_minor_skin - body.geometry.length.fat
 
 # Composition
 

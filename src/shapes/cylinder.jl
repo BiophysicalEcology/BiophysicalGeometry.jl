@@ -71,69 +71,40 @@ end
 # end
 surface_area(shape::Cylinder, r, l) = 2 * π * r * l + 2 * π * r^2
 
-# Silhouette area
-
-function silhouette_area(shape::Cylinder, ::Naked, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    l = body.geometry.length.length_skin
-    return silhouette_area(shape, r, l, θ)
-end
-function silhouette_area(shape::Cylinder, insulation::FatLayer, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    l = body.geometry.length.length_skin
-    return silhouette_area(shape, r, l, θ)
-end
-function silhouette_area(shape::Cylinder, insulation::FibrousLayer, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fibrous
-    l = body.geometry.length.length_fibrous
-    return silhouette_area(shape, r, l, θ)
-end
-function silhouette_area(shape::Cylinder, insulation::Union{Naked,FatLayer}, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    l = body.geometry.length.length_skin
-    return silhouette_area(shape, r, l, θ)
-end
-
-function silhouette_area(shape::Cylinder, insulation::CompositeInsulation, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fibrous
-    l = body.geometry.length.length_fibrous
-    return silhouette_area(shape, r, l, θ)
-end
+# Silhouette area. `outer_dims` selects skin- vs fibrous-level (r, L) by
+# insulation, so a single insulation-dispatched wrapper per arity covers
+# all four insulation kinds.
 silhouette_area(shape::Cylinder, r, l, θ) = 2 * r * l * sin(θ) + π * r^2 * cos(θ)
-function silhouette_area(shape::Cylinder, insulation::Union{Naked,FatLayer}, body::AbstractBody)
-    r = body.geometry.length.radius_skin
-    l = body.geometry.length.length_skin
-    normal = 2 * r * l
-    parallel = π *r^2
-    return (; normal, parallel)
+function silhouette_area(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody, θ)
+    d = outer_dims(sh, body)
+    silhouette_area(sh, d.r, d.L, θ)
 end
-function silhouette_area(shape::Cylinder, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fibrous
-    l = body.geometry.length.length_fibrous
-    normal = 2 * r * l
-    parallel = π *r^2
-    return (; normal, parallel)
+function silhouette_area(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody)
+    d = outer_dims(sh, body)
+    (; normal = 2 * d.r * d.L, parallel = π * d.r^2)
 end
 
-# Radius
+# Radius — shared by every cylindrical shape (`Cylinder`, `HalfCylinder`,
+# `Cone`); all store the same `radius_skin` / `radius_fibrous` / `fat`
+# fields, so the dispatch lives once on the family type.
 
-skin_radius(shape::Cylinder, insulation::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
+skin_radius(::AbstractCylindrical, ::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
 
 # naked
-insulation_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Cylinder, insulation::Naked, body) = body.geometry.length.radius_skin
+insulation_radius(::AbstractCylindrical, ::Naked, body) = body.geometry.length.radius_skin
+flesh_radius(::AbstractCylindrical, ::Naked, body) = body.geometry.length.radius_skin
 
 # fur
-insulation_radius(shape::Cylinder, insulation::FibrousLayer, body) = body.geometry.length.radius_fibrous
-flesh_radius(shape::Cylinder, insulation::FibrousLayer, body) = body.geometry.length.radius_skin
+insulation_radius(::AbstractCylindrical, ::FibrousLayer, body) = body.geometry.length.radius_fibrous
+flesh_radius(::AbstractCylindrical, ::FibrousLayer, body) = body.geometry.length.radius_skin
 
 # fat
-insulation_radius(shape::Cylinder, insulation::FatLayer, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Cylinder, insulation::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+insulation_radius(::AbstractCylindrical, ::FatLayer, body) = body.geometry.length.radius_skin
+flesh_radius(::AbstractCylindrical, ::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
 # fur and fat
-insulation_radius(shape::Cylinder, insulation::CompositeInsulation, body) = body.geometry.length.radius_fibrous
-flesh_radius(shape::Cylinder, insulation::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+insulation_radius(::AbstractCylindrical, ::CompositeInsulation, body) = body.geometry.length.radius_fibrous
+flesh_radius(::AbstractCylindrical, ::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
 
 # Composition
 
