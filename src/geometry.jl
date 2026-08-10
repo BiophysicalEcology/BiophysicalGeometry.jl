@@ -202,6 +202,69 @@ struct Geometry{V,C,L,A<:SurfaceAreas} <: AbstractGeometryPars
     area::A
 end
 
+# ── Generic geometry construction ─────────────────────────────────────────
+#
+# The standard parametric shapes (cylinder, cone, sphere, ellipsoid, plate)
+# all build their `Geometry` the same way: enclosed volume from mass/density,
+# skin dimensions from that volume, then optional fat (a shell inside the skin,
+# derived from the fat mass fraction) and fur (a shell outside the skin, from a
+# thickness). Only three things vary per shape, so each provides those as
+# primitives and the four insulation combinations are assembled here once:
+#
+#   _skin_level(shape, volume)             -> (; dims, area)   skin NamedTuple + skin area
+#   _fibrous_level(shape, skin_dims, t)    -> (; dims, area)   fur NamedTuple + outer area
+#   _fat_thickness(shape, skin_dims, flesh_volume, fat_volume) -> Length
+#
+# `Half`, `TriMesh`, and the animal shapes are not in `_StandardShape`; they
+# keep their own `geometry` methods.
+
+const _StandardShape = Union{AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab}
+
+_body_volume(shape::AbstractShape) = shape.mass / shape.density
+_flesh_volume(shape::AbstractShape, fat::FatLayer) =
+    _body_volume(shape) - shape.mass * fat.fraction / fat.density
+_characteristic_length(volume) = volume^(1 / 3)
+_convective_area(fur::FibrousLayer, skin_area) =
+    skin_area - insulation_area(fur.fibre_diameter, fur.fibre_density, skin_area)
+
+# Equivalent-sphere radius enclosing `volume`; the ellipsoid reuses it on the
+# volume scaled by its axis ratio, so the cube-root formula lives in one place.
+_sphere_radius(volume) = ((3 / 4) * volume / π)^(1 / 3)
+
+function geometry(shape::_StandardShape, ::Naked)
+    volume = _body_volume(shape)
+    skin = _skin_level(shape, volume)
+    Geometry(volume, _characteristic_length(volume), skin.dims, SurfaceAreas(; total = skin.area))
+end
+function geometry(shape::_StandardShape, fur::FibrousLayer)
+    volume = _body_volume(shape)
+    skin = _skin_level(shape, volume)
+    fibrous = _fibrous_level(shape, skin.dims, fur.thickness)
+    Geometry(volume, _characteristic_length(volume) + fur.thickness,
+             merge(skin.dims, fibrous.dims),
+             SurfaceAreas(; total = fibrous.area, skin = skin.area,
+                          convection = _convective_area(fur, skin.area)))
+end
+function geometry(shape::_StandardShape, fat::FatLayer)
+    volume = _body_volume(shape)
+    flesh_volume = _flesh_volume(shape, fat)
+    skin = _skin_level(shape, volume)
+    fat = _fat_thickness(shape, skin.dims, flesh_volume, volume - flesh_volume)
+    Geometry(volume, _characteristic_length(volume),
+             merge(skin.dims, (; fat)), SurfaceAreas(; total = skin.area))
+end
+function geometry(shape::_StandardShape, fur::FibrousLayer, fat::FatLayer)
+    volume = _body_volume(shape)
+    flesh_volume = _flesh_volume(shape, fat)
+    skin = _skin_level(shape, volume)
+    fibrous = _fibrous_level(shape, skin.dims, fur.thickness)
+    fat = _fat_thickness(shape, skin.dims, flesh_volume, volume - flesh_volume)
+    Geometry(volume, _characteristic_length(volume) + fur.thickness,
+             merge(skin.dims, fibrous.dims, (; fat)),
+             SurfaceAreas(; total = fibrous.area, skin = skin.area,
+                          convection = _convective_area(fur, skin.area)))
+end
+
 """
     AbstractBody
 

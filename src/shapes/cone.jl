@@ -26,70 +26,18 @@ function _cone_radius(volume, b, t)
     (3 * volume / (2π * b * _cone_volume_factor(t)))^(1/3)
 end
 
-function geometry(shape::Cone, ::Naked)
-    volume = shape.mass / shape.density
-    t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
+function _skin_level(shape::Cone, volume)
+    radius_skin = _cone_radius(volume, shape.axis_ratio_b, shape.top_ratio)
     length_skin = 2 * shape.axis_ratio_b * radius_skin
-    total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1/3)
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, length_skin),
-                    SurfaceAreas(; total))
+    (; dims = (; radius_skin, length_skin), area = surface_area(shape, radius_skin, length_skin))
 end
-function geometry(shape::Cone, fur::FibrousLayer)
-    volume = shape.mass / shape.density
-    t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
-    radius_fibrous = radius_skin + fur.thickness
-    length_skin = 2 * shape.axis_ratio_b * radius_skin
-    length_fibrous = length_skin + 2 * fur.thickness
-    total = surface_area(shape, radius_fibrous, length_fibrous)
-    skin = surface_area(shape, radius_skin, length_skin)
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1/3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fibrous, length_skin, length_fibrous),
-                    SurfaceAreas(; total, skin, convection))
+function _fibrous_level(shape::Cone, skin, thickness)
+    radius_fibrous = skin.radius_skin + thickness
+    length_fibrous = skin.length_skin + 2 * thickness
+    (; dims = (; radius_fibrous, length_fibrous), area = surface_area(shape, radius_fibrous, length_fibrous))
 end
-function geometry(shape::Cone, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
-    length_skin = 2 * shape.axis_ratio_b * radius_skin
-    radius_flesh = _cone_radius(flesh_volume, shape.axis_ratio_b, t)
-    fat_thickness = radius_skin - radius_flesh
-    total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1/3)
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, length_skin, fat=fat_thickness),
-                    SurfaceAreas(; total))
-end
-function geometry(shape::Cone, fur::FibrousLayer, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    t = shape.top_ratio
-    radius_skin = _cone_radius(volume, shape.axis_ratio_b, t)
-    radius_fibrous = radius_skin + fur.thickness
-    length_skin = 2 * shape.axis_ratio_b * radius_skin
-    length_fibrous = length_skin + 2 * fur.thickness
-    radius_flesh = _cone_radius(flesh_volume, shape.axis_ratio_b, t)
-    fat_thickness = radius_skin - radius_flesh
-    total = surface_area(shape, radius_fibrous, length_fibrous)
-    skin = surface_area(shape, radius_skin, length_skin)
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1/3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fibrous, length_skin, length_fibrous, fat=fat_thickness),
-                    SurfaceAreas(; total, skin, convection))
-end
+_fat_thickness(shape::Cone, skin, flesh_volume, fat_volume) =
+    skin.radius_skin - _cone_radius(flesh_volume, shape.axis_ratio_b, shape.top_ratio)
 
 # Aggregate surface area for a frustum: base disc + top disc + slant surface.
 # Slant length s = sqrt((R - r)² + L²) where r = t·R.

@@ -41,90 +41,55 @@ function _prolate_area(a, b, c)
     area * u"m^2"
 end
 
-function geometry(shape::Ellipsoid, ::Naked)
-    volume = shape.mass / shape.density
-    b_semi_minor_skin = ((3 / 4) * volume / (π * shape.axis_ratio_b)) ^ (1 / 3)
-    c_semi_minor_skin = b_semi_minor_skin
-    a_semi_major_skin = b_semi_minor_skin * shape.axis_ratio_b
-    total = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
-    characteristic_dimension = volume^(1 / 3)
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin),
-                    SurfaceAreas(; total))
+# b-semi-minor from an enclosed volume. Identical to the equivalent-sphere radius
+# of the volume scaled by the axis ratio, so the cube-root lives once (geometry.jl).
+_ellipsoid_b(shape::Ellipsoid, volume) = _sphere_radius(volume / shape.axis_ratio_b)
+
+function _skin_level(shape::Ellipsoid, volume)
+    b = _ellipsoid_b(shape, volume)          # c = b; a = axis_ratio_b · b
+    a = shape.axis_ratio_b * b
+    (; dims = (; a_semi_major_skin = a, b_semi_minor_skin = b, c_semi_minor_skin = b),
+       area = _prolate_area(a, b, b))
 end
-function geometry(shape::Ellipsoid, fur::FibrousLayer)
-    volume = shape.mass / shape.density
-    b_semi_minor_skin = ((3 / 4) * volume / (π * shape.axis_ratio_b)) ^ (1 / 3)
-    c_semi_minor_skin = b_semi_minor_skin
-    a_semi_major_skin = b_semi_minor_skin * shape.axis_ratio_b
-    a_semi_major_fibrous = a_semi_major_skin + fur.thickness
-    b_semi_minor_fibrous = b_semi_minor_skin + fur.thickness
-    c_semi_minor_fibrous = c_semi_minor_skin + fur.thickness
-    total = _prolate_area(a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous)
-    skin = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-                       a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous),
-                    SurfaceAreas(; total, skin, convection))
+function _fibrous_level(shape::Ellipsoid, skin, thickness)
+    a = skin.a_semi_major_skin + thickness
+    b = skin.b_semi_minor_skin + thickness
+    c = skin.c_semi_minor_skin + thickness
+    (; dims = (; a_semi_major_fibrous = a, b_semi_minor_fibrous = b, c_semi_minor_fibrous = c),
+       area = _prolate_area(a, b, c))
 end
-function geometry(shape::Ellipsoid, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    b_flesh = (((3 / 4) * flesh_volume) / (π * shape.axis_ratio_b)) ^ (1 / 3)
-    c_flesh = b_flesh # assuming c = b
-    a_flesh = shape.axis_ratio_b * b_flesh
-    fat = prolate_fat_layer(flesh_volume, fat_volume, shape.axis_ratio_b, b_flesh)
-    if fat <= 0.0u"m"
-        b_semi_minor_skin = (((3 / 4) * volume) / (π * shape.axis_ratio_b)) ^ (1 / 3)
-        c_semi_minor_skin = b_semi_minor_skin
-        a_semi_major_skin = shape.axis_ratio_b * b_semi_minor_skin
+# Ellipsoid fat is a *uniform* shell: each skin semi-axis is the flesh semi-axis
+# plus one fat thickness (so the skin is not a scaled flesh ellipsoid). Skin dims
+# are therefore coupled to the cubic fat solve, so the fat paths override the
+# generic orchestrator rather than compute skin from volume independently.
+function _ellipsoid_fat_skin(shape::Ellipsoid, fat::FatLayer)
+    volume = _body_volume(shape)
+    flesh_volume = _flesh_volume(shape, fat)
+    b_flesh = _ellipsoid_b(shape, flesh_volume)
+    fat_thickness = prolate_fat_layer(flesh_volume, volume - flesh_volume, shape.axis_ratio_b, b_flesh)
+    if fat_thickness <= 0.0u"m"
+        b = _ellipsoid_b(shape, volume)
+        a = shape.axis_ratio_b * b
     else
-        a_semi_major_skin = a_flesh + fat
-        b_semi_minor_skin = b_flesh + fat
-        c_semi_minor_skin = c_flesh + fat
+        b = b_flesh + fat_thickness
+        a = shape.axis_ratio_b * b_flesh + fat_thickness
     end
-    total = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
-    characteristic_dimension = volume^(1 / 3)
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat),
-                    SurfaceAreas(; total))
+    dims = (; a_semi_major_skin = a, b_semi_minor_skin = b, c_semi_minor_skin = b)
+    (; volume, dims, fat = fat_thickness, area = _prolate_area(a, b, b))
+end
+
+function geometry(shape::Ellipsoid, fat::FatLayer)
+    s = _ellipsoid_fat_skin(shape, fat)
+    Geometry(s.volume, _characteristic_length(s.volume),
+             merge(s.dims, (; fat = s.fat)), SurfaceAreas(; total = s.area))
 end
 function geometry(shape::Ellipsoid, fur::FibrousLayer, fat::FatLayer)
-    # TODO reduce duplication here
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    b_flesh = (((3 / 4) * flesh_volume) / (π * shape.axis_ratio_b)) ^ (1 / 3)
-    c_flesh = b_flesh # assuming c = b
-    a_flesh = shape.axis_ratio_b * b_flesh
-    fat = prolate_fat_layer(flesh_volume, fat_volume, shape.axis_ratio_b, b_flesh)
-    if fat <= 0.0u"m"
-        b_semi_minor_skin = (((3 / 4) * volume) / (π * shape.axis_ratio_b)) ^ (1 / 3)
-        c_semi_minor_skin = b_semi_minor_skin
-        a_semi_major_skin = shape.axis_ratio_b * b_semi_minor_skin
-    else
-        a_semi_major_skin = a_flesh + fat
-        b_semi_minor_skin = b_flesh + fat
-        c_semi_minor_skin = c_flesh + fat
-    end
-    a_semi_major_fibrous = a_semi_major_skin + fur.thickness
-    b_semi_minor_fibrous = b_semi_minor_skin + fur.thickness
-    c_semi_minor_fibrous = c_semi_minor_skin + fur.thickness
-    total = _prolate_area(a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous)
-    skin = _prolate_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-                       a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous, fat),
-                    SurfaceAreas(; total, skin, convection))
+    s = _ellipsoid_fat_skin(shape, fat)
+    fibrous = _fibrous_level(shape, s.dims, fur.thickness)
+    Geometry(s.volume, _characteristic_length(s.volume) + fur.thickness,
+             merge(s.dims, fibrous.dims, (; fat = s.fat)),
+             SurfaceAreas(; total = fibrous.area, skin = s.area,
+                          convection = _convective_area(fur, s.area)))
 end
 
 # FatLayer thickness calculation

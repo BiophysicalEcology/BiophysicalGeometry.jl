@@ -9,58 +9,21 @@ mutable struct Cylinder{M,D,B} <: AbstractCylindrical
     axis_ratio_b::B
 end
 
-function geometry(shape::Cylinder, ::Naked)
-    volume = shape.mass / shape.density
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+# Radial dimension from an enclosed volume; used for both skin and flesh radii.
+_cylinder_radius(shape::Cylinder, volume) = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+
+function _skin_level(shape::Cylinder, volume)
+    radius_skin = _cylinder_radius(shape, volume)
     length_skin = shape.axis_ratio_b * radius_skin * 2
-    total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1 / 3) # radius_skin * 2
-    return Geometry(volume, characteristic_dimension, (; length_skin, radius_skin), SurfaceAreas(; total))
+    (; dims = (; radius_skin, length_skin), area = surface_area(shape, radius_skin, length_skin))
 end
-function geometry(shape::Cylinder, fur::FibrousLayer)
-    volume = shape.mass / shape.density
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
-    radius_fibrous = radius_skin + fur.thickness
-    length_skin = shape.axis_ratio_b * radius_skin * 2
-    length_fibrous = shape.axis_ratio_b * radius_skin * 2 + fur.thickness * 2
-    total = surface_area(shape, radius_fibrous, length_fibrous)
-    skin = surface_area(shape, radius_skin, length_skin)
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness #radius_fibrous * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fibrous, length_skin, length_fibrous), SurfaceAreas(; total, skin, convection))
+function _fibrous_level(shape::Cylinder, skin, thickness)
+    radius_fibrous = skin.radius_skin + thickness
+    length_fibrous = skin.length_skin + thickness * 2
+    (; dims = (; radius_fibrous, length_fibrous), area = surface_area(shape, radius_fibrous, length_fibrous))
 end
-function geometry(shape::Cylinder, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
-    length_skin = shape.axis_ratio_b * radius_skin * 2
-    radius_flesh = (flesh_volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
-    fat = radius_skin - radius_flesh
-    total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1 / 3) # radius_skin * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, length_skin, fat), SurfaceAreas(; total))
-end
-function geometry(shape::Cylinder, fur::FibrousLayer, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    radius_skin = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
-    radius_fibrous = radius_skin + fur.thickness
-    length_skin = shape.axis_ratio_b * radius_skin * 2
-    length_fibrous = shape.axis_ratio_b * radius_skin * 2 + fur.thickness * 2
-    radius_flesh = (flesh_volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
-    fat = radius_skin - radius_flesh
-    total = surface_area(shape, radius_fibrous, length_fibrous)
-    skin = surface_area(shape, radius_skin, length_skin)
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness # radius_fibrous * 2
-    return Geometry(volume, characteristic_dimension, (; radius_skin, radius_fibrous, length_skin, length_fibrous, fat), SurfaceAreas(; total, skin, convection))
-end
+_fat_thickness(shape::Cylinder, skin, flesh_volume, fat_volume) =
+    skin.radius_skin - _cylinder_radius(shape, flesh_volume)
 
 # Surface area
 
