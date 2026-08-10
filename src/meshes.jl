@@ -30,8 +30,9 @@ end
 
 # ── Ellipsoid (sphere is the special case _ellipsoid_mesh(r, r)) ─────────
 
-function _ellipsoid_mesh(a, b; n=60, θ_end=2π)
-    θ = LinRange(0.0, θ_end, n);  φ = LinRange(0.0, π, n)
+# `φ_end=π/2` gives the upper (z ≥ 0) dome — the half-ellipsoid / hemisphere.
+function _ellipsoid_mesh(a, b; n=60, θ_end=2π, φ_end=π)
+    θ = LinRange(0.0, θ_end, n);  φ = LinRange(0.0, φ_end, n)
     [a*sin(φj)*cos(θi) for θi in θ, φj in φ],
     [b*sin(φj)*sin(θi) for θi in θ, φj in φ],
     [b*cos(φj)         for _  in θ, φj in φ]
@@ -60,19 +61,9 @@ function _ellipsoid_pole_a_cap(a, b, c, x_ratio; n=40)
 end
 
 # ── Half-cylinder (axis +z, dome y ≥ 0, flat at y = 0) ───────────────────
+# The dome and end caps are `_cylinder_tube` / `_cylinder_cap` at `θ_end=π`;
+# only the flat cut face at y = 0 is unique to the half.
 
-function _half_cylinder_tube(r, L; nθ=72, nz=2, z0=0.0)
-    θ = LinRange(0.0, π, nθ);  z = LinRange(z0, z0 + Float64(L), nz)
-    [r*cos(θi) for θi in θ, _ in z],
-    [r*sin(θi) for θi in θ, _ in z],
-    [zi        for _  in θ, zi in z]
-end
-function _half_cylinder_cap(r, z0; nθ=72, nr=12)
-    θ = LinRange(0.0, π, nθ);  rv = LinRange(0.0, r, nr)
-    [rr*cos(θi) for θi in θ, rr in rv],
-    [rr*sin(θi) for θi in θ, rr in rv],
-    fill(Float64(z0), nθ, nr)
-end
 function _half_cylinder_flat(r, L; nx=12, nz=2, z0=0.0)
     xs = LinRange(-r, r, nx);  zs = LinRange(z0, z0 + Float64(L), nz)
     [xi for xi in xs, _ in zs],
@@ -81,13 +72,9 @@ function _half_cylinder_flat(r, L; nx=12, nz=2, z0=0.0)
 end
 
 # ── Half-ellipsoid (long axis +x, dome z ≥ 0, flat at z = 0) ─────────────
+# The dome is `_ellipsoid_mesh(a, b; φ_end=π/2)`; only the flat cut face at
+# z = 0 is unique to the half.
 
-function _half_ellipsoid_dome_mesh(a, b; n=60)
-    θ = LinRange(0.0, 2π, n);  φ = LinRange(0.0, π/2, n)
-    [a*sin(φj)*cos(θi) for θi in θ, φj in φ],
-    [b*sin(φj)*sin(θi) for θi in θ, φj in φ],
-    [b*cos(φj)         for _  in θ, φj in φ]
-end
 function _half_ellipsoid_flat_mesh(a, b; n=60)
     rs = LinRange(0.0, 1.0, n);  ts = LinRange(0.0, 2π, n)
     [a*r*cos(t) for t in ts, r in rs],
@@ -98,8 +85,8 @@ end
 # ── Cone / frustum (axis +z, base at z=0 of radius r_base, top at z=L of
 #                   radius r_top = top_ratio*r_base; r_top = 0 for sharp cone)
 
-function _cone_tube(r_base, r_top, L; nθ=72, nz=2, z0=0.0)
-    θ = LinRange(0.0, 2π, nθ);  z = LinRange(z0, z0 + Float64(L), nz)
+function _cone_tube(r_base, r_top, L; nθ=72, nz=2, θ_end=2π, z0=0.0)
+    θ = LinRange(0.0, θ_end, nθ);  z = LinRange(z0, z0 + Float64(L), nz)
     [(r_base + (r_top - r_base) * (zi - z0)/L) * cos(θi) for θi in θ, zi in z],
     [(r_base + (r_top - r_base) * (zi - z0)/L) * sin(θi) for θi in θ, zi in z],
     [zi                                                  for _  in θ, zi in z]
@@ -233,15 +220,15 @@ end
 function _part_outer_meshes(sh::Half{<:AbstractCylindrical}, body, sc)
     d = _mesh_dims(sh, body, sc)
     z0 = -d.pad
-    [_half_cylinder_tube(d.r, d.Lo; z0=z0),
-     _half_cylinder_cap(d.r, z0),
-     _half_cylinder_cap(d.r, z0 + d.Lo),
+    [_cylinder_tube(d.r, d.Lo; θ_end=π, z0=z0),
+     _cylinder_cap(d.r, z0; θ_end=π),
+     _cylinder_cap(d.r, z0 + d.Lo; θ_end=π),
      _half_cylinder_flat(d.r_skin, d.Ls; z0=0.0)]
 end
 
 function _part_outer_meshes(sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}}, body, sc)
     d = _mesh_dims(sh, body, sc)
-    [_half_ellipsoid_dome_mesh(d.a, d.b), _half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
+    [_ellipsoid_mesh(d.a, d.b; φ_end=π/2), _half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
 end
 
 # ── Pose application ─────────────────────────────────────────────────────

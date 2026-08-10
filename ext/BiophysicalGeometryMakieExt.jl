@@ -7,11 +7,11 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, Half
 import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
 # Mesh helpers now live in core (src/meshes.jl); reuse them here.
-import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh,
-    _half_cylinder_tube, _half_cylinder_cap, _half_cylinder_flat,
-    _half_ellipsoid_dome_mesh, _half_ellipsoid_flat_mesh,
-    _cone_tube, _box_face_x, _box_face_y, _box_face_z,
+import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh, _cone_tube,
+    _half_cylinder_flat, _half_ellipsoid_flat_mesh,
+    _box_face_x, _box_face_y, _box_face_z,
     _part_outer_meshes, _transform_mesh, outer_dims
+import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
@@ -31,7 +31,8 @@ _scaled_radii(body, sc) = map(x -> _m(x, sc), _radii(body))
 _layer_flags(r) = (fat=r.skin > r.flesh + 1e-9, fur=r.ins > r.skin + 1e-9)
 
 _axis_ratio(::Any) = 1.0
-_axis_ratio(s::Ellipsoid) = Float64(s.b)
+_axis_ratio(s::Ellipsoid) = Float64(s.axis_ratio_b)
+_axis_ratio(s::Half) = _axis_ratio(s.parent)
 
 _colors(p) = (flesh=p[:flesh_col][], fat=p[:fat_col][], fur=p[:fur_col][])
 
@@ -115,12 +116,65 @@ function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
     hl_i = _m(di.L, sc) / 2
     hh_i = _m(di.H, sc) / 2
     hw_f = r.flesh
-    hl_f = hw_f * Float64(sh.b)
-    hh_f = hl_f / Float64(sh.c)
+    hl_f = hw_f * Float64(sh.axis_ratio_b)
+    hh_f = hl_f / Float64(sh.axis_ratio_c)
 
     _draw_box_faces!(p, hl_f, hw_f, hh_f, cols.flesh; full=true)
     fl.fat && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat)
     fl.fur && _draw_box_faces!(p, hl_i, hw_i, hh_i, cols.fur)
+end
+
+function _draw_cone!(target, r_base, r_top, L, col; θ_end=2π, z0=0.0)
+    _draw_surface!(target, _cone_tube(r_base, r_top, L; θ_end, z0), col)
+    _draw_surface!(target, _cylinder_cap(r_base, z0; θ_end), col)
+    r_top > 0 && _draw_surface!(target, _cylinder_cap(r_top, z0 + L; θ_end), col)
+end
+
+function _draw_cutaway_shape!(p, sh::Cone, body, sc, cols)
+    r = _scaled_radii(body, sc)
+    fl = _layer_flags(r)
+    t = Float64(sh.top_ratio)
+    L_s = _m(body.geometry.length.length_skin, sc)
+    L_i = _m(outer_dims(sh, body).L, sc)
+    z0_i = -(L_i - L_s) / 2
+    _draw_cone!(p, r.flesh, t * r.flesh, L_s, cols.flesh)
+    fl.fat && _draw_cone!(p, r.skin, t * r.skin, L_s, cols.fat; θ_end=3π/2)
+    fl.fur && _draw_cone!(p, r.ins,  t * r.ins,  L_i, cols.fur; θ_end=3π/2, z0=z0_i)
+end
+
+# Half shapes: draw the layers over their half domain, with a wedge removed from
+# the outer (fat/fur) layers to reveal the flesh, plus the flat cut face.
+function _draw_half_cylinder!(target, r, L, col; θ_end=π, z0=0.0)
+    _draw_surface!(target, _cylinder_tube(r, L; θ_end, z0), col)
+    _draw_surface!(target, _cylinder_cap(r, z0; θ_end), col)
+    _draw_surface!(target, _cylinder_cap(r, z0 + L; θ_end), col)
+    _draw_surface!(target, _half_cylinder_flat(r, L; z0), col)
+end
+
+function _draw_cutaway_shape!(p, sh::Half{<:AbstractCylindrical}, body, sc, cols)
+    r = _scaled_radii(body, sc)
+    fl = _layer_flags(r)
+    L_s = _m(body.geometry.length.length_skin, sc)
+    L_i = _m(outer_dims(sh, body).L, sc)
+    z0_i = -(L_i - L_s) / 2
+    _draw_half_cylinder!(p, r.flesh, L_s, cols.flesh)
+    fl.fat && _draw_half_cylinder!(p, r.skin, L_s, cols.fat; θ_end=3π/4)
+    fl.fur && _draw_half_cylinder!(p, r.ins,  L_i, cols.fur; θ_end=3π/4, z0=z0_i)
+end
+
+function _draw_half_ellipsoid!(target, a, b, col; θ_end=2π)
+    _draw_surface!(target, _ellipsoid_mesh(a, b; θ_end, φ_end=π/2), col)
+    _draw_surface!(target, _half_ellipsoid_flat_mesh(a, b), col)
+end
+
+function _draw_cutaway_shape!(p, sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}},
+                              body, sc, cols)
+    r = _scaled_radii(body, sc)
+    fl = _layer_flags(r)
+    ratio = _axis_ratio(sh)
+    _draw_half_ellipsoid!(p, r.flesh * ratio, r.flesh, cols.flesh)
+    fl.fat && _draw_half_ellipsoid!(p, r.skin * ratio, r.skin, cols.fat; θ_end=3π/2)
+    fl.fur && _draw_half_ellipsoid!(p, r.ins  * ratio, r.ins,  cols.fur; θ_end=3π/2)
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -224,11 +278,11 @@ function _section_layers(sh::Plate, body, mode, r, cols)
     if mode === :long
         d_s = (gl.length_skin / 2, gl.height_skin / 2)
         d_i = (di.L / 2, di.H / 2)
-        d_f = (r_f * sh.b, r_f * sh.b / sh.c)
+        d_f = (r_f * sh.axis_ratio_b, r_f * sh.axis_ratio_b / sh.axis_ratio_c)
     else
         d_s = (gl.width_skin / 2, gl.height_skin / 2)
         d_i = (di.W / 2, di.H / 2)
-        d_f = (r_f, (r_f * sh.b) / sh.c)
+        d_f = (r_f, (r_f * sh.axis_ratio_b) / sh.axis_ratio_c)
     end
     [
         (r_i > r_s, () -> _rect_pts(d_i...), cols.fur),
