@@ -164,7 +164,7 @@ function _mesh_dims(sh::Plate, body, sc)
      hH = _ustrip_m(d.H, sc) / 2)
 end
 
-function _mesh_dims(sh::HalfCylinder, body, sc)
+function _mesh_dims(sh::Half{<:AbstractCylindrical}, body, sc)
     d = outer_dims(sh, body)
     Lo = _ustrip_m(d.L, sc)
     Ls = _ustrip_m(body.geometry.length.length_skin, sc)
@@ -173,12 +173,18 @@ function _mesh_dims(sh::HalfCylinder, body, sc)
      r_skin = _ustrip_m(body.geometry.length.radius_skin, sc))
 end
 
-function _mesh_dims(sh::HalfEllipsoid, body, sc)
+function _mesh_dims(sh::Half{<:AbstractEllipsoidal}, body, sc)
     d = outer_dims(sh, body)
     (a = _ustrip_m(d.a, sc),
      b = _ustrip_m(d.b, sc),
      a_skin = _ustrip_m(body.geometry.length.a_semi_major_skin, sc),
      b_skin = _ustrip_m(body.geometry.length.b_semi_minor_skin, sc))
+end
+
+function _mesh_dims(sh::Half{<:AbstractSpherical}, body, sc)
+    r = _ustrip_m(insulation_radius(body), sc)
+    rs = _ustrip_m(body.geometry.length.radius_skin, sc)
+    (a = r, b = r, a_skin = rs, b_skin = rs)
 end
 
 function _part_outer_meshes(sh::Cylinder, body, sc)
@@ -224,7 +230,7 @@ function _part_outer_meshes(sh::Plate, body, sc)
      _box_face_x( d.hL, -d.hW, d.hW, -d.hH, d.hH)]
 end
 
-function _part_outer_meshes(sh::HalfCylinder, body, sc)
+function _part_outer_meshes(sh::Half{<:AbstractCylindrical}, body, sc)
     d = _mesh_dims(sh, body, sc)
     z0 = -d.pad
     [_half_cylinder_tube(d.r, d.Lo; z0=z0),
@@ -233,7 +239,7 @@ function _part_outer_meshes(sh::HalfCylinder, body, sc)
      _half_cylinder_flat(d.r_skin, d.Ls; z0=0.0)]
 end
 
-function _part_outer_meshes(sh::HalfEllipsoid, body, sc)
+function _part_outer_meshes(sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}}, body, sc)
     d = _mesh_dims(sh, body, sc)
     [_half_ellipsoid_dome_mesh(d.a, d.b), _half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
 end

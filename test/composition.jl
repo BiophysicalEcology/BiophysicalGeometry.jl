@@ -63,15 +63,15 @@ end
 end
 
 @testset "HalfSphere geometry" begin
-    # A half-sphere is the equal-axis half-ellipsoid; two of mass m reconstruct
+    # A hemisphere wraps Sphere (fast spherical math); two of mass m reconstruct
     # Sphere(2m). HalfSphere(m, ρ) shares the full Sphere(2m, ρ)'s skin radius.
     h    = Body(HalfSphere(5u"kg", ρ), Naked())
     full = Body(Sphere(10u"kg", ρ), Naked())
-    @test h isa Body{<:HalfEllipsoid}
-    @test h.geometry.length.b_semi_minor_skin ≈ full.geometry.length.radius_skin
+    @test h isa Body{<:Half}
+    @test h.geometry.length.radius_skin ≈ full.geometry.length.radius_skin
     @test flesh_volume(h) ≈ flesh_volume(full) / 2
     # Half dome + flat ≈ total; the two domes reconstruct the full sphere's area.
-    flat = π * h.geometry.length.b_semi_minor_skin^2
+    flat = π * h.geometry.length.radius_skin^2
     @test total_area(h) - flat ≈ total_area(full) / 2
 end
 

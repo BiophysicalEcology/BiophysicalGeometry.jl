@@ -79,17 +79,17 @@ function flesh_centroid(::Ellipsoid, body::AbstractBody)
     z = body.geometry.length.a_semi_major_skin
     (zero(z), zero(z), zero(z))
 end
-# HalfCylinder: half-disc cross-section, bulge along +y; centroid of a
+# Cylindrical half: half-disc cross-section, bulge along +y; centroid of a
 # half-disc sits at 4R/(3π) off the flat plane, at mid-length.
-function flesh_centroid(::HalfCylinder, body::AbstractBody)
+function flesh_centroid(::Half{<:AbstractCylindrical}, body::AbstractBody)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
     (zero(R), 4R / (3π), L / 2)
 end
-# HalfEllipsoid: dome along +z from the flat face; half-ellipsoid centroid
+# Domed half (ellipsoidal/spherical): dome along +z from the flat face; centroid
 # sits at 3c/8 off the flat plane (hemisphere centroid generalised).
-function flesh_centroid(::HalfEllipsoid, body::AbstractBody)
-    c = body.geometry.length.c_semi_minor_skin
+function flesh_centroid(sh::HalfDomed, body::AbstractBody)
+    _, _, c = _domed_semiaxes(sh, body)
     (zero(c), zero(c), 3c / 8)
 end
 # Plate: centred at the origin.

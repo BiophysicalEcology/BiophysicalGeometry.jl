@@ -3,7 +3,7 @@ module BiophysicalGeometryMakieExt
 using Makie
 using Unitful
 using BiophysicalGeometry
-import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, HalfCylinder, HalfEllipsoid, TriMesh
+import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, Half, TriMesh
 import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
 # Mesh helpers now live in core (src/meshes.jl); reuse them here.

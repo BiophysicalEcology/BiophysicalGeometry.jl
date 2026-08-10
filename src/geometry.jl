@@ -47,6 +47,32 @@ Family of flat-plate shapes (`Plate`) sharing slab thermal correlations.
 abstract type AbstractSlab <: AbstractShape end
 
 """
+    Half(parent::AbstractShape) <: AbstractShape
+
+A shape cut through the centre and mirror-joined at a flat face: the dorsal or
+ventral half of `parent`. `parent` is the full shape of *double* mass, so a
+`Half` reuses all of the parent's radius/flesh/fat/fur math (single source of
+truth); only surface area, the flat join face, and the mesh are halved/added.
+Family membership comes from the type parameter (`Half{<:AbstractCylindrical}`);
+where a family supertype won't match a wrapper (HeatExchange), the `Half`
+forwards to its parent. `HalfCylinder`, `HalfEllipsoid` and `HalfSphere` are
+constructors returning the matching `Half`.
+"""
+struct Half{S<:AbstractShape} <: AbstractShape
+    parent::S
+end
+
+"""
+    mass(shape) -> mass
+
+Physical mass of a shape. A `Half` wraps a *double*-mass parent, so its own mass
+is half the parent's — never read `shape.mass` directly, as wrappers have no such
+field.
+"""
+mass(s::AbstractShape) = s.mass
+mass(h::Half) = mass(h.parent) / 2
+
+"""
     AbstractInsulationLayer
 
 Abstract supertype for the insulation of the organism being modelled.
@@ -275,7 +301,7 @@ flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
 function flesh_volume(ins::Union{FatLayer, CompositeInsulation}, body)
     fat = inner_insulation(body.insulation)
     if body.geometry.length.fat > zero(body.geometry.length.fat)
-        body.geometry.volume - body.shape.mass * fat.fraction / fat.density
+        body.geometry.volume - mass(body.shape) * fat.fraction / fat.density
     else
         body.geometry.volume
     end
