@@ -17,71 +17,36 @@ mutable struct HalfCylinder{M,D,B} <: AbstractCylindrical
     axis_ratio_b::B
 end
 
-function geometry(shape::HalfCylinder, ::Naked)
-    volume = shape.mass / shape.density
-    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
-    length_skin = 2 * shape.axis_ratio_b * radius_skin
-    total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1 / 3)
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, length_skin),
-                    SurfaceAreas(; total))
-end
-function geometry(shape::HalfCylinder, fur::FibrousLayer)
-    volume = shape.mass / shape.density
-    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
-    radius_fibrous = radius_skin + fur.thickness
-    length_skin = 2 * shape.axis_ratio_b * radius_skin
-    length_fibrous = length_skin + 2 * fur.thickness
-    flat_area = 2 * radius_skin * length_skin
-    total = π * radius_fibrous * length_fibrous + π * radius_fibrous^2 + flat_area
-    skin = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fibrous, length_skin, length_fibrous),
-                    SurfaceAreas(; total, skin, convection))
-end
-function geometry(shape::HalfCylinder, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
-    length_skin = 2 * shape.axis_ratio_b * radius_skin
-    radius_flesh = (flesh_volume / (π * shape.axis_ratio_b))^(1 / 3)
-    fat_thickness = radius_skin - radius_flesh
-    total = surface_area(shape, radius_skin, length_skin)
-    characteristic_dimension = volume^(1 / 3)
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, length_skin, fat=fat_thickness),
-                    SurfaceAreas(; total))
-end
-function geometry(shape::HalfCylinder, fur::FibrousLayer, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    radius_skin = (volume / (π * shape.axis_ratio_b))^(1 / 3)
-    radius_fibrous = radius_skin + fur.thickness
-    length_skin = 2 * shape.axis_ratio_b * radius_skin
-    length_fibrous = length_skin + 2 * fur.thickness
-    radius_flesh = (flesh_volume / (π * shape.axis_ratio_b))^(1 / 3)
-    fat_thickness = radius_skin - radius_flesh
-    flat_area = 2 * radius_skin * length_skin
-    total = π * radius_fibrous * length_fibrous + π * radius_fibrous^2 + flat_area
-    skin = π * radius_skin * length_skin + π * radius_skin^2 + flat_area
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1 / 3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; radius_skin, radius_fibrous, length_skin, length_fibrous, fat=fat_thickness),
-                    SurfaceAreas(; total, skin, convection))
-end
+# A half of mass m is the full `Cylinder` of mass 2m split along its axis, so
+# all radius/length/fat/fur math is inherited from `Cylinder` (single source of
+# truth) via `full`; the half only differs in area (half the lateral + the two
+# semicircular ends, plus a flat rectangular face at skin level) and volume.
+_full_cylinder(sh::HalfCylinder) = Cylinder(2 * sh.mass, sh.density, sh.axis_ratio_b)
 
-# Aggregate surface area (naked).
-surface_area(::HalfCylinder, r, L) = π * r * L + π * r^2 + 2 * r * L
+geometry(sh::HalfCylinder, ins::Naked)        = _half_geometry(sh, geometry(_full_cylinder(sh), ins))
+geometry(sh::HalfCylinder, fat::FatLayer)     = _half_geometry(sh, geometry(_full_cylinder(sh), fat))
+geometry(sh::HalfCylinder, fur::FibrousLayer) = _half_geometry(sh, geometry(_full_cylinder(sh), fur), fur)
+geometry(sh::HalfCylinder, fur::FibrousLayer, fat::FatLayer) =
+    _half_geometry(sh, geometry(_full_cylinder(sh), fur, fat), fur)
+
+_half_cyl_dome(r, L) = π * r * L + π * r^2  # half the full lateral + two half-discs
+
+function _half_geometry(sh::HalfCylinder, full)
+    len = full.length
+    flat = 2 * len.radius_skin * len.length_skin
+    total = _half_cyl_dome(len.radius_skin, len.length_skin) + flat
+    vol = sh.mass / sh.density
+    Geometry(vol, vol^(1 / 3), len, SurfaceAreas(; total))
+end
+function _half_geometry(sh::HalfCylinder, full, fur::FibrousLayer)
+    len = full.length
+    flat = 2 * len.radius_skin * len.length_skin
+    total = _half_cyl_dome(len.radius_fibrous, len.length_fibrous) + flat
+    skin = _half_cyl_dome(len.radius_skin, len.length_skin) + flat
+    convection = skin - insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
+    vol = sh.mass / sh.density
+    Geometry(vol, vol^(1 / 3) + fur.thickness, len, SurfaceAreas(; total, skin, convection))
+end
 
 # Silhouette area: half of the equivalent full cylinder's, so two halves
 # joined back together reproduce the full cylinder's silhouettes. `outer_dims`

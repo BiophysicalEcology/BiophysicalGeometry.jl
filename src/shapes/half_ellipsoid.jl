@@ -42,86 +42,33 @@ HalfSphere(mass, density) = HalfEllipsoid(mass, density, 1.0, 1.0)
 # rather than repeating the eccentricity math.
 _half_dome_area(a, b, c) = _prolate_area(a, b, c) / 2
 
-function geometry(shape::HalfEllipsoid, ::Naked)
-    volume = shape.mass / shape.density
-    b_semi_minor_skin = (3 * volume / (2π * shape.axis_ratio_b))^(1/3)
-    c_semi_minor_skin = b_semi_minor_skin
-    a_semi_major_skin = b_semi_minor_skin * shape.axis_ratio_b
-    dome = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin)
-    flat = π * b_semi_minor_skin * c_semi_minor_skin
-    total = dome + flat
-    characteristic_dimension = volume^(1/3)
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin),
-                    SurfaceAreas(; total))
+# A half of mass m is the full `Ellipsoid` of mass 2m cut through the centre,
+# so all radius/flesh/fat/fur math is inherited from `Ellipsoid` (single source
+# of truth) via `full`; the half only differs in area (half dome + flat face,
+# at skin level so mixed-insulation halves join under `FullCover`) and volume.
+_full_ellipsoid(sh::HalfEllipsoid) = Ellipsoid(2 * sh.mass, sh.density, sh.axis_ratio_b, sh.axis_ratio_c)
+
+geometry(sh::HalfEllipsoid, ins::Naked)        = _half_geometry(sh, geometry(_full_ellipsoid(sh), ins))
+geometry(sh::HalfEllipsoid, fat::FatLayer)     = _half_geometry(sh, geometry(_full_ellipsoid(sh), fat))
+geometry(sh::HalfEllipsoid, fur::FibrousLayer) = _half_geometry(sh, geometry(_full_ellipsoid(sh), fur), fur)
+geometry(sh::HalfEllipsoid, fur::FibrousLayer, fat::FatLayer) =
+    _half_geometry(sh, geometry(_full_ellipsoid(sh), fur, fat), fur)
+
+function _half_geometry(sh::HalfEllipsoid, full)
+    len = full.length
+    flat = π * len.b_semi_minor_skin * len.c_semi_minor_skin
+    total = _half_dome_area(len.a_semi_major_skin, len.b_semi_minor_skin, len.c_semi_minor_skin) + flat
+    vol = sh.mass / sh.density
+    Geometry(vol, vol^(1/3), len, SurfaceAreas(; total))
 end
-function geometry(shape::HalfEllipsoid, fur::FibrousLayer)
-    volume = shape.mass / shape.density
-    b_semi_minor_skin = (3 * volume / (2π * shape.axis_ratio_b))^(1/3)
-    c_semi_minor_skin = b_semi_minor_skin
-    a_semi_major_skin = b_semi_minor_skin * shape.axis_ratio_b
-    a_semi_major_fibrous = a_semi_major_skin + fur.thickness
-    b_semi_minor_fibrous = b_semi_minor_skin + fur.thickness
-    c_semi_minor_fibrous = c_semi_minor_skin + fur.thickness
-    flat = π * b_semi_minor_skin * c_semi_minor_skin  # skin level for FullCover
-    total = _half_dome_area(a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous) + flat
-    skin = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1/3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-                       a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous),
-                    SurfaceAreas(; total, skin, convection))
-end
-function geometry(shape::HalfEllipsoid, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    b_flesh = (3 * flesh_volume / (2π * shape.axis_ratio_b))^(1/3)
-    fat_thickness = (((3 * volume / (2π * shape.axis_ratio_b))^(1/3)) - b_flesh)
-    if fat_thickness <= 0.0u"m"
-        b_semi_minor_skin = (3 * volume / (2π * shape.axis_ratio_b))^(1/3)
-    else
-        b_semi_minor_skin = b_flesh + fat_thickness
-    end
-    c_semi_minor_skin = b_semi_minor_skin
-    a_semi_major_skin = b_semi_minor_skin * shape.axis_ratio_b
-    total = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) +
-            π * b_semi_minor_skin * c_semi_minor_skin
-    characteristic_dimension = volume^(1/3)
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin, fat=fat_thickness),
-                    SurfaceAreas(; total))
-end
-function geometry(shape::HalfEllipsoid, fur::FibrousLayer, fat::FatLayer)
-    fat_mass = shape.mass * fat.fraction
-    fat_volume = fat_mass / fat.density
-    volume = shape.mass / shape.density
-    flesh_volume = volume - fat_volume
-    b_flesh = (3 * flesh_volume / (2π * shape.axis_ratio_b))^(1/3)
-    fat_thickness = ((3 * volume / (2π * shape.axis_ratio_b))^(1/3)) - b_flesh
-    if fat_thickness <= 0.0u"m"
-        b_semi_minor_skin = (3 * volume / (2π * shape.axis_ratio_b))^(1/3)
-    else
-        b_semi_minor_skin = b_flesh + fat_thickness
-    end
-    c_semi_minor_skin = b_semi_minor_skin
-    a_semi_major_skin = b_semi_minor_skin * shape.axis_ratio_b
-    a_semi_major_fibrous = a_semi_major_skin + fur.thickness
-    b_semi_minor_fibrous = b_semi_minor_skin + fur.thickness
-    c_semi_minor_fibrous = c_semi_minor_skin + fur.thickness
-    flat = π * b_semi_minor_skin * c_semi_minor_skin
-    total = _half_dome_area(a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous) + flat
-    skin = _half_dome_area(a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin) + flat
-    area_hair = insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    convection = skin - area_hair
-    characteristic_dimension = volume^(1/3) + fur.thickness
-    return Geometry(volume, characteristic_dimension,
-                    (; a_semi_major_skin, b_semi_minor_skin, c_semi_minor_skin,
-                       a_semi_major_fibrous, b_semi_minor_fibrous, c_semi_minor_fibrous, fat=fat_thickness),
-                    SurfaceAreas(; total, skin, convection))
+function _half_geometry(sh::HalfEllipsoid, full, fur::FibrousLayer)
+    len = full.length
+    flat = π * len.b_semi_minor_skin * len.c_semi_minor_skin
+    total = _half_dome_area(len.a_semi_major_fibrous, len.b_semi_minor_fibrous, len.c_semi_minor_fibrous) + flat
+    skin = _half_dome_area(len.a_semi_major_skin, len.b_semi_minor_skin, len.c_semi_minor_skin) + flat
+    convection = skin - insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
+    vol = sh.mass / sh.density
+    Geometry(vol, vol^(1/3) + fur.thickness, len, SurfaceAreas(; total, skin, convection))
 end
 
 # Silhouette area: half of full ellipsoid's, so two halves reproduce the

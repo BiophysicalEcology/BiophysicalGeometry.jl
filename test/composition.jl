@@ -29,6 +29,26 @@ end
     @test total_area(h) ≈ total_area(full)/2 + flat
 end
 
+@testset "Half shapes inherit full-shape dimension math" begin
+    fur = FibrousLayer(5u"mm", 30u"μm", 5e7u"1/m^2")
+    fat = FatLayer(0.2, 900.0u"kg/m^3")
+    for ins in (Naked(), fat, fur, CompositeInsulation(fur, fat))
+        he = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), ins)
+        fe = Body(Ellipsoid(10u"kg", ρ, 1.5, 1.0), ins)
+        eflat = π * he.geometry.length.b_semi_minor_skin * he.geometry.length.c_semi_minor_skin
+        @test skin_radius(he) ≈ skin_radius(fe)              # dims inherited from full 2m
+        @test total_area(he) ≈ total_area(fe)/2 + eflat
+        @test flesh_radius(he) ≤ skin_radius(he)             # flesh sits inside skin (fat clamped ≥ 0)
+
+        hc = Body(HalfCylinder(10u"kg", ρ, 3.0), ins)
+        fc = Body(Cylinder(20u"kg", ρ, 3.0), ins)
+        cflat = 2 * hc.geometry.length.radius_skin * hc.geometry.length.length_skin
+        @test skin_radius(hc) ≈ skin_radius(fc)
+        @test total_area(hc) ≈ total_area(fc)/2 + cflat
+        @test flesh_radius(hc) ≤ skin_radius(hc)
+    end
+end
+
 @testset "Dorsal/ventral torso == full cylinder" begin
     dorsal = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
     ventral = Body(HalfCylinder(10u"kg", ρ, 3.0), Naked())
