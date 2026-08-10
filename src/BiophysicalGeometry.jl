@@ -4,7 +4,7 @@ using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
 export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, Cone, LeopardFrog, DesertIguana
-export Half, HalfCylinder, HalfEllipsoid, HalfSphere, TriMesh
+export Half, HalfCylinder, HalfEllipsoid, HalfSphere
 export AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab
 export AbstractInsulationLayer, CompositeInsulation, Naked, FibrousLayer, FatLayer
 export AbstractPorousLayer, AbstractSolidLayer
@@ -59,7 +59,6 @@ include("shapes/sphere.jl")
 include("shapes/ellipsoid.jl")
 include("shapes/cone.jl")
 include("shapes/half.jl")
-include("shapes/trimesh.jl")
 include("shapes/desert_iguana.jl")
 include("shapes/leopard_frog.jl")
 include("meshes.jl")

@@ -206,14 +206,6 @@ end
     # Sphere: centroid → any surface point is the radius.
     sph = Body(Sphere(2u"kg", ρ), Naked())
     @test internal_distance(sph, Radial(0.0, 0.0)) ≈ skin_radius(sph)
-
-    # TriMesh has no thermal family — flesh_centroid falls through to the
-    # generic error, so a lumped-resistance path length fails loudly.
-    verts = [(0.0u"m",0.0u"m",0.0u"m"), (1.0u"m",0.0u"m",0.0u"m"),
-             (0.0u"m",1.0u"m",0.0u"m"), (0.0u"m",0.0u"m",1.0u"m")]
-    faces = [(1,3,2), (1,2,4), (1,4,3), (2,3,4)]
-    mesh_body = Body(TriMesh(verts, faces; mass=1u"kg"), Naked())
-    @test_throws ErrorException internal_distance(mesh_body, Radial(0.0, 0.0))
 end
 
 @testset "Validation" begin

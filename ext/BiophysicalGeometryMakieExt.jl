@@ -3,7 +3,7 @@ module BiophysicalGeometryMakieExt
 using Makie
 using Unitful
 using BiophysicalGeometry
-import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, Half, TriMesh
+import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, Half
 import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
 # Mesh helpers now live in core (src/meshes.jl); reuse them here.
@@ -100,14 +100,6 @@ function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
     _draw_surface!(p, _ellipsoid_mesh(r.flesh * ratio, r.flesh), cols.flesh)
     fl.fat && _draw_surface!(p, _ellipsoid_mesh(r.skin * ratio, r.skin; θ_end=3π/2), cols.fat)
     fl.fur && _draw_surface!(p, _ellipsoid_mesh(r.ins * ratio, r.ins;  θ_end=3π/2), cols.fur)
-end
-
-# For free-form meshes there is no analytic cutaway — just render the full
-# outer surface in flesh colour. (No layered fur/fat support yet for TriMesh.)
-function _draw_cutaway_shape!(p, shape::TriMesh, body, sc, cols)
-    for m in _part_outer_meshes(shape, body, sc)
-        _draw_surface!(p, m, cols.flesh)
-    end
 end
 
 function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)

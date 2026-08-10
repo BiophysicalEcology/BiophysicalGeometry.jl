@@ -51,8 +51,8 @@ end
     flesh_centroid(shape, body) -> NTuple{3,Length}
 
 Volumetric (flesh) centroid of a part in its local frame. Closed-form per
-shape family. `TriMesh` has no method — a lumped-resistance solve on a mesh
-part errors here rather than silently using the wrong path length.
+shape family. Shapes with no method (the animal shapes) error here rather
+than silently using the wrong path length for a lumped-resistance solve.
 """
 function flesh_centroid(sh::AbstractShape, body::AbstractBody)
     error("flesh_centroid not defined for $(typeof(sh)) — no lumped conduction path")

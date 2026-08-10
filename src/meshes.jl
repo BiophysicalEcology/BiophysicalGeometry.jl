@@ -244,22 +244,6 @@ function _part_outer_meshes(sh::Union{Half{<:AbstractEllipsoidal},Half{<:Abstrac
     [_half_ellipsoid_dome_mesh(d.a, d.b), _half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
 end
 
-# Each TriMesh face becomes one degenerate 2×2 grid (v1, v2, v3, v3) so it
-# slots into the existing parametric-grid pipeline (plotting + silhouette).
-function _part_outer_meshes(shape::TriMesh, body, sc)
-    out = Vector{Tuple{Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}}()
-    _pt(v) = (_ustrip_m(v[1], sc), _ustrip_m(v[2], sc), _ustrip_m(v[3], sc))
-    for (i, j, k) in shape.faces
-        x1, y1, z1 = _pt(shape.vertices[i])
-        x2, y2, z2 = _pt(shape.vertices[j])
-        x3, y3, z3 = _pt(shape.vertices[k])
-        push!(out, ([x1 x3; x2 x3],
-                    [y1 y3; y2 y3],
-                    [z1 z3; z2 z3]))
-    end
-    out
-end
-
 # ── Pose application ─────────────────────────────────────────────────────
 
 # Apply a Pose (translation in m, dimensionless rotation) to a triple of

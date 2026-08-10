@@ -12,9 +12,8 @@ abstract type AbstractShape <: AbstractGeometryModel end
 # concrete shapes. Thermal consumers (HeatExchange) dispatch on these —
 # one method per family covers every concrete shape in it, and a new
 # concrete shape joins its family with no new physics methods.
-# `TriMesh` deliberately has no family: a thermal solve on a mesh errors
-# with a missing-method dispatch rather than silently using the wrong
-# correlation.
+# Shapes with no family (the animal shapes) get a missing-method dispatch
+# on a thermal solve rather than silently using the wrong correlation.
 
 """
     AbstractCylindrical <: AbstractShape
@@ -215,8 +214,8 @@ end
 #   _fibrous_level(shape, skin_dims, t)    -> (; dims, area)   fur NamedTuple + outer area
 #   _fat_thickness(shape, skin_dims, flesh_volume, fat_volume) -> Length
 #
-# `Half`, `TriMesh`, and the animal shapes are not in `_StandardShape`; they
-# keep their own `geometry` methods.
+# `Half` and the animal shapes are not in `_StandardShape`; they keep their
+# own `geometry` methods.
 
 const _StandardShape = Union{AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab}
 
