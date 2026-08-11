@@ -356,3 +356,34 @@ function view_partition(body::CompositeBody; ndirections::Integer = 256, resolut
         (; sky = sky[p] * inv, ground = grnd[p] * inv, neighbours = nb)
     end)
 end
+
+# ── Silhouette API ─────────────────────────────────────────────────────────
+#
+# One verb: `silhouette(body, source)` — each part's projected area (m²) facing
+# `source`, occlusion-aware. A source is a region of the direction sphere.
+#
+#   Point(d)  — one direction (the direct beam / sun).
+#
+# For a `CompositeBody` this rasterises (parts shadow each other); for a lone
+# convex `Body` a fixed `SolarOrientation` posture gives the closed-form area.
+#
+# `silhouette_factors(body)` is the diffuse counterpart: each part's radiative
+# view split into `sky` / `ground` / per-`neighbour` fractions that sum to 1
+# (i.e. view factors — the normalised, dimensionless form of the silhouette).
+
+struct Point
+    direction::NTuple{3,Float64}
+    Point(d::NTuple{3,<:Real}) = new(_normalize3(d))
+end
+Point(x::Real, y::Real, z::Real) = Point((x, y, z))
+
+# Direct beam toward one direction: per-part lit area (occlusion-aware).
+silhouette(body::CompositeBody, src::Point; resolution::Integer = 256) =
+    silhouette_area_per_part(body, src.direction; resolution)
+
+# Lone convex body, fixed posture: the closed-form projected area.
+silhouette(body::AbstractBody, orientation::SolarOrientation) = silhouette_area(body, orientation)
+
+# Per-part radiative view factors: sky / ground / each neighbour, summing to 1.
+silhouette_factors(body::CompositeBody; ndirections::Integer = 256, resolution::Integer = 96) =
+    view_partition(body; ndirections, resolution)
