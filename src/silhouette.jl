@@ -267,7 +267,24 @@ function _fibonacci_sphere(n::Integer)
 end
 
 """
-    silhouette_factors(body::CompositeBody; ndirections=256, resolution=96)
+    Horizon(elevation = 0u"°")
+
+The site's sky/ground boundary: `elevation` is the angle above horizontal below
+which directions see ground rather than sky — flat plain `0u"°"`, a pit or canyon
+`> 0`, a mountaintop `< 0`, a sealed burrow `90u"°"`. A `Unitful` angle.
+
+Callable: `horizon(d)` returns the **sky fraction** (`0`–`1`) of unit direction
+`d`. `Horizon` is a hard boundary (0 or 1); a custom callable can return an
+in-between value for a partially obscured direction (vegetation, cavity mouth).
+"""
+struct Horizon{E}
+    elevation::E
+end
+Horizon() = Horizon(0.0u"°")
+(h::Horizon)(d) = d[3] >= sin(h.elevation) ? 1.0 : 0.0
+
+"""
+    silhouette_factors(body::CompositeBody; ndirections=256, resolution=96, horizon=Horizon())
 
 Occlusion-aware partition of every part's radiative view into `sky`, `ground`, and
 per-`neighbour` fractions that **sum to 1**. A `NamedTuple` keyed like `body.parts`;
@@ -276,16 +293,21 @@ by the *other* parts.
 
 Integrates the depth-buffered per-part silhouette over a Fibonacci-sphere set of
 directions: toward each direction a part's *unoccluded* projected area counts as sky
-(direction above the horizon) or ground (below), while the projected area it loses to a
-frontmost neighbour `k` accrues to that neighbour. So the blocked solid angle is never
-lost — it becomes the part-to-part term — and the three shares exhaust the hemisphere.
-General for any parts at any pose (no shape/orientation assumption); internal mated
-faces score zero because the neighbour buries them in the depth buffer.
+or ground per `horizon(d)`, while the projected area it loses to a frontmost neighbour
+`k` accrues to that neighbour. So the blocked solid angle is never lost — it becomes
+the part-to-part term — and the shares exhaust the sphere. General for any parts at
+any pose (no shape/orientation assumption); internal mated faces score zero because
+the neighbour buries them in the depth buffer.
+
+`horizon(d) -> Bool` maps each direction to sky (`true`) or ground (`false`); the
+default is a flat horizon at `z = 0`. A burrow, cave, or mountaintop supplies its own,
+so the sky/ground solid angles follow the site rather than a fixed hemisphere.
 
 `ndirections` sets the angular quadrature, `resolution` the raster grid; both trade
 accuracy for cost. Runs once per pose/solar configuration (an `init!`-time quantity).
 """
-function silhouette_factors(body::CompositeBody; ndirections::Integer = 256, resolution::Integer = 96)
+function silhouette_factors(body::CompositeBody; ndirections::Integer = 256,
+                            resolution::Integer = 96, horizon = Horizon())
     names = propertynames(body.parts)
     npart = length(names)
 
@@ -338,7 +360,7 @@ function silhouette_factors(body::CompositeBody; ndirections::Integer = 256, res
         # For each part: pixels it wins → sky/ground exposure; pixels it covers but a
         # neighbour won → that neighbour's part-to-part share. `cell` weights each pixel
         # by area; the shared `dω` cancels in the per-part normalisation, so it is omitted.
-        upper = d[3] >= 0
+        sky_fraction = horizon(d)          # 0–1; split each won pixel sky/ground
         cov = falses(resolution, resolution)
         for pidx in 1:npart
             fill!(cov, false)
@@ -349,7 +371,8 @@ function silhouette_factors(body::CompositeBody; ndirections::Integer = 256, res
                 cov[i, j] || continue
                 w = part_buf[i, j]
                 if w == pidx
-                    (upper ? sky : grnd)[pidx] += cell
+                    sky[pidx]  += cell * sky_fraction
+                    grnd[pidx] += cell * (1 - sky_fraction)
                 elseif w != 0
                     neigh[pidx, w] += cell
                 end
