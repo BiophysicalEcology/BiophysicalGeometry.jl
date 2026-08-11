@@ -26,7 +26,7 @@ end
 
 # Silhouette area
 
-function silhouette_area(shape::LeopardFrog, θ)
+function silhouette(shape::LeopardFrog, θ)
     area = surface_area(shape)
     pct = 1.38171e-6 * θ ^ 4 - 1.93335e-4 * θ ^ 3 + 4.75761e-3 * θ ^ 2 - 0.167912 * θ + 45.8228
     return pct * area / 100

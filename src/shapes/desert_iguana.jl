@@ -35,24 +35,24 @@ end
 
 # Silhouette area
 
-# Required by the generic silhouette_area(body::AbstractBody) dispatch in geometry.jl,
-# which calls silhouette_area(shape, insulation, body) and expects a (; normal, parallel) NamedTuple.
-function silhouette_area(shape::DesertIguana, ::Naked, ::AbstractBody)
+# Required by the generic silhouette(body::AbstractBody) dispatch in geometry.jl,
+# which calls silhouette(shape, insulation, body) and expects a (; normal, parallel) NamedTuple.
+function silhouette(shape::DesertIguana, ::Naked, ::AbstractBody)
     mass_g = Unitful.uconvert(u"g", shape.mass)
     normal = Unitful.uconvert(u"m^2", (3.798 * Unitful.ustrip(mass_g) ^ 0.683)u"cm^2")
     parallel = Unitful.uconvert(u"m^2", (0.694 * Unitful.ustrip(mass_g) ^ 0.743)u"cm^2")
     return (; normal, parallel)
 end
 
-function silhouette_area(shape::DesertIguana, ::NormalToSun)
+function silhouette(shape::DesertIguana, ::NormalToSun)
     mass_g = Unitful.uconvert(u"g", shape.mass)
     return Unitful.uconvert(u"m^2", (3.798 * Unitful.ustrip(mass_g) ^ 0.683)u"cm^2")
 end
-function silhouette_area(shape::DesertIguana, ::ParallelToSun)
+function silhouette(shape::DesertIguana, ::ParallelToSun)
     mass_g = Unitful.uconvert(u"g", shape.mass)
     return Unitful.uconvert(u"m^2", (0.694 * Unitful.ustrip(mass_g) ^ 0.743)u"cm^2")
 end
-function silhouette_area(shape::DesertIguana, ::Intermediate)
+function silhouette(shape::DesertIguana, ::Intermediate)
     mass_g = Unitful.uconvert(u"g", shape.mass)
     normal = Unitful.uconvert(u"m^2", (3.798 * Unitful.ustrip(mass_g) ^ 0.683)u"cm^2")
     parallel = Unitful.uconvert(u"m^2", (0.694 * Unitful.ustrip(mass_g) ^ 0.743)u"cm^2")

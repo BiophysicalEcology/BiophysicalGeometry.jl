@@ -702,14 +702,14 @@ flesh_volume(b::CompositeBody) = sum(map(flesh_volume, values(b.parts)))
 # Silhouette for a composite is the per-part sum — an *upper bound* that
 # ignores part-on-part shadowing. For accurate values, project all parts
 # together and rasterise: see `silhouette_rasterized`.
-function silhouette_area(b::CompositeBody)
-    sils = map(silhouette_area, values(b.parts))
+function silhouette(b::CompositeBody)
+    sils = map(silhouette, values(b.parts))
     (; normal = sum(map(s -> s.normal, sils)),
        parallel = sum(map(s -> s.parallel, sils)))
 end
 
-silhouette_area(b::CompositeBody, θ) = sum(map(p -> silhouette_area(p, θ), values(b.parts)))
-silhouette_area(b::CompositeBody, ::NormalToSun) = silhouette_area(b).normal
-silhouette_area(b::CompositeBody, ::ParallelToSun) = silhouette_area(b).parallel
-silhouette_area(b::CompositeBody, ::Intermediate) =
-    (silhouette_area(b).normal + silhouette_area(b).parallel) * 0.5
+silhouette(b::CompositeBody, θ) = sum(map(p -> silhouette(p, θ), values(b.parts)))
+silhouette(b::CompositeBody, ::NormalToSun) = silhouette(b).normal
+silhouette(b::CompositeBody, ::ParallelToSun) = silhouette(b).parallel
+silhouette(b::CompositeBody, ::Intermediate) =
+    (silhouette(b).normal + silhouette(b).parallel) * 0.5

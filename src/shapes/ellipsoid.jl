@@ -151,16 +151,16 @@ end
 # is an ellipse of area π·sqrt(b²c²·d_x² + a²c²·d_y² + a²b²·d_z²). With
 # the sun in the equatorial plane at angle θ from the long (a) axis,
 # d = (cos θ, sin θ, 0) gives π·c·sqrt(b²·cos²θ + a²·sin²θ).
-function silhouette_area(shape::Ellipsoid, a, b, c, θ)
+function silhouette(shape::Ellipsoid, a, b, c, θ)
     π * c * sqrt(b^2 * cos(θ)^2 + a^2 * sin(θ)^2)
 end
-function silhouette_area(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody)
+function silhouette(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody)
     d = outer_dims(sh, body)
     (; normal = π * d.a * d.b, parallel = π * d.b * d.c)
 end
-function silhouette_area(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody, θ)
+function silhouette(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(sh, body)
-    silhouette_area(sh, d.a, d.b, d.c, θ)
+    silhouette(sh, d.a, d.b, d.c, θ)
 end
 
 # Radius — shared by every ellipsoidal shape (`Ellipsoid`, `HalfEllipsoid`);

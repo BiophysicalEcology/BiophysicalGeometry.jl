@@ -37,12 +37,12 @@ surface_area(shape::Cylinder, r, l) = 2 * π * r * l + 2 * π * r^2
 # Silhouette area. `outer_dims` selects skin- vs fibrous-level (r, L) by
 # insulation, so a single insulation-dispatched wrapper per arity covers
 # all four insulation kinds.
-silhouette_area(shape::Cylinder, r, l, θ) = 2 * r * l * sin(θ) + π * r^2 * cos(θ)
-function silhouette_area(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody, θ)
+silhouette(shape::Cylinder, r, l, θ) = 2 * r * l * sin(θ) + π * r^2 * cos(θ)
+function silhouette(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(sh, body)
-    silhouette_area(sh, d.r, d.L, θ)
+    silhouette(sh, d.r, d.L, θ)
 end
-function silhouette_area(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody)
+function silhouette(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody)
     d = outer_dims(sh, body)
     (; normal = 2 * d.r * d.L, parallel = π * d.r^2)
 end

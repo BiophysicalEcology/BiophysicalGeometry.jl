@@ -41,7 +41,7 @@ surface_area(shape::Plate, length, width, height) = length * width * 2 + length 
 
 # Silhouette area
 
-function silhouette_area(shape::Plate, insulation::Union{Naked,FatLayer}, body::AbstractBody)
+function silhouette(shape::Plate, insulation::Union{Naked,FatLayer}, body::AbstractBody)
     length = body.geometry.length.length_skin
     width = body.geometry.length.width_skin
     height = body.geometry.length.height_skin
@@ -49,7 +49,7 @@ function silhouette_area(shape::Plate, insulation::Union{Naked,FatLayer}, body::
     parallel = min(length * width, length * height, height * width)
     return (; normal, parallel)
 end
-function silhouette_area(shape::Plate, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
+function silhouette(shape::Plate, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
     length = body.geometry.length.length_fibrous
     width = body.geometry.length.width_fibrous
     height = body.geometry.length.height_fibrous

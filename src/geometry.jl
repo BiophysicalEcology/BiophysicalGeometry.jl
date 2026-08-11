@@ -315,35 +315,35 @@ evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractB
 # Silhouette area
 
 """
-    silhouette_area(body::AbstractBody, θ)
-    silhouette_area(body::AbstractBody, orientation::SolarOrientation)
+    silhouette(body::AbstractBody, θ)
+    silhouette(body::AbstractBody, orientation::SolarOrientation)
 
 Calculates the silhouette (projected) area of an object given a
 solar zenith angle `θ` or a fixed [`SolarOrientation`](@ref) such as
 [`NormalToSun`](@ref), [`ParallelToSun`](@ref), or [`Intermediate`](@ref).
 """
-silhouette_area(body::AbstractBody, θ) = silhouette_area(shape(body), insulation(body), body, θ)
-silhouette_area(body::AbstractBody) = silhouette_area(shape(body), insulation(body), body)
+silhouette(body::AbstractBody, θ) = silhouette(shape(body), insulation(body), body, θ)
+silhouette(body::AbstractBody) = silhouette(shape(body), insulation(body), body)
 
 # Orientation-specific implementations
-silhouette_area(body::AbstractBody, ::NormalToSun) = silhouette_area(body).normal
-silhouette_area(body::AbstractBody, ::ParallelToSun) = silhouette_area(body).parallel
-silhouette_area(body::AbstractBody, ::Intermediate) =
-    (silhouette_area(body).normal + silhouette_area(body).parallel) * 0.5
+silhouette(body::AbstractBody, ::NormalToSun) = silhouette(body).normal
+silhouette(body::AbstractBody, ::ParallelToSun) = silhouette(body).parallel
+silhouette(body::AbstractBody, ::Intermediate) =
+    (silhouette(body).normal + silhouette(body).parallel) * 0.5
 
 # Generic 3-arg fallback: zenith angle ignored for fixed orientations
-silhouette_area(body::AbstractBody, o::SolarOrientation, zenith_angle) = silhouette_area(body, o)
+silhouette(body::AbstractBody, o::SolarOrientation, zenith_angle) = silhouette(body, o)
 
 # ZenithAngleVarying: compute from zenith angle using shape-specific 4-arg dispatch;
-# falls back to Intermediate() for shapes that don't implement silhouette_area(shape, ins, body, θ)
-function silhouette_area(body::AbstractBody, ::ZenithAngleVarying, zenith_angle)
+# falls back to Intermediate() for shapes that don't implement silhouette(shape, ins, body, θ)
+function silhouette(body::AbstractBody, ::ZenithAngleVarying, zenith_angle)
     sh = shape(body)
     ins = insulation(body)
     θ = uconvert(u"rad", zenith_angle)
-    if hasmethod(silhouette_area, (typeof(sh), typeof(ins), typeof(body), typeof(θ)))
-        return silhouette_area(sh, ins, body, θ)
+    if hasmethod(silhouette, (typeof(sh), typeof(ins), typeof(body), typeof(θ)))
+        return silhouette(sh, ins, body, θ)
     end
-    return silhouette_area(body, Intermediate())
+    return silhouette(body, Intermediate())
 end
 
 # Insulation area

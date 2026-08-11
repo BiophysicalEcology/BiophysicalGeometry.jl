@@ -76,10 +76,10 @@ flesh_radius(h::Half, ins, body)      = flesh_radius(h.parent, ins, body)
 outer_dims(h::Half, body::AbstractBody) = outer_dims(h.parent, body)
 
 # The half's silhouette is exactly half the parent's, in every family.
-silhouette_area(h::Half, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
-    silhouette_area(h.parent, ins, body, θ) / 2
-function silhouette_area(h::Half, ins::AbstractInsulationLayer, body::AbstractBody)
-    s = silhouette_area(h.parent, ins, body)
+silhouette(h::Half, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
+    silhouette(h.parent, ins, body, θ) / 2
+function silhouette(h::Half, ins::AbstractInsulationLayer, body::AbstractBody)
+    s = silhouette(h.parent, ins, body)
     (; normal = s.normal / 2, parallel = s.parallel / 2)
 end
 

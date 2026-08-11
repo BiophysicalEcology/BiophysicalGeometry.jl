@@ -51,14 +51,14 @@ end
 # Silhouette: same shape as the cylinder pattern, but the lateral profile is a
 # triangle (r·L) rather than a rectangle (2·r·L). `outer_dims` picks skin- vs
 # fibrous-level (r, L) so one wrapper per arity covers all insulation kinds.
-function silhouette_area(::Cone, r, L, θ)
+function silhouette(::Cone, r, L, θ)
     r * L * sin(θ) + π * r^2 * cos(θ)
 end
-function silhouette_area(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody, θ)
+function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(sh, body)
-    silhouette_area(sh, d.r, d.L, θ)
+    silhouette(sh, d.r, d.L, θ)
 end
-function silhouette_area(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody)
+function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody)
     d = outer_dims(sh, body)
     (; normal = d.r * d.L, parallel = π * d.r^2)
 end

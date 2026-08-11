@@ -31,25 +31,25 @@ end
 
 # Silhouette area
 
-silhouette_area(shape::Sphere, r) = π * r ^ 2
-function silhouette_area(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody, θ)
+silhouette(shape::Sphere, r) = π * r ^ 2
+function silhouette(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody, θ)
     r = body.geometry.length.radius_skin
-    return silhouette_area(shape, r)
+    return silhouette(shape, r)
 end
-function silhouette_area(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody, θ)
+function silhouette(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody, θ)
     r = body.geometry.length.radius_fibrous
-    return silhouette_area(shape, r)
+    return silhouette(shape, r)
 end
-function silhouette_area(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody)
+function silhouette(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody)
     r = body.geometry.length.radius_skin
-    area = silhouette_area(shape, r)
+    area = silhouette(shape, r)
     normal = area
     parallel = area
     return (; normal, parallel)
 end
-function silhouette_area(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
+function silhouette(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
     r = body.geometry.length.radius_fibrous
-    area = silhouette_area(shape, r)
+    area = silhouette(shape, r)
     normal = area
     parallel = area
     return (; normal, parallel)
