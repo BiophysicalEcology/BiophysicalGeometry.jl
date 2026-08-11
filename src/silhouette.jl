@@ -28,17 +28,18 @@ function _normalize3(d::NTuple{3,<:Real})
 end
 
 """
-    Point(direction)
+    Beam(direction)
 
-A point (collimated) source at one direction — the direct beam. A source is a
-region of the direction sphere; `silhouette(body, source)` gives each part's
-projected area facing it.
+A collimated beam from one `direction` — parallel rays from a source at infinity,
+i.e. the direct (beam) component of radiation, as opposed to the diffuse `Sky` /
+`Ground` regions. `silhouette(body, Beam(dir))` gives each part's projected area
+facing the beam.
 """
-struct Point
+struct Beam
     direction::NTuple{3,Float64}
-    Point(d::NTuple{3,<:Real}) = new(_normalize3(d))
+    Beam(d::NTuple{3,<:Real}) = new(_normalize3(d))
 end
-Point(x::Real, y::Real, z::Real) = Point((x, y, z))
+Beam(x::Real, y::Real, z::Real) = Beam((x, y, z))
 
 # Rasterise one 2D triangle into a z-buffer, tagging each won pixel with `part`.
 # `depth` is the triangle's distance along the view direction (larger = nearer the
@@ -190,7 +191,7 @@ function silhouette_rasterized(body::CompositeBody, sun_direction::NTuple{3,<:Re
 end
 
 """
-    silhouette(body::CompositeBody, ::Point; resolution=256)
+    silhouette(body::CompositeBody, ::Beam; resolution=256)
 
 Per-part lit (unshadowed) silhouette area projected along `view_direction` — a
 `NamedTuple` keyed like `body.parts`, each a `Quantity` (m²). Every part's posed
@@ -203,7 +204,7 @@ therefore reports (near) zero, and the parts' areas sum to the composite silhoue
 Run it toward the sun for direct-beam exposure, or toward the sky / ground
 hemispheres for the diffuse view fractions each part sees.
 """
-function silhouette(body::CompositeBody, src::Point; resolution::Integer = 256)
+function silhouette(body::CompositeBody, src::Beam; resolution::Integer = 256)
     d = src.direction
     u, v = _ortho_basis(d)
     names = propertynames(body.parts)
@@ -267,24 +268,70 @@ function _fibonacci_sphere(n::Integer)
 end
 
 """
-    Horizon(elevation = 0u"°")
+    Sky(size)
+    Sky(size, tilt)
 
-The site's sky/ground boundary: `elevation` is the angle above horizontal below
-which directions see ground rather than sky — flat plain `0u"°"`, a pit or canyon
-`> 0`, a mountaintop `< 0`, a sealed burrow `90u"°"`. A `Unitful` angle.
-
-Callable: `horizon(d)` returns the **sky fraction** (`0`–`1`) of unit direction
-`d`. `Horizon` is a hard boundary (0 or 1); a custom callable can return an
-in-between value for a partially obscured direction (vegetation, cavity mouth).
+The sky as a region of the direction sphere: a spherical cap covering `size` (a
+fraction `0`–`1` of the whole sphere), centred straight up. `Sky(0.5)` is a
+flat-ground hemisphere, `Sky(0.7)` a mountaintop (sky bulging past horizontal),
+`Sky(0.0)` a sealed burrow. Pass a `tilt` direction (a 3-tuple) to point the cap off
+vertical — a slope whose sky leans downhill. `Ground` is its complement; hand either
+to [`silhouette_factors`](@ref) to split every direction into sky and ground.
 """
-struct Horizon{E}
-    elevation::E
+struct Sky{S,A}
+    size::S
+    axis::A
+    Sky(size::S, tilt) where {S} = (a = _normalize3(tilt); new{S,typeof(a)}(size, a))
 end
-Horizon() = Horizon(0.0u"°")
-(h::Horizon)(d) = d[3] >= sin(h.elevation) ? 1.0 : 0.0
+Sky(size) = Sky(size, (0.0, 0.0, 1.0))
 
 """
-    silhouette_factors(body::CompositeBody; ndirections=256, resolution=96, horizon=Horizon())
+    Ground(size)
+    Ground(size, tilt)
+
+The ground as a region of the direction sphere: a spherical cap covering `size` (a
+fraction `0`–`1` of the whole sphere), centred straight down. `Ground(g)` is the
+complement of `Sky(1 - g)`, so `Ground(0.5)` is flat ground and `Ground(1.0)` a
+sealed burrow. `tilt` points the cap off vertical for a slope.
+"""
+struct Ground{S,A}
+    size::S
+    axis::A
+    Ground(size::S, tilt) where {S} = (a = _normalize3(tilt); new{S,typeof(a)}(size, a))
+end
+Ground(size) = Ground(size, (0.0, 0.0, -1.0))
+
+"""
+    Horizon(angles)
+
+The measured horizon as a per-azimuth elevation profile — the real, possibly
+asymmetric sky/ground boundary that a symmetric `Sky`/`Ground` cap cannot express.
+`angles` is a vector of `n` `Unitful` elevations above horizontal, one per compass
+bearing: bin `i` is azimuth `(i-1)·360°/n`, from north (`+y`) clockwise, matched to a
+direction by nearest bin — exactly the `horizon_angles` a Microclimate.jl `Site`
+carries (`fill(0.0u"°", 24)` for flat ground). Sky is every direction above the
+profile, ground every direction below.
+"""
+struct Horizon{A}
+    angles::A
+end
+
+# Sky share of a unit direction `d` (0 or 1) under a region; the ground share is its
+# complement `1 - sky`. A spherical cap of sphere-fraction `f` has half-angle `θ` with
+# `cos θ = 1 - 2f`, so cap membership is the plain dot-product test `d · axis ≥ 1 - 2·size`.
+_sky_share(r::Sky, d)    = (d[1]*r.axis[1] + d[2]*r.axis[2] + d[3]*r.axis[3]) >= 1 - 2*r.size ? 1.0 : 0.0
+_sky_share(r::Ground, d) = (d[1]*r.axis[1] + d[2]*r.axis[2] + d[3]*r.axis[3]) >= 1 - 2*r.size ? 0.0 : 1.0
+function _sky_share(r::Horizon, d)
+    n = length(r.angles)
+    elevation = asin(clamp(d[3], -1.0, 1.0))                # radians above horizontal
+    azimuth = atan(d[1], d[2])                              # from +y (north), clockwise
+    azimuth < 0 && (azimuth += 2π)
+    idx = mod(round(Int, azimuth / (2π / n)), n) + 1        # nearest bin (Microclimate rule)
+    elevation >= ustrip(u"rad", @inbounds r.angles[idx]) ? 1.0 : 0.0
+end
+
+"""
+    silhouette_factors(body::CompositeBody, region; ndirections=256, resolution=96)
 
 Occlusion-aware partition of every part's radiative view into `sky`, `ground`, and
 per-`neighbour` fractions that **sum to 1**. A `NamedTuple` keyed like `body.parts`;
@@ -293,21 +340,21 @@ by the *other* parts.
 
 Integrates the depth-buffered per-part silhouette over a Fibonacci-sphere set of
 directions: toward each direction a part's *unoccluded* projected area counts as sky
-or ground per `horizon(d)`, while the projected area it loses to a frontmost neighbour
-`k` accrues to that neighbour. So the blocked solid angle is never lost — it becomes
-the part-to-part term — and the shares exhaust the sphere. General for any parts at
-any pose (no shape/orientation assumption); internal mated faces score zero because
-the neighbour buries them in the depth buffer.
+or ground per `region`, while the projected area it loses to a frontmost neighbour `k`
+accrues to that neighbour. So the blocked solid angle is never lost — it becomes the
+part-to-part term — and the shares exhaust the sphere. General for any parts at any
+pose (no shape/orientation assumption); internal mated faces score zero because the
+neighbour buries them in the depth buffer.
 
-`horizon(d) -> Bool` maps each direction to sky (`true`) or ground (`false`); the
-default is a flat horizon at `z = 0`. A burrow, cave, or mountaintop supplies its own,
-so the sky/ground solid angles follow the site rather than a fixed hemisphere.
+`region` fixes the sky/ground split of each direction and is one of [`Sky`](@ref),
+[`Ground`](@ref), or [`Horizon`](@ref) — an idealised cap from either side, or the
+measured horizon profile. The two are complementary, so a single object suffices.
 
 `ndirections` sets the angular quadrature, `resolution` the raster grid; both trade
 accuracy for cost. Runs once per pose/solar configuration (an `init!`-time quantity).
 """
-function silhouette_factors(body::CompositeBody; ndirections::Integer = 256,
-                            resolution::Integer = 96, horizon = Horizon())
+function silhouette_factors(body::CompositeBody, region;
+                            ndirections::Integer = 256, resolution::Integer = 96)
     names = propertynames(body.parts)
     npart = length(names)
 
@@ -360,7 +407,7 @@ function silhouette_factors(body::CompositeBody; ndirections::Integer = 256,
         # For each part: pixels it wins → sky/ground exposure; pixels it covers but a
         # neighbour won → that neighbour's part-to-part share. `cell` weights each pixel
         # by area; the shared `dω` cancels in the per-part normalisation, so it is omitted.
-        sky_fraction = horizon(d)          # 0–1; split each won pixel sky/ground
+        sky_fraction = _sky_share(region, d)   # 0–1; split each won pixel sky/ground
         cov = falses(resolution, resolution)
         for pidx in 1:npart
             fill!(cov, false)

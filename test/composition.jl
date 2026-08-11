@@ -295,19 +295,19 @@ end
     )
 
     # Along +z: the top sphere is nearer the source and fully shadows the bottom.
-    along = silhouette(snowman, Point(0.0, 0.0, 1.0); resolution=256)
+    along = silhouette(snowman, Beam(0.0, 0.0, 1.0); resolution=256)
     @test abs(along.top - expected) / expected < 0.02
     @test along.bottom / expected < 0.02                     # occluded → ~0
     @test abs((along.top + along.bottom) -
               silhouette_rasterized(snowman, (0.0, 0.0, 1.0))) / expected < 0.02  # sums to composite
 
     # Across (+x): side by side, neither shadows the other.
-    across = silhouette(snowman, Point(1.0, 0.0, 0.0); resolution=256)
+    across = silhouette(snowman, Beam(1.0, 0.0, 0.0); resolution=256)
     @test abs(across.top - expected) / expected < 0.02
     @test abs(across.bottom - expected) / expected < 0.02
 
     # view_partition: each sphere's hemisphere splits into sky / ground / the neighbour.
-    vp = silhouette_factors(snowman; ndirections=400, resolution=96)
+    vp = silhouette_factors(snowman, Sky(0.5); ndirections=400, resolution=96)
     for k in (:top, :bottom)
         e = vp[k]
         @test e.sky + e.ground + sum(values(e.neighbours)) ≈ 1.0 atol = 1e-6   # exhausts the hemisphere
