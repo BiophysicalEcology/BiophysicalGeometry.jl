@@ -23,7 +23,7 @@ end
 _layer_flags(r) = (fat_layer=r.skin > r.flesh + 1e-9, fibrous_layer=r.ins > r.skin + 1e-9)
 
 _axis_ratio(::Any)        = 1.0
-_axis_ratio(s::Ellipsoid) = Float64(s.b)
+_axis_ratio(s::Ellipsoid) = Float64(s.axis_ratio_b)
 
 _colors(p) = (flesh=p[:flesh_col][], fat_layer=p[:fat_layer_col][], fibrous_layer=p[:fibrous_layer_col][])
 
@@ -148,8 +148,8 @@ function _draw_cutaway_shape!(p, shape::Plate, body, sc, cols)
     hl_i = ustrip(u"m", _get(gl, :length_fibrous, gl.length_skin)) / 2 * sc
     hh_i = ustrip(u"m", _get(gl, :height_fibrous, gl.height_skin)) / 2 * sc
     hw_f = r.flesh
-    hl_f = hw_f * Float64(shape.b)
-    hh_f = hl_f / Float64(shape.c)
+    hl_f = hw_f * Float64(shape.axis_ratio_b)
+    hh_f = hl_f / Float64(shape.axis_ratio_c)
 
     _draw_box_faces!(p, hl_f, hw_f, hh_f, cols.flesh; full=true)
     fl.fat_layer && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat_layer)
@@ -202,11 +202,11 @@ function _section_layers(shape::Plate, body, mode, r, cols)
     if mode === :long
         d_s = (gl.length_skin / 2, gl.height_skin / 2)
         d_i = (_get(gl, :length_fibrous, gl.length_skin) / 2, _get(gl, :height_fibrous, gl.height_skin) / 2)
-        d_f = (r_f * shape.b, r_f * shape.b / shape.c)
+        d_f = (r_f * shape.axis_ratio_b, r_f * shape.axis_ratio_b / shape.axis_ratio_c)
     else
         d_s = (gl.width_skin / 2, gl.height_skin / 2)
         d_i = (_get(gl, :width_fibrous, gl.width_skin) / 2, _get(gl, :height_fibrous, gl.height_skin) / 2)
-        d_f = (r_f, (r_f * shape.b) / shape.c)
+        d_f = (r_f, (r_f * shape.axis_ratio_b) / shape.axis_ratio_c)
     end
     [
         (r_i > r_s, () -> _rect_pts(d_i...), cols.fibrous_layer),
