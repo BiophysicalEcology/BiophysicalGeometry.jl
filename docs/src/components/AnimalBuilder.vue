@@ -11,6 +11,17 @@ const presets = {
               headRatio: 1.3, headFraction: 0.08, nose: 'Nose', noseFraction: 0.02, ears: 'Plate', earFraction: 0.01,
               earPosture: 'Up', earRatio: 1.2, earFlatness: 30, legFraction: 0.04, legRatio: 3.5, legTop: 0.8, tail: true,
               tailFraction: 0.002, tailRatio: 12 },
+  Human: { ...defaults, mass: 70, density: 1050, fatDensity: 1050, posture: 'Upright', torsoRatio: 1.9, fat: 0.252,
+           backFur: 0.006, bellyFur: 0.006, limbFur: 0.006, headShape: 'Ellipsoid', headRatio: 1.6, headFraction: 0.0761,
+           legs: 2, legFraction: 0.1623, legRatio: 7, legTop: 1, arms: true, armFraction: 0.0493, armRatio: 12 },
+  Kangaroo: { ...defaults, mass: 50, pitch: 40, torsoRatio: 2.2, fat: 0.05, backFur: 0.01, bellyFur: 0.006, limbFur: 0.005,
+              headRatio: 1.8, headFraction: 0.04, neck: true, neckFraction: 0.03, neckRatio: 1.5, ears: 'Plate',
+              earFraction: 0.001, earRatio: 2.5, earFlatness: 12, legFraction: 0.01, legRatio: 6, legTop: 0.5,
+              hindLegs: 'Different', hindFraction: 0.1, hindRatio: 4.5, tail: true, tailFraction: 0.08, tailRatio: 7 },
+  Tyrannosaur: { ...defaults, mass: 7000, pitch: 5, torsoRatio: 2.2, fat: 0, backFur: 0, bellyFur: 0, limbFur: 0,
+                 headRatio: 1.8, headFraction: 0.07, neck: true, neckFraction: 0.04, neckRatio: 1, legFraction: 0.002,
+                 legRatio: 5, legTop: 0.5, hindLegs: 'Different', hindFraction: 0.12, hindRatio: 4, tail: true,
+                 tailFraction: 0.12, tailRatio: 5 },
   Giraffe: { ...defaults, mass: 800, torsoRatio: 1.8, fat: 0.02, backFur: 0.003, bellyFur: 0.003, limbFur: 0.003,
              headRatio: 2, headFraction: 0.02, neck: true, neckFraction: 0.1, neckRatio: 6, neckPosture: 'Up',
              ears: 'Plate', earFraction: 0.0005, earRatio: 2, earFlatness: 12, legFraction: 0.05, legRatio: 10, legTop: 0.5,
@@ -46,9 +57,9 @@ const sunDirection = computed(() => {
 const shadow = computed(() => silhouette(animal.value.triangles, sunDirection.value, 160))
 
 const colours = { dorsal: [76, 140, 191], ventral: [230, 158, 51], head: [89, 173, 115], neck: [148, 115, 184],
-                  nose: [140, 107, 89], beak: [217, 166, 64], tail: [128, 128, 128], ear: [217, 140, 191], wing: [100, 170, 180] }
+                  nose: [140, 107, 89], beak: [217, 166, 64], tail: [128, 128, 128], ear: [217, 140, 191], wing: [100, 170, 180], arm: [160, 190, 90] }
 const legColour = [204, 102, 115]
-const colourOf = (part) => colours[part] || (part.startsWith('ear') ? colours.ear : part.startsWith('wing') ? colours.wing : legColour)
+const colourOf = (part) => colours[part] || (part.startsWith('ear') ? colours.ear : part.startsWith('wing') ? colours.wing : part.startsWith('arm') ? colours.arm : legColour)
 
 const fmt = (x, unit) => {
   const s = x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x >= 1 ? x.toFixed(2) : x.toPrecision(3)
@@ -59,7 +70,7 @@ const massLabel = computed(() => (p.mass >= 1 ? fmt(p.mass, 'kg') : fmt(p.mass *
 const rows = computed(() => {
   const groups = {}
   for (const part of animal.value.parts) {
-    const key = part.name.startsWith('leg') ? 'legs' : part.name.startsWith('ear') ? 'ears' : part.name.startsWith('wing') ? 'wings' : part.name
+    const key = part.name.startsWith('leg') ? 'legs' : part.name.startsWith('ear') ? 'ears' : part.name.startsWith('wing') ? 'wings' : part.name.startsWith('arm') ? 'arms' : part.name
     groups[key] = (groups[key] || 0) + part.total - part.hidden
   }
   return Object.entries(groups)
@@ -154,8 +165,14 @@ async function copyCode() {
 
 onMounted(() => {
   // a link such as builder?preset=Bird opens on that animal
-  const wanted = new URLSearchParams(window.location.search).get('preset')
+  const query = new URLSearchParams(window.location.search)
+  const wanted = query.get('preset')
   if (wanted in presets) { preset.value = wanted; usePreset() }
+  // and any setting can follow, as in builder?preset=Kangaroo&torsoShape=Ellipsoid&pitch=20
+  for (const [key, value] of query) {
+    if (key in defaults) p[key] = typeof defaults[key] === 'number' ? Number(value) : typeof defaults[key] === 'boolean' ? value === 'true' : value
+  }
+  logMass.value = Math.log10(p.mass)
   draw(); drawShadow()
 })
 watch([animal, view], draw, { deep: true })
@@ -173,9 +190,15 @@ watch(shadow, drawShadow)
 
       <h4>Body</h4>
       <label>Mass <output>{{ massLabel }}</output>
-        <input type="range" min="-2" max="3" step="0.01" v-model.number="logMass" /></label>
-      <label>Torso shape
-        <select v-model="p.torsoShape"><option>Cylinder</option><option>Ellipsoid</option></select></label>
+        <input type="range" min="-2" max="4" step="0.01" v-model.number="logMass" /></label>
+      <label>Posture
+        <select v-model="p.posture"><option>Horizontal</option><option>Upright</option></select></label>
+      <template v-if="p.posture === 'Horizontal'">
+        <label>Body pitch, head up <output>{{ p.pitch }}°</output>
+          <input type="range" min="-30" max="80" step="1" v-model.number="p.pitch" /></label>
+        <label>Torso shape
+          <select v-model="p.torsoShape"><option>Cylinder</option><option>Ellipsoid</option></select></label>
+      </template>
       <label>Torso length / width <output>{{ p.torsoRatio }}</output>
         <input type="range" min="1.1" max="6" step="0.1" v-model.number="p.torsoRatio" /></label>
       <label>Fat, fraction of torso mass <output>{{ p.fat }}</output>
@@ -201,7 +224,7 @@ watch(shadow, drawShadow)
         <template v-if="p.neck">
           <label>Neck length / width <output>{{ p.neckRatio }}</output>
             <input type="range" min="0.5" max="8" step="0.1" v-model.number="p.neckRatio" /></label>
-          <label>Neck posture
+          <label v-if="p.posture === 'Horizontal'">Neck posture
             <select v-model="p.neckPosture"><option>Forward</option><option>Up</option></select></label>
         </template>
         <label>Nose or beak
@@ -226,7 +249,8 @@ watch(shadow, drawShadow)
 
       <h4>Legs</h4>
       <label>Number
-        <select v-model.number="p.legs"><option :value="0">0</option><option :value="2">2</option><option :value="4">4</option></select></label>
+        <select v-model.number="p.legs"><option :value="0">0</option><option :value="2">2</option>
+          <option v-if="p.posture === 'Horizontal'" :value="4">4</option></select></label>
       <template v-if="p.legs > 0">
         <label>Proportions
           <select v-model="p.legScaling">
@@ -244,20 +268,41 @@ watch(shadow, drawShadow)
           {{ animal.params.legRatio.toFixed(1) }}, {{ (100 * animal.params.legFraction).toFixed(1) }}% of mass each.</p>
         <label>Taper, foot / top <output>{{ p.legTop >= 1 ? 'cylinder' : p.legTop }}</output>
           <input type="range" min="0.1" max="1" step="0.05" v-model.number="p.legTop" /></label>
+        <template v-if="p.legs === 4 && p.posture === 'Horizontal' && p.legScaling === 'Manual'">
+          <label>Hind legs
+            <select v-model="p.hindLegs"><option value="Same">Same as forelegs</option><option>Different</option></select></label>
+          <template v-if="p.hindLegs === 'Different'">
+            <label>Hind leg, fraction of mass, each <output>{{ p.hindFraction }}</output>
+              <input type="range" min="0.005" max="0.2" step="0.005" v-model.number="p.hindFraction" /></label>
+            <label>Hind leg, length / width <output>{{ p.hindRatio }}</output>
+              <input type="range" min="1" max="12" step="0.1" v-model.number="p.hindRatio" /></label>
+          </template>
+        </template>
       </template>
 
-      <h4>Wings</h4>
-      <label>Wings
-        <select v-model="p.wings"><option>None</option><option>Folded</option><option>Spread</option></select></label>
-      <label v-if="p.wings !== 'None'">Fraction of mass, each <output>{{ p.wingFraction }}</output>
-        <input type="range" min="0.005" max="0.15" step="0.005" v-model.number="p.wingFraction" /></label>
+      <template v-if="p.posture === 'Upright'">
+        <h4>Arms</h4>
+        <label class="check"><span><input type="checkbox" v-model="p.arms" /> Arms</span>
+          <output v-if="p.arms">{{ p.armFraction }} each</output>
+          <input v-if="p.arms" type="range" min="0.005" max="0.1" step="0.005" v-model.number="p.armFraction" /></label>
+        <label v-if="p.arms">Length / width <output>{{ p.armRatio }}</output>
+          <input type="range" min="2" max="16" step="0.5" v-model.number="p.armRatio" /></label>
+      </template>
 
-      <h4>Tail</h4>
-      <label class="check"><span><input type="checkbox" v-model="p.tail" /> Tail</span>
-        <output v-if="p.tail">{{ p.tailFraction }}</output>
-        <input v-if="p.tail" type="range" min="0.001" max="0.1" step="0.001" v-model.number="p.tailFraction" /></label>
-      <label v-if="p.tail">Length / width <output>{{ p.tailRatio }}</output>
-        <input type="range" min="1" max="20" step="0.5" v-model.number="p.tailRatio" /></label>
+      <template v-if="p.posture === 'Horizontal'">
+        <h4>Wings</h4>
+        <label>Wings
+          <select v-model="p.wings"><option>None</option><option>Folded</option><option>Spread</option></select></label>
+        <label v-if="p.wings !== 'None'">Fraction of mass, each <output>{{ p.wingFraction }}</output>
+          <input type="range" min="0.005" max="0.15" step="0.005" v-model.number="p.wingFraction" /></label>
+
+        <h4>Tail</h4>
+        <label class="check"><span><input type="checkbox" v-model="p.tail" /> Tail</span>
+          <output v-if="p.tail">{{ p.tailFraction }}</output>
+          <input v-if="p.tail" type="range" min="0.001" max="0.25" step="0.001" v-model.number="p.tailFraction" /></label>
+        <label v-if="p.tail">Length / width <output>{{ p.tailRatio }}</output>
+          <input type="range" min="1" max="20" step="0.5" v-model.number="p.tailRatio" /></label>
+      </template>
 
       <h4>Sun</h4>
       <label>Zenith angle <output>{{ sun.zenith }}°</output>
@@ -295,8 +340,13 @@ watch(shadow, drawShadow)
 </template>
 
 <style scoped>
-.builder { display: grid; grid-template-columns: minmax(230px, 280px) 1fr; gap: 20px; margin: 16px 0; }
-.controls { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+/* The controls scroll in their own column, so that the animal stays in view while any slider is moved. */
+.builder { display: grid; grid-template-columns: minmax(230px, 280px) 1fr; gap: 20px; margin: 16px 0;
+           --pane: calc(100vh - var(--vp-nav-height, 64px) - 40px); }
+.controls { display: flex; flex-direction: column; gap: 6px; font-size: 13px; position: sticky;
+            top: calc(var(--vp-nav-height, 64px) + 20px); align-self: start; max-height: var(--pane); overflow-y: auto;
+            padding-right: 10px; }
+.controls h4:first-of-type { margin-top: 4px; }
 .controls h4 { margin: 10px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;
                color: var(--vp-c-text-2); }
 .controls label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; }
@@ -306,8 +356,8 @@ watch(shadow, drawShadow)
 .controls label.check span { display: flex; align-items: center; gap: 6px; }
 .controls .note { margin: 0; font-size: 12px; line-height: 1.4; color: var(--vp-c-text-2); }
 .controls output { font-variant-numeric: tabular-nums; color: var(--vp-c-text-2); }
-.result { min-width: 0; }
-canvas.body { width: 100%; height: auto; border: 1px solid var(--vp-c-divider); border-radius: 8px;
+.result { min-width: 0; position: sticky; top: calc(var(--vp-nav-height, 64px) + 20px); align-self: start; }
+canvas.body { width: min(100%, calc(0.5 * var(--pane) * 1.4)); height: auto; border: 1px solid var(--vp-c-divider); border-radius: 8px;
               cursor: grab; touch-action: none; color: var(--vp-c-text-2); background: var(--vp-c-bg-soft); }
 .hint { margin: 2px 0 8px; font-size: 12px; color: var(--vp-c-text-3); }
 .numbers { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
@@ -325,5 +375,12 @@ canvas.body { width: 100%; height: auto; border: 1px solid var(--vp-c-divider); 
 .code h4 { margin: 0 0 6px; font-size: 14px; }
 .code button { position: absolute; top: 36px; right: 8px; font-size: 12px; padding: 2px 10px; border-radius: 6px;
                border: 1px solid var(--vp-c-divider); background: var(--vp-c-bg); color: var(--vp-c-text-2); }
-@media (max-width: 720px) { .builder { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .builder { grid-template-columns: 1fr; }
+  .controls { position: static; max-height: none; overflow: visible; order: 2; }
+  .result { top: var(--vp-nav-height, 64px); z-index: 2; background: var(--vp-c-bg); order: 1; }
+  .code { order: 3; }
+  canvas.body { width: min(100%, 56vh); }
+  .numbers { display: none; }
+}
 </style>

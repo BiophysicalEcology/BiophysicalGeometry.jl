@@ -44,6 +44,13 @@ const num = (x, digits = 5) => {
   return s.includes('.') || s.includes('e') ? s : s + '.0'
 }
 const metres = (x) => `${num(x)}u"m"`
+// An angle, written exactly where it is a simple fraction of π, so that rounding cannot put it out of range.
+const angle = (x) => {
+  for (const [value, text] of [[PI, 'π'], [-PI, '-π'], [PI / 2, 'π / 2'], [-PI / 2, '-π / 2'], [0, '0.0']]) {
+    if (Math.abs(x - value) < 1e-9) return text
+  }
+  return num(x, 7)
+}
 const kilograms = (x) => `${num(x, 6)}u"kg"`
 const fibres = (depth) => (depth > 0 ? `FibrousLayer(${num(depth * 1000)}u"mm", 30.0u"μm", 3000u"cm^-2")` : 'Naked()')
 
@@ -135,27 +142,27 @@ const at = {
     ? { point: [0, 0, part.L / 2], normal: [0, -1, 0], code: 'Flat()' }
     : { point: [0, 0, 0], normal: [0, 0, -1], code: 'Flat()' },
   endA: (r = 0, phi = 0) => ({ point: [r * Math.cos(phi), r * Math.sin(phi), 0], normal: [0, 0, -1],
-                               code: `EndA(${metres(r)}, ${num(phi)})` }),
+                               code: `EndA(${metres(r)}, ${angle(phi)})` }),
   endB: (part, r = 0, phi = 0) => ({ point: [r * Math.cos(phi), r * Math.sin(phi), part.L], normal: [0, 0, 1],
-                                     code: `EndB(${metres(r)}, ${num(phi)})` }),
+                                     code: `EndB(${metres(r)}, ${angle(phi)})` }),
   lateral: (part, z, phi) => ({ point: [part.r * Math.cos(phi), part.r * Math.sin(phi), z],
-                                normal: [Math.cos(phi), Math.sin(phi), 0], code: `Lateral(${metres(z)}, ${num(phi)})` }),
+                                normal: [Math.cos(phi), Math.sin(phi), 0], code: `Lateral(${metres(z)}, ${angle(phi)})` }),
   dome: (part, alpha, beta) => {
     const { a, b } = part
     return { point: [a * Math.cos(alpha), b * Math.sin(alpha) * Math.cos(beta), b * Math.sin(alpha) * Math.sin(beta)],
              normal: unit([Math.cos(alpha) * b * b, Math.sin(alpha) * Math.cos(beta) * a * b, Math.sin(alpha) * Math.sin(beta) * a * b]),
-             code: `Dome(${num(alpha)}, ${num(beta)})` }
+             code: `Dome(${angle(alpha)}, ${angle(beta)})` }
   },
   poleA: (part) => ({ point: [part.a, 0, 0], normal: [1, 0, 0], code: 'PoleA()' }),
   poleB: (part) => ({ point: [-part.a, 0, 0], normal: [-1, 0, 0], code: 'PoleB()' }),
   equator: (part, phi) => ({ point: [0, part.b * Math.cos(phi), part.b * Math.sin(phi)], normal: [0, Math.cos(phi), Math.sin(phi)],
-                             code: `Equator(${num(phi)})` }),
+                             code: `Equator(${angle(phi)})` }),
   bottom: (part) => ({ point: [0, 0, -part.H / 2], normal: [0, 0, -1], code: 'Bottom(0.0u"m", 0.0u"m")' }),
   bottomFace: (part) => ({ point: [0, 0, -part.H / 2], normal: [0, 0, -1], code: 'Bottom()' }),
   sideB: (part) => ({ point: [-part.L / 2, 0, 0], normal: [-1, 0, 0], code: 'SideB(0.0u"m", 0.0u"m")' }),
   radial: (part, theta, phi) => {
     const n = [Math.sin(theta) * Math.cos(phi), Math.sin(theta) * Math.sin(phi), Math.cos(theta)]
-    return { point: n.map((x) => part.r * x), normal: n, code: `Radial(${num(theta)}, ${num(phi)})` }
+    return { point: n.map((x) => part.r * x), normal: n, code: `Radial(${angle(theta)}, ${angle(phi)})` }
   },
 }
 
@@ -209,12 +216,15 @@ function childPose(parent, on, child, twist = 0) {
 
 export const defaults = {
   mass: 20, density: 1000, fatDensity: 901,
+  posture: 'Horizontal', pitch: 0,
   torsoShape: 'Cylinder', torsoRatio: 3, fat: 0.1, backFur: 0.015, bellyFur: 0.005, limbFur: 0.008,
   headShape: 'Ellipsoid', headRatio: 1.5, headFraction: 0.08,
   neck: false, neckFraction: 0.04, neckRatio: 1, neckPosture: 'Forward',
   nose: 'None', noseFraction: 0.005,
   ears: 'None', earFraction: 0.002, earPosture: 'Up', earRatio: 1.5, earFlatness: 10,
   legs: 4, legScaling: 'Manual', legFraction: 0.03, legRatio: 5, legTop: 0.5,
+  hindLegs: 'Same', hindFraction: 0.06, hindRatio: 6,
+  arms: false, armFraction: 0.05, armRatio: 12,
   wings: 'None', wingFraction: 0.04,
   tail: false, tailFraction: 0.01, tailRatio: 6,
 }
@@ -226,6 +236,11 @@ const legPlaces = (n) => (n === 4 ? [[0.85, 1], [0.85, -1], [0.15, 1], [0.15, -1
 
 export function build(input) {
   const p = { ...defaults, ...input }
+  const upright = p.posture === 'Upright'
+  if (upright) {   // a trunk standing on two legs, with arms: no tail or wings, and a round trunk
+    Object.assign(p, { torsoShape: 'Cylinder', legs: Math.min(p.legs, 2), tail: false, wings: 'None', neckPosture: 'Forward',
+                       pitch: 0 })
+  }
   const hasHead = p.headShape !== 'None'
   const mass = {
     head: hasHead ? p.headFraction * p.mass : 0,
@@ -235,6 +250,7 @@ export function build(input) {
     leg: p.legs > 0 ? p.legFraction * p.mass : 0,
     tail: p.tail ? p.tailFraction * p.mass : 0,
     wing: p.wings !== 'None' ? p.wingFraction * p.mass : 0,
+    arm: upright && p.arms ? p.armFraction * p.mass : 0,
   }
   let scaledLeg = null
   if (p.legs > 0 && p.legScaling !== 'Manual') {   // leg length and diameter from the mass of the body
@@ -244,13 +260,20 @@ export function build(input) {
     p.legRatio = scaledLeg.length / scaledLeg.diameter
     p.legFraction = mass.leg / p.mass
   }
-  p.torsoMass = p.mass - mass.head - mass.neck - mass.nose - 2 * mass.ear - p.legs * mass.leg - mass.tail - 2 * mass.wing
+  // hind legs of their own size, for an animal with four legs sized by hand
+  const ownHind = p.legs === 4 && p.hindLegs === 'Different' && p.legScaling === 'Manual'
+  mass.hind = ownHind ? p.hindFraction * p.mass : mass.leg
+  const legMass = p.legs === 4 ? 2 * mass.leg + 2 * mass.hind : p.legs * mass.leg
+  p.torsoMass = p.mass - mass.head - mass.neck - mass.nose - 2 * mass.ear - legMass - mass.tail - 2 * mass.wing - 2 * mass.arm
   const cylinder = p.torsoShape === 'Cylinder'
 
   const dorsal = { name: 'dorsal', ...torsoHalf(p, p.backFur), mass: p.torsoMass / 2 }
   const ventral = { name: 'ventral', ...torsoHalf(p, p.bellyFur), mass: p.torsoMass / 2 }
-  // the torso lies along x with the back up
-  dorsal.pose = { rotation: cylinder ? [[0, 0, 1], [1, 0, 0], [0, 1, 0]] : IDENTITY, translation: [0, 0, 0] }
+  // The torso lies along x with the back up, tipped head-up by the pitch; or stands upright, its back to +y.
+  const tilt = (p.pitch * PI) / 180
+  const pitched = [[Math.cos(tilt), 0, -Math.sin(tilt)], [0, 1, 0], [Math.sin(tilt), 0, Math.cos(tilt)]]
+  dorsal.pose = { rotation: upright ? IDENTITY : multiply(pitched, cylinder ? [[0, 0, 1], [1, 0, 0], [0, 1, 0]] : IDENTITY),
+                  translation: [0, 0, 0] }
   const parts = [dorsal, ventral]
   const joins = []
   const definitions = [] // Julia lines for the bodies, each used under one or more names
@@ -269,14 +292,25 @@ export function build(input) {
     const r = Math.floor(radius * scale) / scale
     return [PI * r * r, `Disc(${metres(r)})`]
   }
-  const onTorso = (part, towardHead, side = 0) => cylinder
+  // the place on a head that faces the direction `towards`
+  const facing = (head, towards) => {
+    const R = head.pose.rotation
+    const local = [0, 1, 2].map((j) => R[0][j] * towards[0] + R[1][j] * towards[1] + R[2][j] * towards[2])
+    return p.headShape === 'Sphere'
+      ? at.radial(head, Math.acos(Math.max(-1, Math.min(1, local[2] / Math.hypot(...local)))), Math.atan2(local[1], local[0]))
+      : at.equator(head, Math.atan2(local[2], local[1]))
+  }
+  const onTorso = (part, towardHead, side = 0) => upright ? at.endB(part, 0, PI / 2) : cylinder
     ? (side === 0 ? at[towardHead ? 'endB' : 'endA'](...(towardHead ? [part, part.r / 2, PI / 2] : [part.r / 2, PI / 2]))
                   : at.lateral(part, towardHead * part.L, PI / 2 + side * LEG_SPLAY))
     : (side === 0 ? at.dome(part, towardHead ? 0.3 : PI - 0.3, PI / 2)
                   : at.dome(part, towardHead > 0.6 ? 0.9 : towardHead < 0.4 ? PI - 0.9 : PI / 2, PI / 2 + side * 0.5))
 
   parts.pop() // ventral is added by its join
-  join(dorsal, at.flat(dorsal), ventral, at.flat(ventral), dorsal.cut, 'FullCover()', cylinder ? -PI / 2 : 0)
+  // the ventral half is turned about the join until its long axis lies along that of the dorsal half
+  const longAxis = cylinder ? [0, 0, 1] : [1, 0, 0]
+  const lineUp = twistTo(dorsal.pose, at.flat(dorsal), at.flat(ventral), longAxis, rotate(dorsal.pose.rotation, longAxis))
+  join(dorsal, at.flat(dorsal), ventral, at.flat(ventral), dorsal.cut, 'FullCover()', lineUp)
 
   if (hasHead) {
     const head = { name: 'head', ...(p.headShape === 'Sphere' ? sphere(mass.head, p) : ellipsoid(mass.head, p.headRatio, p)) }
@@ -302,16 +336,17 @@ export function build(input) {
       const nose = { name: p.nose === 'Beak' ? 'beak' : 'nose',
                      ...(p.nose === 'Beak' ? axial(mass.nose, 2.0, 0, p) : axial(mass.nose, 1.0, 0.5, p)) }
       definitions.push(`${nose.name} = ${nose.code}`)
-      const front = p.headShape === 'Sphere' ? at.radial(head, PI / 2, 0) : at.poleA(head)
+      const front = upright ? facing(head, [0, -1, 0]) : p.headShape === 'Sphere' ? at.radial(head, PI / 2, 0) : at.poleA(head)
       join(head, front, nose, at.endA(), ...disc(Math.min(nose.r, 0.45 * head.r)))
     }
     if (p.ears !== 'None') {
       const flatEar = p.ears === 'Plate'
       const ear = flatEar ? plate(mass.ear, p.earRatio, p.earFlatness, p) : axial(mass.ear, 1.5, 0.3, p)
       definitions.push(`ear = ${ear.code}`)
-      const forward = rotate(head.pose.rotation, [1, 0, 0])
+      const forward = upright ? [0, -1, 0] : rotate(head.pose.rotation, [1, 0, 0])
       for (const [name, side] of [['ear_l', 1], ['ear_r', -1]]) {
-        const on = p.headShape === 'Sphere' ? at.radial(head, 0.6, (side * PI) / 2) : at.equator(head, PI / 2 - side * 0.6)
+        const on = upright ? facing(head, [side * 0.9, 0, 0.45])
+          : p.headShape === 'Sphere' ? at.radial(head, 0.6, (side * PI) / 2) : at.equator(head, PI / 2 - side * 0.6)
         const child = { name, ...ear, alias: 'ear' }
         if (!flatEar) {
           join(head, on, child, at.endA(), ...disc(Math.min(ear.r, 0.45 * head.r)))
@@ -342,9 +377,25 @@ export function build(input) {
     } else {
       definitions.push(`leg = ${leg.code}`)
     }
+    const hind = ownHind ? axial(mass.hind, p.hindRatio, p.legTop, p) : leg
+    if (ownHind) definitions.push(`hind_leg = ${hind.code}`)
     legPlaces(p.legs).forEach(([along, side], k) => {
-      join(ventral, onTorso(ventral, along, side), { name: legNames(p.legs)[k], ...leg, alias: 'leg' }, at.endA(), ...disc(leg.r))
+      const rear = ownHind && along < 0.4
+      const child = { name: legNames(p.legs)[k], ...(rear ? hind : leg), alias: rear ? 'hind_leg' : 'leg' }
+      if (upright) {   // under the trunk, side by side
+        join(dorsal, at.endA(1.1 * child.r, side > 0 ? 0 : PI), child, at.endA(), ...disc(child.r))
+      } else {
+        join(ventral, onTorso(ventral, along, side), child, at.endA(), ...disc(child.r))
+      }
     })
+  }
+  if (mass.arm > 0) {   // hung from the shoulders by their sides, and turned to point down
+    const arm = axial(mass.arm, p.armRatio, 1, p)
+    definitions.push(`arm = ${arm.code}`)
+    for (const [name, side] of [['arm_l', 1], ['arm_r', -1]]) {
+      const shoulder = at.lateral(dorsal, dorsal.L - arm.r, side > 0 ? 0 : PI)
+      join(dorsal, shoulder, { name, ...arm, alias: 'arm' }, at.lateral(arm, arm.r, side > 0 ? PI : 0), ...disc(arm.r), PI)
+    }
   }
   if (p.wings !== 'None') {
     const wing = plate(mass.wing, 2.5, 15, p)
@@ -374,7 +425,7 @@ export function build(input) {
   const skin = parts.reduce((s, part) => s + part.skin, 0) - 2 * joined
   return {
     params: p, parts, total, skin, joined, volume: p.mass / p.density, meeh: total / Math.cbrt(p.mass) ** 2,
-    triangles: parts.flatMap(mesh), code: juliaCode(p, dorsal, ventral, definitions, parts, joins, cylinder),
+    triangles: parts.flatMap(mesh), code: juliaCode(p, dorsal, ventral, definitions, parts, joins),
   }
 }
 
@@ -473,7 +524,7 @@ export function silhouette(triangles, direction, n = 240) {
 
 // ── Julia code ──────────────────────────────────────────────────────────────
 
-function juliaCode(p, dorsal, ventral, definitions, parts, joins, cylinder) {
+function juliaCode(p, dorsal, ventral, definitions, parts, joins) {
   const lines = ['using BiophysicalGeometry, Unitful', '', `density = ${num(p.density)}u"kg/m^3"`]
   if (definitions.length > 0) lines.push(`coat = ${fibres(p.limbFur)}`)
   lines.push(`dorsal = ${dorsal.code}`, `ventral = ${ventral.code}`, ...definitions)
@@ -481,7 +532,11 @@ function juliaCode(p, dorsal, ventral, definitions, parts, joins, cylinder) {
   lines.push('', 'animal = CompositeBody(;', `    parts = (; ${names.join(', ')}),`, '    joins = (')
   joins.forEach((j) => lines.push('        ' + j.code))
   lines.push('    ),')
-  if (cylinder) lines.push('    root_pose = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 0.0 1.0; 1.0 0.0 0.0; 0.0 1.0 0.0]),')
+  const R = dorsal.pose.rotation
+  if (R.some((row, i) => row.some((x, j) => Math.abs(x - (i === j ? 1 : 0)) > 1e-12))) {
+    const matrix = R.map((row) => row.map((x) => num(Math.abs(x) < 1e-12 ? 0 : x, 9)).join(' ')).join('; ')
+    lines.push(`    root_pose = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [${matrix}]),`)
+  }
   lines.push(')', '', 'total_area(animal), skin_area(animal)')
   return lines.join('\n')
 }

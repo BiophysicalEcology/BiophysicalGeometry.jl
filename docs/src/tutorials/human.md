@@ -192,5 +192,7 @@ markdown_table(["Part", "Sky", "Ground", "Rest of the body"],
                [(name, v.sky, v.ground, sum(v.neighbours)) for (name, v) in pairs(views)])
 ```
 
+The page [Build an animal](../builder.md) has this person as a starting point, to reshape with sliders.
+
 The defaults of `HomoTherm` for the view of the sky are 0.50 for the head, 0.42 for the trunk and 0.35 for the arms
 and legs, close to those computed.
