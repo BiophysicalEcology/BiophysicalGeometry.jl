@@ -66,7 +66,7 @@ place of codes:
 | `ORIENT`, `ZEN` | [`silhouette`](@ref) with an angle or a [`SolarOrientation`](@ref) |
 | `PCOND`, used by `HomoTherm` as the fraction of area joined to other parts | [`Join`](@ref), with the place and size of the joined patch |
 
-NicheMapR's human model, `HomoTherm`, calls `GEOM_ENDO` once per body part, and joins the parts by giving each a
+NicheMapR's human model, `HomoTherm` (Kearney et al. 2026), calls `GEOM_ENDO` once per body part, and joins the parts by giving each a
 fraction of its area that is in contact with the others. What is new here is that parts have positions and
 orientations, so the joined areas, the shading of one part by another and the views between parts are computed
 from where the parts are. The tutorial

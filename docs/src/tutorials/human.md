@@ -1,6 +1,6 @@
 # A human: comparison with NicheMapR
 
-The human model of NicheMapR, `HomoTherm`, is made of a head, a trunk, two arms and two legs. This tutorial builds
+The human model of NicheMapR, `HomoTherm` (Kearney et al. 2026), is made of a head, a trunk, two arms and two legs. This tutorial builds
 the same 70 kg person with this package, and compares the geometry with that from NicheMapR 3.3.3, part by part
 and as a whole.
 
@@ -147,8 +147,9 @@ maximum(abs.(parts_sum .- sun[:, 2]))
 ```
 
 Adding the parts ignores the shade of one part on another: an arm on the trunk with the sun to the side, and the
-head and shoulders on everything else with the sun overhead. NicheMapR corrects for this with a fit to the
-silhouettes of people measured by Underwood and Ward (1966). Here the shade is computed, for a person facing the
+head and shoulders on everything else with the sun overhead. The summed silhouette overestimates the sunlight
+absorbed, and NicheMapR corrects for this with a fit to the silhouettes of people measured by Underwood and Ward
+(1966), see Kearney et al. (2026). Here the shade is computed, for a person facing the
 sun or side-on to it:
 
 ```@example human

@@ -19,6 +19,10 @@ Energy Budget models. *Ecography* 43: 85–96.
 Kearney, M. R., Briscoe, N. J., Mathewson, P. D. and Porter, W. P. (2021). NicheMapR – an R package for biophysical
 modelling: the endotherm model. *Ecography* 44: 1595–1605.
 
+Kearney, M. R., Mitchell, D. and Maloney, S. K. (2026). HomoTherm: an open-source approach to modelling heat exchange
+in humans and other hominins in diverse environments. *Global Change Biology* 32: e70830.
+https://doi.org/10.1111/gcb.70830
+
 McMahon, T. A. (1973). Size and shape in biology. *Science* 179: 1201–1204.
 
 Porter, W. P., Bertz, A. E., Mathewson, P. D., Solorzano, L. C., Dudley, P. N., Bonazza, R. and Gebremedhin, K. G.
