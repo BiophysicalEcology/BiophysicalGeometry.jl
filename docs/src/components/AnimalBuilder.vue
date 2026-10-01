@@ -181,6 +181,7 @@ watch(shadow, drawShadow)
 
 <template>
   <div class="builder">
+    <div class="panes">
     <div class="controls">
       <label class="wide">Start from
         <select v-model="preset" @change="usePreset">
@@ -331,6 +332,8 @@ watch(shadow, drawShadow)
       </div>
     </div>
 
+    </div>
+
     <div class="code">
       <h4>Julia code for this animal</h4>
       <button @click="copyCode">{{ copied ? 'Copied' : 'Copy' }}</button>
@@ -341,8 +344,9 @@ watch(shadow, drawShadow)
 
 <style scoped>
 /* The controls scroll in their own column, so that the animal stays in view while any slider is moved. */
-.builder { display: grid; grid-template-columns: minmax(230px, 280px) 1fr; gap: 20px; margin: 16px 0;
-           --pane: calc(100vh - var(--vp-nav-height, 64px) - 40px); }
+/* The code sits under the panes, outside them, so that it cannot slide up over them. */
+.builder { margin: 16px 0; --pane: calc(100vh - var(--vp-nav-height, 64px) - 40px); }
+.panes { display: grid; grid-template-columns: minmax(230px, 280px) 1fr; gap: 20px; }
 .controls { display: flex; flex-direction: column; gap: 6px; font-size: 13px; position: sticky;
             top: calc(var(--vp-nav-height, 64px) + 20px); align-self: start; max-height: var(--pane); overflow-y: auto;
             padding-right: 10px; }
@@ -369,17 +373,16 @@ canvas.body { width: min(100%, calc(0.5 * var(--pane) * 1.4)); height: auto; bor
 .shadow canvas { color: var(--vp-c-text-1); border: 1px solid var(--vp-c-divider); border-radius: 8px;
                  background: var(--vp-c-bg-soft); }
 .shadow p { margin: 4px 0 0; line-height: 1.4; }
-.code { grid-column: 1 / -1; position: relative; }
+.code { position: relative; margin-top: 24px; }
 .code pre { margin: 0; padding: 14px 16px; border-radius: 8px; background: var(--vp-code-block-bg); overflow-x: auto;
             font-size: 12.5px; line-height: 1.5; }
 .code h4 { margin: 0 0 6px; font-size: 14px; }
 .code button { position: absolute; top: 36px; right: 8px; font-size: 12px; padding: 2px 10px; border-radius: 6px;
                border: 1px solid var(--vp-c-divider); background: var(--vp-c-bg); color: var(--vp-c-text-2); }
 @media (max-width: 720px) {
-  .builder { grid-template-columns: 1fr; }
+  .panes { grid-template-columns: 1fr; }
   .controls { position: static; max-height: none; overflow: visible; order: 2; }
   .result { top: var(--vp-nav-height, 64px); z-index: 2; background: var(--vp-c-bg); order: 1; }
-  .code { order: 3; }
   canvas.body { width: min(100%, 56vh); }
   .numbers { display: none; }
 }
