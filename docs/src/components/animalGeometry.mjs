@@ -116,6 +116,14 @@ function plate(mass, ratio, flatness, p) {
            code: `Body(Plate(${kilograms(mass)}, density, ${num(ratio)}, ${num(flatness)}), coat)` }
 }
 
+// Limb length and diameter (m) from body mass (kg), as in BiologicalScaling.jl: elastic similarity (McMahon 1973),
+// in which larger animals have relatively thicker limbs, or geometric similarity, in which proportions are fixed.
+const LIMB_EXPONENTS = { Elastic: [1 / 4, 3 / 8], Geometric: [1 / 3, 1 / 3] }
+function limb(similarity, mass) {
+  const [lengthExponent, diameterExponent] = LIMB_EXPONENTS[similarity]
+  return { length: 0.17 * mass ** lengthExponent, diameter: 0.013 * mass ** diameterExponent }
+}
+
 // ── Surfaces ────────────────────────────────────────────────────────────────
 //
 // A location on a part: its point and outward normal in the part's own frame, and its Julia code.
@@ -206,7 +214,7 @@ export const defaults = {
   neck: false, neckFraction: 0.04, neckRatio: 1, neckPosture: 'Forward',
   nose: 'None', noseFraction: 0.005,
   ears: 'None', earFraction: 0.002, earPosture: 'Up', earRatio: 1.5, earFlatness: 10,
-  legs: 4, legFraction: 0.03, legRatio: 5, legTop: 0.5,
+  legs: 4, legScaling: 'Manual', legFraction: 0.03, legRatio: 5, legTop: 0.5,
   wings: 'None', wingFraction: 0.04,
   tail: false, tailFraction: 0.01, tailRatio: 6,
 }
@@ -228,6 +236,14 @@ export function build(input) {
     tail: p.tail ? p.tailFraction * p.mass : 0,
     wing: p.wings !== 'None' ? p.wingFraction * p.mass : 0,
   }
+  let scaledLeg = null
+  if (p.legs > 0 && p.legScaling !== 'Manual') {   // leg length and diameter from the mass of the body
+    scaledLeg = limb(p.legScaling, p.mass)
+    const taper = p.legTop >= 1 ? 1 : (1 + p.legTop + p.legTop ** 2) / 3
+    mass.leg = p.density * PI * (scaledLeg.diameter / 2) ** 2 * scaledLeg.length * taper
+    p.legRatio = scaledLeg.length / scaledLeg.diameter
+    p.legFraction = mass.leg / p.mass
+  }
   p.torsoMass = p.mass - mass.head - mass.neck - mass.nose - 2 * mass.ear - p.legs * mass.leg - mass.tail - 2 * mass.wing
   const cylinder = p.torsoShape === 'Cylinder'
 
@@ -246,7 +262,13 @@ export function build(input) {
                        (Math.abs(twist) > 1e-9 ? `; twist = ${num(twist, 7)}),` : '),') })
     parts.push(child)
   }
-  const disc = (radius) => [PI * radius * radius, `Disc(${metres(radius)})`]
+  // A round patch. Its radius is rounded down to the digits written in the Julia code, so that the patch never
+  // comes out larger than the surface it sits on.
+  const disc = (radius) => {
+    const scale = 10 ** (4 - Math.floor(Math.log10(radius)))
+    const r = Math.floor(radius * scale) / scale
+    return [PI * r * r, `Disc(${metres(r)})`]
+  }
   const onTorso = (part, towardHead, side = 0) => cylinder
     ? (side === 0 ? at[towardHead ? 'endB' : 'endA'](...(towardHead ? [part, part.r / 2, PI / 2] : [part.r / 2, PI / 2]))
                   : at.lateral(part, towardHead * part.L, PI / 2 + side * LEG_SPLAY))
@@ -306,7 +328,20 @@ export function build(input) {
   }
   if (p.legs > 0) {
     const leg = axial(mass.leg, p.legRatio, p.legTop, p)
-    definitions.push(`leg = ${leg.code}`)
+    if (scaledLeg) {
+      const cone = p.legTop < 1
+      definitions.push(
+        `# legs from ${p.legScaling.toLowerCase()} similarity, with BiologicalScaling.jl`,
+        'import BiologicalScaling',
+        `similarity = BiologicalScaling.${p.legScaling}Similarity()`,
+        `leg_length = BiologicalScaling.limb_length(similarity, ${kilograms(p.mass)})`,
+        `leg_diameter = BiologicalScaling.limb_diameter(similarity, ${kilograms(p.mass)})`,
+        `leg_mass = density * π * (leg_diameter / 2)^2 * leg_length` + (cone ? ` * (1 + ${num(p.legTop)} + ${num(p.legTop)}^2) / 3` : ''),
+        cone ? `leg = Body(Cone(leg_mass, density, leg_length / leg_diameter, ${num(p.legTop)}), coat)`
+             : 'leg = Body(Cylinder(leg_mass, density, leg_length / leg_diameter), coat)')
+    } else {
+      definitions.push(`leg = ${leg.code}`)
+    }
     legPlaces(p.legs).forEach(([along, side], k) => {
       join(ventral, onTorso(ventral, along, side), { name: legNames(p.legs)[k], ...leg, alias: 'leg' }, at.endA(), ...disc(leg.r))
     })

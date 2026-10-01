@@ -19,3 +19,7 @@ change a join, add a neck or a tail, or ask for each part's view of the sky, see
 
 This page computes its numbers in the browser, with a copy of the package's calculations for these shapes. The copy
 is checked against the package each time the documentation is built.
+
+The legs can be set by hand, or sized from the mass of the body by elastic or geometric similarity with
+[BiologicalScaling.jl](https://github.com/BiophysicalEcology/BiologicalScaling.jl), see
+[Geometry and allometry](tutorials/scaling.md).

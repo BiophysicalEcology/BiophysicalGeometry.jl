@@ -68,10 +68,10 @@ A quadruped of any mass, with fixed proportions: a torso with 80% of the mass, a
 3% each.
 
 ```@example scaling
-function quadruped(mass; leg_ratio = 4.0)
-    torso = Body(Cylinder(0.80mass, density, 2.5), Naked())
+function quadruped(mass; leg_mass = 0.03mass, leg_ratio = 4.0)
+    torso = Body(Cylinder(0.92mass - 4leg_mass, density, 2.5), Naked())
     head = Body(Ellipsoid(0.08mass, density, 1.5, 1.0), Naked())
-    leg = Body(Cylinder(0.03mass, density, leg_ratio), Naked())
+    leg = Body(Cylinder(leg_mass, density, leg_ratio), Naked())
     L = torso.geometry.length.length_skin
     r_leg = skin_radius(leg)
     r_neck = 0.5 * skin_radius(head)
@@ -98,16 +98,26 @@ the proportions are.
 ## Proportions that change with size
 
 Real proportions are not fixed. Under *elastic similarity* (McMahon 1973) the legs of larger animals are
-relatively thicker, so that they do not buckle, and BiologicalScaling.jl gives their length over their diameter:
+relatively thicker, so that they do not buckle. BiologicalScaling.jl gives the length and diameter of a leg from
+the mass of the body:
 
 ```@example scaling
-[BS.limb_aspect_ratio(BS.ElasticSimilarity(), m) for m in [0.02, 2.0, 200.0] .* u"kg"]
+markdown_table(["Body mass", "Leg length", "Leg diameter", "Length / diameter"],
+               [(m, uconvert(u"cm", BS.limb_length(BS.ElasticSimilarity(), m)),
+                 uconvert(u"cm", BS.limb_diameter(BS.ElasticSimilarity(), m)), BS.limb_aspect_ratio(BS.ElasticSimilarity(), m))
+                for m in [0.02, 2.0, 200.0] .* u"kg"])
 ```
 
-This is the `axis_ratio_b` of a cylinder, so it can be passed straight to the legs:
+A cylinder is sized from its mass and its length over its diameter, so the legs are given the mass of a cylinder
+of that length and diameter:
 
 ```@example scaling
-elastic(mass) = quadruped(mass; leg_ratio = BS.limb_aspect_ratio(BS.ElasticSimilarity(), mass))
+function elastic(mass)
+    leg_length = BS.limb_length(BS.ElasticSimilarity(), mass)
+    leg_diameter = BS.limb_diameter(BS.ElasticSimilarity(), mass)
+    leg_mass = density * π * (leg_diameter / 2)^2 * leg_length
+    quadruped(mass; leg_mass, leg_ratio = leg_length / leg_diameter)
+end
 fig = Figure(size = (700, 260)) # hide
 for (i, m) in enumerate([0.02, 2.0, 200.0] .* u"kg") # hide
     draw_parts!(body_axis(fig[1, i]; decorations = false, azimuth = -π / 2, elevation = 0.0, title = "$m", # hide
@@ -210,4 +220,4 @@ from the skin.
 An allometric equation gives a surface area with nothing more than a mass, and is the place to start. Geometry is
 needed when the question is about shape: the area of a part, the effect of a posture or a coat, what the sun and
 the sky see. The two also work together, as here, with allometry supplying the proportions that geometry turns
-into a body.
+into a body. The page [Build an animal](../builder.md) offers legs sized by elastic similarity in the same way.

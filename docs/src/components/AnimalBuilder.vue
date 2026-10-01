@@ -228,10 +228,20 @@ watch(shadow, drawShadow)
       <label>Number
         <select v-model.number="p.legs"><option :value="0">0</option><option :value="2">2</option><option :value="4">4</option></select></label>
       <template v-if="p.legs > 0">
-        <label>Fraction of mass, each <output>{{ p.legFraction }}</output>
-          <input type="range" min="0.005" max="0.1" step="0.005" v-model.number="p.legFraction" /></label>
-        <label>Length / width <output>{{ p.legRatio }}</output>
-          <input type="range" min="1" max="12" step="0.1" v-model.number="p.legRatio" /></label>
+        <label>Proportions
+          <select v-model="p.legScaling">
+            <option value="Manual">Set by hand</option>
+            <option value="Elastic">Elastic similarity</option>
+            <option value="Geometric">Geometric similarity</option>
+          </select></label>
+        <template v-if="p.legScaling === 'Manual'">
+          <label>Fraction of mass, each <output>{{ p.legFraction }}</output>
+            <input type="range" min="0.005" max="0.1" step="0.005" v-model.number="p.legFraction" /></label>
+          <label>Length / width <output>{{ p.legRatio }}</output>
+            <input type="range" min="1" max="12" step="0.1" v-model.number="p.legRatio" /></label>
+        </template>
+        <p v-else class="note">From body mass, with BiologicalScaling.jl: length / width
+          {{ animal.params.legRatio.toFixed(1) }}, {{ (100 * animal.params.legFraction).toFixed(1) }}% of mass each.</p>
         <label>Taper, foot / top <output>{{ p.legTop >= 1 ? 'cylinder' : p.legTop }}</output>
           <input type="range" min="0.1" max="1" step="0.05" v-model.number="p.legTop" /></label>
       </template>
@@ -294,6 +304,7 @@ watch(shadow, drawShadow)
 .controls select { border: 1px solid var(--vp-c-divider); border-radius: 6px; padding: 2px 6px;
                    background: var(--vp-c-bg-soft); color: var(--vp-c-text-1); }
 .controls label.check span { display: flex; align-items: center; gap: 6px; }
+.controls .note { margin: 0; font-size: 12px; line-height: 1.4; color: var(--vp-c-text-2); }
 .controls output { font-variant-numeric: tabular-nums; color: var(--vp-c-text-2); }
 .result { min-width: 0; }
 canvas.body { width: 100%; height: auto; border: 1px solid var(--vp-c-divider); border-radius: 8px;
