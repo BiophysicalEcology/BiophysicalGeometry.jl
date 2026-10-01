@@ -66,12 +66,15 @@ const fmt = (x, unit) => {
   return `${s} ${unit}`
 }
 const area = (x) => (x >= 0.1 ? fmt(x, 'm²') : fmt(x * 1e4, 'cm²'))
-const massLabel = computed(() => (p.mass >= 1 ? fmt(p.mass, 'kg') : fmt(p.mass * 1000, 'g')))
+const weight = (x) => (x >= 1 ? fmt(x, 'kg') : fmt(x * 1000, 'g'))
+const massLabel = computed(() => weight(p.mass))
 const rows = computed(() => {
   const groups = {}
   for (const part of animal.value.parts) {
     const key = part.name.startsWith('leg') ? 'legs' : part.name.startsWith('ear') ? 'ears' : part.name.startsWith('wing') ? 'wings' : part.name.startsWith('arm') ? 'arms' : part.name
-    groups[key] = (groups[key] || 0) + part.total - part.hidden
+    groups[key] = groups[key] || { area: 0, mass: 0 }
+    groups[key].area += part.total - part.hidden
+    groups[key].mass += part.mass
   }
   return Object.entries(groups)
 })
@@ -323,7 +326,12 @@ watch(shadow, drawShadow)
           <tr><th>Hidden by joins</th><td>{{ area(2 * animal.joined) }}</td></tr>
           <tr><th>Volume</th><td>{{ fmt(animal.volume * 1000, 'L') }}</td></tr>
           <tr><th>Meeh coefficient</th><td>{{ animal.meeh.toFixed(3) }}</td></tr>
-          <tr v-for="[name, value] in rows" :key="name"><th class="part">{{ name }}</th><td>{{ area(value) }}</td></tr>
+        </table>
+        <table>
+          <tr><th>Part</th><th class="right">Exposed area</th><th class="right">Mass</th></tr>
+          <tr v-for="[name, value] in rows" :key="name">
+            <td class="name">{{ name }}</td><td>{{ area(value.area) }}</td><td>{{ weight(value.mass) }}</td></tr>
+          <tr><th>Whole animal</th><td>{{ area(animal.total) }}</td><td>{{ weight(p.mass) }}</td></tr>
         </table>
         <div class="shadow">
           <canvas ref="shadowCanvas" width="200" height="150"></canvas>
@@ -367,7 +375,8 @@ canvas.body { width: min(100%, calc(0.5 * var(--pane) * 1.4)); height: auto; bor
 .numbers { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 .numbers table { margin: 0; font-size: 13px; display: table; width: auto; }
 .numbers th { text-align: left; font-weight: 500; padding: 3px 12px 3px 8px; }
-.numbers th.part { font-weight: 400; padding-left: 20px; color: var(--vp-c-text-2); }
+.numbers th.right { text-align: right; }
+.numbers td.name { text-align: left; }
 .numbers td { text-align: right; font-variant-numeric: tabular-nums; padding: 3px 8px; }
 .shadow { text-align: center; font-size: 13px; }
 .shadow canvas { color: var(--vp-c-text-1); border: 1px solid var(--vp-c-divider); border-radius: 8px;
