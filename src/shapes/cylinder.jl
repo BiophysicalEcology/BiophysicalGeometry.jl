@@ -1,7 +1,9 @@
 """
-    Cylinder <: AbstractShape
+    Cylinder(mass, density, axis_ratio_b)
 
-A cylindrical organism shape.
+A cylinder. `axis_ratio_b` is length over diameter.
+
+Local frame: axis along `+z`, from `z = 0` to `z = length_skin`.
 """
 mutable struct Cylinder{M,D,B} <: AbstractCylindrical
     mass::M
@@ -76,6 +78,12 @@ attachment_surfaces(::Cylinder) = (EndA, EndB, Lateral)
 # Outer (insulation-aware) dimensions. Insulation-dispatched; no runtime
 # field-lookup. `r` matches insulation_radius(body); `L` is the axial extent
 # of the outer surface (skin + fur padding at each end).
+"""
+    outer_dims(shape, body)
+
+Outer dimensions of a body, over any fibrous layer: `(r, L)` for cylinders and cones, `(a, b, c)` for ellipsoids,
+`(L, W, H)` for plates.
+"""
 outer_dims(sh::Cylinder, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
 outer_dims(::Cylinder, ::Union{Naked,FatLayer}, body::AbstractBody) =

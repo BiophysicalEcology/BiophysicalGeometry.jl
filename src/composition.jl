@@ -203,6 +203,11 @@ SideD() = SideD(nothing, nothing)
 
 # ── Attachment shapes ─────────────────────────────────────────────────────
 
+"""
+    AbstractAttachmentShape
+
+Supertype for the patch covered by one side of a [`Join`](@ref): [`Disc`](@ref) or [`FullCover`](@ref).
+"""
 abstract type AbstractAttachmentShape end
 
 """

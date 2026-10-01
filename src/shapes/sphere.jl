@@ -1,7 +1,7 @@
 """
-    Sphere <: AbstractShape
+    Sphere(mass, density)
 
-A spherical organism shape.
+A sphere, centred on the origin.
 """
 mutable struct Sphere{M,D} <: AbstractSpherical
     mass::M

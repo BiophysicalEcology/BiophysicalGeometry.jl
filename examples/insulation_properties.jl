@@ -91,7 +91,7 @@ function draw_silhouette_vs_zenith!(ax, shape, insulations, labels)
     for (ins, lbl, col, ls) in zip(insulations, labels, colours, linestyles)
         body = Body(shape, ins)
         sil = [ustrip(u"cm^2",
-                       silhouette_area(body, ZenithAngleVarying(), θ * u"°"))
+                       silhouette(body, ZenithAngleVarying(), θ * u"°"))
                 for θ in θ_deg]
         lines!(ax, θ_deg, sil; color=col, linestyle=ls, linewidth=2, label=lbl)
     end

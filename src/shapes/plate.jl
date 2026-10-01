@@ -1,7 +1,9 @@
 """
-    Plate <: AbstractShape
+    Plate(mass, density, axis_ratio_b, axis_ratio_c)
 
-A flat plate-shaped organism shape.
+A rectangular plate. `axis_ratio_b` is length over width and `axis_ratio_c` is length over height.
+
+Local frame: length, width and height along `x`, `y` and `z`, centred on the origin.
 """
 mutable struct Plate{M,D,B,C} <: AbstractSlab
     mass::M

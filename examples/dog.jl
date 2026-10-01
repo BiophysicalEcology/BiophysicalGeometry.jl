@@ -111,7 +111,7 @@ dog = CompositeBody(;
 
 # ── Report ────────────────────────────────────────────────────────────────────
 # Rasterised silhouette accounts for part-on-part shadowing; the per-part
-# summed `silhouette_area(dog)` is shown alongside as the upper bound.
+# summed `silhouette(dog)` is shown alongside as the upper bound.
 silhouette_top  = silhouette_rasterized(dog, (0.0, 0.0, 1.0))
 silhouette_side = silhouette_rasterized(dog, (1.0, 0.0, 0.0))
 println("Dog built.")
@@ -119,7 +119,7 @@ println("  total surface area      : ", total_area(dog))
 println("  flesh volume            : ", flesh_volume(dog))
 println("  silhouette top  (sun↓z) : ", silhouette_top)
 println("  silhouette side (sun→x) : ", silhouette_side)
-println("  per-part summed (upper) : ", silhouette_area(dog).normal)
+println("  per-part summed (upper) : ", silhouette(dog).normal)
 
 # ── Plot ──────────────────────────────────────────────────────────────────────
 # Interactive silhouette: 3-D body on the left, rasterised projection on the

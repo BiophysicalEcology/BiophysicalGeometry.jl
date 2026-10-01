@@ -193,10 +193,10 @@ end
 """
     silhouette(body::CompositeBody, ::Beam; resolution=256)
 
-Per-part lit (unshadowed) silhouette area projected along `view_direction` — a
+Per-part lit (unshadowed) silhouette area projected along the beam direction — a
 `NamedTuple` keyed like `body.parts`, each a `Quantity` (m²). Every part's posed
 mesh is projected and rasterised into a shared depth buffer, so at each pixel only
-the frontmost part (nearest along `view_direction`) is counted. A part occluded by
+the frontmost part (nearest the source) is counted. A part occluded by
 another — a ground-facing half under a sky-facing half toward an overhead sun —
 therefore reports (near) zero, and the parts' areas sum to the composite silhouette
 (no double counting), unlike the per-part analytic `silhouette`.
