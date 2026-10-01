@@ -37,8 +37,8 @@ const presets = {
           headShape: 'Sphere', headFraction: 0.05, legs: 0, limbFur: 0.003 },
 }
 
-const p = reactive({ ...defaults })
-const logMass = ref(Math.log10(defaults.mass))
+const p = reactive({ ...presets.Dog })   // the page opens on the first preset
+const logMass = ref(Math.log10(p.mass))
 const sun = reactive({ zenith: 30, azimuth: 90 })
 const view = reactive({ azimuth: -0.9, elevation: 0.35 })
 const preset = ref('Dog')
