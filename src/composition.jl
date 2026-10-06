@@ -306,6 +306,7 @@ struct Pose{T,M<:AbstractMatrix}
     rotation::M
 end
 
+# TODO: this should be a static array
 const _IDENTITY_ROTATION = [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
 
 identity_pose(::Type{T}) where {T} =

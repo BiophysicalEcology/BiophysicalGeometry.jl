@@ -15,14 +15,18 @@
 # ── Cylinder ──────────────────────────────────────────────────────────────
 
 function _cylinder_tube(r, L; nθ=72, nz=2, θ_end=2π, z0=0.0)
-    θ = LinRange(0.0, θ_end, nθ);  z = LinRange(z0, z0 + Float64(L), nz)
+    θ = LinRange(0.0, θ_end, nθ)
+    z = LinRange(z0, z0 + Float64(L), nz)
+
     [r*cos(θi) for θi in θ, _ in z],
     [r*sin(θi) for θi in θ, _ in z],
     [zi        for _  in θ, zi in z]
 end
 
 function _cylinder_cap(r, z0; nθ=72, nr=12, θ_end=2π)
-    θ = LinRange(0.0, θ_end, nθ);  rv = LinRange(0.0, r, nr)
+    θ = LinRange(0.0, θ_end, nθ)
+    rv = LinRange(0.0, r, nr)
+
     [rr*cos(θi) for θi in θ, rr in rv],
     [rr*sin(θi) for θi in θ, rr in rv],
     fill(Float64(z0), nθ, nr)
@@ -32,7 +36,9 @@ end
 
 # `φ_end=π/2` gives the upper (z ≥ 0) dome — the half-ellipsoid / hemisphere.
 function _ellipsoid_mesh(a, b; n=60, θ_end=2π, φ_end=π)
-    θ = LinRange(0.0, θ_end, n);  φ = LinRange(0.0, φ_end, n)
+    θ = LinRange(0.0, θ_end, n)
+    φ = LinRange(0.0, φ_end, n)
+
     [a*sin(φj)*cos(θi) for θi in θ, φj in φ],
     [b*sin(φj)*sin(θi) for θi in θ, φj in φ],
     [b*cos(φj)         for _  in θ, φj in φ]
@@ -44,7 +50,9 @@ end
 # fraction-of-a where the cut sits (1 → no cut).
 function _ellipsoid_mesh_truncated(a, b, c, x_ratio; n=60)
     α_min = acos(clamp(x_ratio, -1.0, 1.0))
-    α = LinRange(α_min, π, n);  β = LinRange(0.0, 2π, n)
+    α = LinRange(α_min, π, n)
+    β = LinRange(0.0, 2π, n)
+
     [a*cos(αj)            for βi in β, αj in α],
     [b*sin(αj)*cos(βi)    for βi in β, αj in α],
     [c*sin(αj)*sin(βi)    for βi in β, αj in α]
@@ -54,7 +62,9 @@ end
 # y/z extents = scale·b and scale·c where scale = sqrt(1 - (x_cut/a)²).
 function _ellipsoid_pole_a_cap(a, b, c, x_ratio; n=40)
     scale = sqrt(max(0.0, 1 - x_ratio^2))
-    rs = LinRange(0.0, 1.0, n);  βs = LinRange(0.0, 2π, n)
+    rs = LinRange(0.0, 1.0, n)
+    βs = LinRange(0.0, 2π, n)
+
     [a * x_ratio          for βi in βs, ri in rs],
     [scale * b * ri * cos(βi) for βi in βs, ri in rs],
     [scale * c * ri * sin(βi) for βi in βs, ri in rs]
@@ -65,7 +75,8 @@ end
 # only the flat cut face at y = 0 is unique to the half.
 
 function _half_cylinder_flat(r, L; nx=12, nz=2, z0=0.0)
-    xs = LinRange(-r, r, nx);  zs = LinRange(z0, z0 + Float64(L), nz)
+    xs = LinRange(-r, r, nx)
+    zs = LinRange(z0, z0 + Float64(L), nz)
     [xi for xi in xs, _ in zs],
     fill(0.0, nx, nz),
     [zi for _  in xs, zi in zs]
@@ -76,7 +87,8 @@ end
 # z = 0 is unique to the half.
 
 function _half_ellipsoid_flat_mesh(a, b; n=60)
-    rs = LinRange(0.0, 1.0, n);  ts = LinRange(0.0, 2π, n)
+    rs = LinRange(0.0, 1.0, n)
+    ts = LinRange(0.0, 2π, n)
     [a*r*cos(t) for t in ts, r in rs],
     [b*r*sin(t) for t in ts, r in rs],
     fill(0.0, n, n)
@@ -86,7 +98,8 @@ end
 #                   radius r_top = top_ratio*r_base; r_top = 0 for sharp cone)
 
 function _cone_tube(r_base, r_top, L; nθ=72, nz=2, θ_end=2π, z0=0.0)
-    θ = LinRange(0.0, θ_end, nθ);  z = LinRange(z0, z0 + Float64(L), nz)
+    θ = LinRange(0.0, θ_end, nθ)
+    z = LinRange(z0, z0 + Float64(L), nz)
     [(r_base + (r_top - r_base) * (zi - z0)/L) * cos(θi) for θi in θ, zi in z],
     [(r_base + (r_top - r_base) * (zi - z0)/L) * sin(θi) for θi in θ, zi in z],
     [zi                                                  for _  in θ, zi in z]

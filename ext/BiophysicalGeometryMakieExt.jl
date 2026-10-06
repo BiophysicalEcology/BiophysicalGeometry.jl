@@ -6,12 +6,13 @@ using BiophysicalGeometry
 import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, Half
 import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
+import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
 # Mesh helpers now live in core (src/meshes.jl); reuse them here.
+# TODO: these should not have leading underscores and be imported in an extension
 import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh, _cone_tube,
     _half_cylinder_flat, _half_ellipsoid_flat_mesh,
     _box_face_x, _box_face_y, _box_face_z,
     _part_outer_meshes, _transform_mesh, outer_dims
-import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
