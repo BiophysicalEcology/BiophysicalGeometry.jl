@@ -3,7 +3,7 @@
 
 A spherical organism shape.
 """
-mutable struct Sphere{M,D} <: AbstractSpherical
+struct Sphere{M,D} <: AbstractSpherical
     mass::M
     density::D
 end
@@ -25,55 +25,26 @@ function surface_area(shape::Sphere, body::AbstractBody)
     r = body.geometry.length_skin / 2
     return surface_area(shape, r)
 end
-function surface_area(shape::Sphere, r)
-    4 * π * r ^ 2
-end
+surface_area(shape::Sphere, r) = 4 * π * r ^ 2
 
 # Silhouette area
 
 silhouette(shape::Sphere, r) = π * r ^ 2
-function silhouette(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    return silhouette(shape, r)
-end
-function silhouette(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fibrous
-    return silhouette(shape, r)
-end
-function silhouette(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody)
-    r = body.geometry.length.radius_skin
-    area = silhouette(shape, r)
-    normal = area
-    parallel = area
-    return (; normal, parallel)
-end
-function silhouette(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fibrous
-    area = silhouette(shape, r)
-    normal = area
-    parallel = area
-    return (; normal, parallel)
+
+silhouette(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
+    silhouette(shape, _sphere_outer_radius(ins, body))
+function silhouette(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody)
+    area = silhouette(shape, _sphere_outer_radius(ins, body))
+    return (; normal=area, parallel=area)
 end
 
-# Radius
+_sphere_outer_radius(::Union{Naked,FatLayer}, body) = body.geometry.length.radius_skin
+_sphere_outer_radius(::Union{FibrousLayer,CompositeInsulation}, body) = body.geometry.length.radius_fibrous
 
-skin_radius(shape::Sphere, insulation::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
+# Radius accessors
 
-# naked
-insulation_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
-
-# fur
-insulation_radius(shape::Sphere, insulation::FibrousLayer, body) = body.geometry.length.radius_fibrous
-flesh_radius(shape::Sphere, insulation::FibrousLayer, body) = body.geometry.length.radius_skin
-
-# fat
-insulation_radius(shape::Sphere, insulation::FatLayer, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Sphere, insulation::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
-
-# fur and fat
-insulation_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_fibrous
-flesh_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+_skin_radius(::Sphere, length) = length.radius_skin
+_fibrous_radius(::Sphere, length) = length.radius_fibrous
 
 # Composition
 

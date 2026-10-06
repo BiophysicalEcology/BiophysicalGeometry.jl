@@ -3,7 +3,7 @@
 
 A flat plate-shaped organism shape.
 """
-mutable struct Plate{M,D,B,C} <: AbstractSlab
+struct Plate{M,D,B,C} <: AbstractSlab
     mass::M
     density::D
     axis_ratio_b::B
@@ -11,7 +11,7 @@ mutable struct Plate{M,D,B,C} <: AbstractSlab
 end
 
 function _skin_level(shape::Plate, volume)
-    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    length_skin = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c)
     width_skin = length_skin / shape.axis_ratio_b
     height_skin = length_skin / shape.axis_ratio_c
     (; dims = (; length_skin, width_skin, height_skin),
@@ -25,58 +25,46 @@ function _fibrous_level(shape::Plate, skin, thickness)
        area = surface_area(shape, length_fibrous, width_fibrous, height_fibrous))
 end
 function _fat_thickness(shape::Plate, skin, flesh_volume, fat_volume)
-    width_flesh = (flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3) / shape.axis_ratio_b
+    width_flesh = cbrt(flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
     (skin.width_skin - width_flesh) / 2
 end
 
 # Surface area
 
-function surface_area(shape::Plate, body)
+function surface_area(shape::Plate, body::AbstractBody)
     length = body.geometry.length.length_skin
     width = body.geometry.length.width_skin
     height = body.geometry.length.height_skin
     surface_area(shape, length, width, height)
 end
-surface_area(shape::Plate, length, width, height) = length * width * 2 + length * height * 2 + width * height * 2
+surface_area(shape::Plate, length, width, height) =
+    length * width * 2 + length * height * 2 + width * height * 2
 
 # Silhouette area
 
-function silhouette(shape::Plate, insulation::Union{Naked,FatLayer}, body::AbstractBody)
-    length = body.geometry.length.length_skin
-    width = body.geometry.length.width_skin
-    height = body.geometry.length.height_skin
-    normal = max(length * width, length * height, height * width)
-    parallel = min(length * width, length * height, height * width)
-    return (; normal, parallel)
-end
-function silhouette(shape::Plate, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    length = body.geometry.length.length_fibrous
-    width = body.geometry.length.width_fibrous
-    height = body.geometry.length.height_fibrous
-    normal = max(length * width, length * height, height * width)
-    parallel = min(length * width, length * height, height * width)
-    return (; normal, parallel)
+function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
+    (length, width, height) = _plate_outer_dims(ins, body)
+    sides = (length * width, length * height, height * width)
+    return (; normal=max(sides...), parallel=min(sides...))
 end
 
-# Radius
+_plate_outer_dims(::Union{Naked,FatLayer}, body) = _plate_skin_outer_lengths(body.geometry.length)
+_plate_outer_dims(::Union{FibrousLayer,CompositeInsulation}, body) = _plate_fibrous_outer_lengths(body.geometry.length)
 
-skin_radius(shape::Plate, insulation::AbstractInsulationLayer, body) = body.geometry.length.width_skin / 2
+_plate_skin_outer_lengths(length) = (length.length_skin, length.width_skin, length.height_skin)
+_plate_fibrous_outer_lengths(length) = (length.length_fibrous, length.width_fibrous, length.height_fibrous)
 
-# naked
-insulation_radius(shape::Plate, insulation::Naked, body) = body.geometry.length.width_skin / 2
-flesh_radius(shape::Plate, insulation::Naked, body) = body.geometry.length.width_skin / 2
+# Characteristic dimension
 
-# fur
-insulation_radius(shape::Plate, insulation::FibrousLayer, body) = body.geometry.length.width_fibrous / 2
-flesh_radius(shape::Plate, insulation::FibrousLayer, body) = body.geometry.length.width_skin / 2
+shortest_outer_dim(::Plate, ::Union{Naked,FatLayer}, geom) =
+    min(_plate_skin_outer_lengths(geom.length)...)
+shortest_outer_dim(::Plate, ::Union{FibrousLayer,CompositeInsulation}, geom) =
+    min(_plate_fibrous_outer_lengths(geom.length)...)
 
-# fat
-insulation_radius(shape::Plate, insulation::FatLayer, body) = body.geometry.length.width_skin / 2
-flesh_radius(shape::Plate, insulation::FatLayer, body) = body.geometry.length.width_skin / 2 - body.geometry.length.fat
+# Radius accessors — Plate uses width/2 as the equivalent radius
 
-# fur plus fat
-insulation_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometry.length.width_fibrous / 2
-flesh_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometry.length.width_skin / 2 - body.geometry.length.fat
+_skin_radius(::Plate, length) = length.width_skin / 2
+_fibrous_radius(::Plate, length) = length.width_fibrous / 2
 
 # Composition
 

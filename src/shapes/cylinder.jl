@@ -3,14 +3,14 @@
 
 A cylindrical organism shape.
 """
-mutable struct Cylinder{M,D,B} <: AbstractCylindrical
+struct Cylinder{M,D,B} <: AbstractCylindrical
     mass::M
     density::D
     axis_ratio_b::B
 end
 
 # Radial dimension from an enclosed volume; used for both skin and flesh radii.
-_cylinder_radius(shape::Cylinder, volume) = (volume / (shape.axis_ratio_b * π * 2))^(1 / 3)
+_cylinder_radius(shape::Cylinder, volume) = cbrt(volume / (shape.axis_ratio_b * π * 2))
 
 function _skin_level(shape::Cylinder, volume)
     radius_skin = _cylinder_radius(shape, volume)
@@ -27,11 +27,6 @@ _fat_thickness(shape::Cylinder, skin, flesh_volume, fat_volume) =
 
 # Surface area
 
-# function surface_area(shape::Cylinder, body::AbstractBody)
-#     r = body.geometry.length.radius
-#     l = body.geometry.length.length
-#     surface_area(shape, r, l)
-# end
 surface_area(shape::Cylinder, r, l) = 2 * π * r * l + 2 * π * r^2
 
 # Silhouette area. `outer_dims` selects skin- vs fibrous-level (r, L) by
@@ -47,27 +42,12 @@ function silhouette(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody)
     (; normal = 2 * d.r * d.L, parallel = π * d.r^2)
 end
 
-# Radius — shared by every cylindrical shape (`Cylinder`, `HalfCylinder`,
-# `Cone`); all store the same `radius_skin` / `radius_fibrous` / `fat`
-# fields, so the dispatch lives once on the family type.
+# Radius accessors — shared by every cylindrical shape (`Cylinder`, `HalfCylinder`,
+# `Cone`); all store the same `radius_skin` / `radius_fibrous` fields, so the
+# dispatch lives once on the family type.
 
-skin_radius(::AbstractCylindrical, ::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
-
-# naked
-insulation_radius(::AbstractCylindrical, ::Naked, body) = body.geometry.length.radius_skin
-flesh_radius(::AbstractCylindrical, ::Naked, body) = body.geometry.length.radius_skin
-
-# fur
-insulation_radius(::AbstractCylindrical, ::FibrousLayer, body) = body.geometry.length.radius_fibrous
-flesh_radius(::AbstractCylindrical, ::FibrousLayer, body) = body.geometry.length.radius_skin
-
-# fat
-insulation_radius(::AbstractCylindrical, ::FatLayer, body) = body.geometry.length.radius_skin
-flesh_radius(::AbstractCylindrical, ::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
-
-# fur and fat
-insulation_radius(::AbstractCylindrical, ::CompositeInsulation, body) = body.geometry.length.radius_fibrous
-flesh_radius(::AbstractCylindrical, ::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+_skin_radius(::AbstractCylindrical, length) = length.radius_skin
+_fibrous_radius(::AbstractCylindrical, length) = length.radius_fibrous
 
 # Composition
 

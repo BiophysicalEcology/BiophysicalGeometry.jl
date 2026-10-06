@@ -228,11 +228,11 @@ end
                       small = Attachment(Flat(), FullCover())),),
     )
 
-    # Empirical shape (LeopardFrog) cannot be joined.
-    frog = Body(LeopardFrog(0.04u"kg", ρ), Naked())
+    # Attachment surface the shape doesn't have (a sphere has no EndA).
+    ball = Body(Sphere(1u"kg", ρ), Naked())
     @test_throws ErrorException CompositeBody(;
-        parts = (; frog, b),
-        joins = (Join(frog = Attachment(EndA(0.0u"m", 0.0), Disc(0.001u"m")),
+        parts = (; ball, b),
+        joins = (Join(ball = Attachment(EndA(0.0u"m", 0.0), Disc(0.001u"m")),
                       b = Attachment(EndA(0.0u"m", 0.0), Disc(0.001u"m"))),),
     )
 end

@@ -43,12 +43,12 @@ geometry(h::Half, fur::FibrousLayer, fat::FatLayer) =
 # Assemble a half Geometry from the parent's: same `length`, half the volume.
 function _halfgeom(full, total)
     vol = full.volume / 2
-    Geometry(vol, vol^(1 / 3), full.length, SurfaceAreas(; total))
+    Geometry(vol, full.length, SurfaceAreas(; total))
 end
 function _halfgeom(full, total, skin, fur::FibrousLayer)
     vol = full.volume / 2
     convection = skin - insulation_area(fur.fibre_diameter, fur.fibre_density, skin)
-    Geometry(vol, vol^(1 / 3) + fur.thickness, full.length, SurfaceAreas(; total, skin, convection))
+    Geometry(vol, full.length, SurfaceAreas(; total, skin, convection))
 end
 
 # A half's surface is the parent's, halved, plus the cut face — the mirror plane
@@ -70,9 +70,8 @@ end
 # ── Route-around-the-wrapper forwards ────────────────────────────────────
 # The half's `length` NamedTuple is the parent's, so these read identically.
 
-skin_radius(h::Half, ins, body)       = skin_radius(h.parent, ins, body)
-insulation_radius(h::Half, ins, body) = insulation_radius(h.parent, ins, body)
-flesh_radius(h::Half, ins, body)      = flesh_radius(h.parent, ins, body)
+_skin_radius(h::Half, length)    = _skin_radius(h.parent, length)
+_fibrous_radius(h::Half, length) = _fibrous_radius(h.parent, length)
 outer_dims(h::Half, body::AbstractBody) = outer_dims(h.parent, body)
 
 # The half's silhouette is exactly half the parent's, in every family.

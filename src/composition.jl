@@ -627,7 +627,7 @@ function solve_poses(parts::NamedTuple, joins::Tuple, root::Symbol, root_pose::P
 end
 
 # Pull a length zero out of a part for the pose translation type.
-_length_unit(b::AbstractBody) = zero(b.geometry.characteristic_dimension)
+_length_unit(b::AbstractBody) = zero(cbrt(b.geometry.volume))
 
 # ── CompositeBody ─────────────────────────────────────────────────────────
 
@@ -641,7 +641,7 @@ A multi-part organism: a `NamedTuple` of `Body` parts connected by
 leg_fr=leg, ...)` — the keys are ordinary Julia identifiers, never
 `Symbol` literals with a colon. The first-listed part is the kinematic
 `root` and serves as the "primary" part for scalar accessors
-(`skin_radius`, `characteristic_dimension`, …) that aren't defined for a
+(`skin_radius`, `insulation_radius`, …) that aren't defined for a
 composite as a whole. Reorder `parts` to change the root.
 
 `joins` is a Tuple of `Join`s. Each `Join(<parent_name>=..., <child_name>=...)`

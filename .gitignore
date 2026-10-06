@@ -1,9 +1,12 @@
 Manifest.toml
 test/R/.Rhistory
 Manifest.toml
+<<<<<<< characteristic-dimension-options
+=======
 examples/cross_sections_2d.png
 examples/insulation_properties.png
 .gitignore
 examples/shapes_3d.png
+>>>>>>> main
 .claude/settings.json
 .claude/settings.local.json

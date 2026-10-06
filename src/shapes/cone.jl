@@ -10,7 +10,7 @@ top disc at `z = length_skin` with radius `top_ratio * radius_skin`.
 Insulation expands radii and length as for `Cylinder`; attachment positions
 stay at flesh level.
 """
-mutable struct Cone{M,D,B,T} <: AbstractCylindrical
+struct Cone{M,D,B,T} <: AbstractCylindrical
     mass::M
     density::D
     axis_ratio_b::B
@@ -23,7 +23,7 @@ Cone(mass, density, b) = Cone(mass, density, b, 0.0)
 _cone_volume_factor(t) = 1 + t + t^2
 
 function _cone_radius(volume, b, t)
-    (3 * volume / (2π * b * _cone_volume_factor(t)))^(1/3)
+    cbrt(3 * volume / (2π * b * _cone_volume_factor(t)))
 end
 
 function _skin_level(shape::Cone, volume)
