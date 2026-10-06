@@ -175,15 +175,22 @@ function define!(r::Recipe, name::Symbol, code::AbstractString; show::Bool = tru
     return binding(r, name)
 end
 
-# Skin dimensions of a body (m), as the package holds them.
-function dims(b)
-    g = b.geometry.length
+# Skin dimensions of a body (m), as the package holds them: semi-axes and a radius for
+# ellipsoids and spheres, radius and length for cylinders and cones, and length,
+# width and height for plates.
+dims(b) = dims(shape(b), b.geometry.length)
+function dims(::Union{BiophysicalGeometry.AbstractEllipsoidal,Half{<:BiophysicalGeometry.AbstractEllipsoidal}}, g)
     m(x) = ustrip(u"m", x)
-    haskey(g, :width_skin) && return (L = m(g.length_skin), W = m(g.width_skin), H = m(g.height_skin))
-    haskey(g, :a_semi_major_skin) && return (a = m(g.a_semi_major_skin), b = m(g.b_semi_minor_skin), r = m(g.b_semi_minor_skin))
-    haskey(g, :length_skin) && return (r = m(g.radius_skin), L = m(g.length_skin))
-    return (r = m(g.radius_skin), a = m(g.radius_skin), b = m(g.radius_skin))
+    (a = m(g.length_skin) / 2, b = m(g.width_skin) / 2, r = m(g.width_skin) / 2)
 end
+function dims(::Union{BiophysicalGeometry.AbstractSpherical,Half{<:BiophysicalGeometry.AbstractSpherical}}, g)
+    r = ustrip(u"m", g.radius_skin)
+    (r = r, a = r, b = r)
+end
+dims(::Union{BiophysicalGeometry.AbstractCylindrical,Half{<:BiophysicalGeometry.AbstractCylindrical}}, g) =
+    (r = ustrip(u"m", g.radius_skin), L = ustrip(u"m", g.length_skin))
+dims(::BiophysicalGeometry.AbstractSlab, g) =
+    (L = ustrip(u"m", g.length_skin), W = ustrip(u"m", g.width_skin), H = ustrip(u"m", g.height_skin))
 
 attachment(r::Recipe, location, patch) = (text = "Attachment($location, $patch)"; (text, evaluate(r, text)))
 normal_of(b, att) = BiophysicalGeometry._attach_normal(shape(b), b, att)
@@ -228,9 +235,11 @@ leg_names(n) = n == 4 ? [:leg_fl, :leg_fr, :leg_bl, :leg_br] : n == 2 ? [:leg_l,
 leg_places(n) = n == 4 ? [(0.85, 1), (0.85, -1), (0.15, 1), (0.15, -1)] : n == 2 ? [(0.5, 1), (0.5, -1)] : Tuple{Float64,Int}[]
 
 # A cylinder (`top` of 1) or a cone or frustum (`top` less than 1).
-axial(mass, ratio, top) = top >= 1 ? "Body(Cylinder($(kilograms(mass)), density, $(num(ratio))), coat)" :
-    "Body(Cone($(kilograms(mass)), density, $(num(ratio)), $(num(top))), coat)"
-plate(mass, ratio, flatness) = "Body(Plate($(kilograms(mass)), density, $(num(ratio)), $(num(flatness))), coat)"
+axial(mass, ratio, top) = top >= 1 ?
+    "Body(Cylinder(; mass = $(kilograms(mass)), density, axis_ratio_b = $(num(ratio))), coat)" :
+    "Body(Cone(; mass = $(kilograms(mass)), density, axis_ratio_b = $(num(ratio)), top_ratio = $(num(top))), coat)"
+plate(mass, ratio, flatness) =
+    "Body(Plate(; mass = $(kilograms(mass)), density, axis_ratio_b = $(num(ratio)), axis_ratio_c = $(num(flatness))), coat)"
 
 """
     animal_code(settings) -> String
@@ -272,14 +281,12 @@ function recipe(settings)
             "# legs from $(lowercase(p.legScaling)) similarity, with BiologicalScaling.jl",
             "import BiologicalScaling",
             "similarity = BiologicalScaling.$(p.legScaling)Similarity()",
-            "leg_length = BiologicalScaling.limb_length(similarity, $(kilograms(M)))",
-            "leg_diameter = BiologicalScaling.limb_diameter(similarity, $(kilograms(M)))",
-            "leg_mass = density * π * (leg_diameter / 2)^2 * leg_length" *
-                (cone ? " * (1 + $(num(p.legTop)) + $(num(p.legTop))^2) / 3" : ""),
-            cone ? "leg = Body(Cone(leg_mass, density, leg_length / leg_diameter, $(num(p.legTop))), coat)" :
-                   "leg = Body(Cylinder(leg_mass, density, leg_length / leg_diameter), coat)"])
+            "length = BiologicalScaling.limb_length(similarity, $(kilograms(M)))",
+            "radius = BiologicalScaling.limb_diameter(similarity, $(kilograms(M))) / 2",
+            cone ? "leg = Body(Cone(; length, radius, density, top_ratio = $(num(p.legTop))), coat)" :
+                   "leg = Body(Cylinder(; length, radius, density), coat)"])
         foreach(line -> evaluate(r, line), leg_lines)
-        mass = merge(mass, (; leg = ustrip(u"kg", binding(r, :leg_mass))))
+        mass = merge(mass, (; leg = ustrip(u"kg", BiophysicalGeometry.mass(shape(binding(r, :leg))))))
     end
     # hind legs of their own size, for an animal with four legs sized by hand
     own_hind = p.legs == 4 && p.hindLegs == "Different" && p.legScaling == "Manual"
@@ -294,8 +301,9 @@ function recipe(settings)
     function torso_half(fur)
         fat_layer = "FatLayer($(num(p.fat)), $(num(p.fatDensity))u\"kg/m^3\")"
         layers = p.fat > 0 ? (fur > 0 ? "CompositeInsulation($(fibres(fur)), $fat_layer)" : fat_layer) : fibres(fur)
-        cylinder ? "Body(HalfCylinder($(kilograms(torso_mass / 2)), density, $(num(p.torsoRatio))), $layers)" :
-                   "Body(HalfEllipsoid($(kilograms(torso_mass / 2)), density, $(num(p.torsoRatio)), 1.0), $layers)"
+        # a half ellipsoid's own height is half the full one's, so its length / height is twice
+        cylinder ? "Body(HalfCylinder(; mass = $(kilograms(torso_mass / 2)), density, axis_ratio_b = $(num(p.torsoRatio))), $layers)" :
+                   "Body(HalfEllipsoid(; mass = $(kilograms(torso_mass / 2)), density, axis_ratio_b = $(num(p.torsoRatio)), axis_ratio_c = $(num(2 * p.torsoRatio))), $layers)"
     end
     torso_lines = ["dorsal = $(torso_half(p.backFur))", "ventral = $(torso_half(p.bellyFur))"]
     foreach(line -> evaluate(r, line), torso_lines)
@@ -303,10 +311,11 @@ function recipe(settings)
     dorsal = body(r, :dorsal)
     D = dims(dorsal)
 
-    # The torso lies along x with the back up, tipped head-up by the pitch; or stands upright, its back to +y.
+    # Every torso half lies along x with its back (dome) up, tipped head-up by the pitch; or stands upright, its
+    # length up and its back to +y. Standing up sends local y to world x, so a lateral angle 0 stays to the side.
     tilt = deg2rad(p.pitch)
     pitched = [cos(tilt) 0 -sin(tilt); 0 1 0; sin(tilt) 0 cos(tilt)]
-    root = upright ? IDENTITY : pitched * (cylinder ? [0 0 1; 1 0 0; 0 1 0] : IDENTITY)
+    root = upright ? [0 1 0; 0 0 1; 1 0 0] : pitched
     r.poses = (; dorsal = Pose((0.0u"m", 0.0u"m", 0.0u"m"), root))
 
     # Where a part sits on a torso half: at its head end (`toward_head` true, or a position along it), its tail
@@ -331,13 +340,13 @@ function recipe(settings)
     end
 
     # The ventral half is turned about the join until its long axis lies along that of the dorsal half.
-    long_axis = cylinder ? (0.0, 0.0, 1.0) : (1.0, 0.0, 0.0)
+    long_axis = (1.0, 0.0, 0.0)
     join!(r, :dorsal, "Flat()", :ventral, :ventral, "Flat()", "FullCover()";
         twist = (on, cb, at) -> twist_to(r, :dorsal, on, cb, at, long_axis, rotate3(root, long_axis)))
 
     if has_head
-        head_code = p.headShape == "Sphere" ? "Body(Sphere($(kilograms(mass.head)), density), coat)" :
-            "Body(Ellipsoid($(kilograms(mass.head)), density, $(num(p.headRatio)), 1.0), coat)"
+        head_code = p.headShape == "Sphere" ? "Body(Sphere(; mass = $(kilograms(mass.head)), density), coat)" :
+            "Body(Ellipsoid(; mass = $(kilograms(mass.head)), density, axis_ratio_b = $(num(p.headRatio)), axis_ratio_c = $(num(p.headRatio))), coat)"
         if p.neck
             define!(r, :neck, axial(mass.neck, p.neckRatio, 0.7))
         end
@@ -406,7 +415,8 @@ function recipe(settings)
         A = dims(define!(r, :arm, axial(mass.arm, p.armRatio, 1.0)))
         for (name, side) in ((:arm_l, 1), (:arm_r, -1))
             join!(r, :dorsal, "Lateral($(metres(D.L - A.r)), $(angle(side > 0 ? 0.0 : π)))", name, :arm,
-                "Lateral($(metres(A.r)), $(angle(side > 0 ? π : 0.0)))", disc(A.r); twist = π)
+                "Lateral($(metres(A.r)), $(angle(side > 0 ? π : 0.0)))", disc(A.r);
+                twist = (o, cb, a) -> twist_to(r, :dorsal, o, cb, a, (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)))
         end
     end
     if p.wings != "None"
