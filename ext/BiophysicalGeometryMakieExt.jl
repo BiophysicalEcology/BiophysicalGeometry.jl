@@ -3,7 +3,7 @@ module BiophysicalGeometryMakieExt
 using Makie
 using Unitful
 using BiophysicalGeometry
-import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, Half
+import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, TriangularPlate, Cone, Half
 import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
 import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
@@ -12,7 +12,8 @@ import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSp
 import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh, _cone_tube,
     _half_cylinder_flat, _half_ellipsoid_flat_mesh,
     _box_face_x, _box_face_y, _box_face_z,
-    _part_outer_meshes, _transform_mesh, outer_dims, _top_ratio, HalfDomed
+    _part_outer_meshes, _transform_mesh, outer_dims, _top_ratio, HalfDomed,
+    _triangle_face, _prism_side, _inradius, _ellipsoid_mesh_truncated, _ellipsoid_pole_a_cap
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
@@ -108,13 +109,30 @@ function _draw_cutaway_shape!(p, sh::Cylinder, body, sc, cols)
     fl.fibrous_layer && _draw_cylinder!(p, r.ins, L_i, cols.fibrous_layer; θ_end=3π/2, x0=x0_fibrous)
 end
 
+_x_ratio(s::Ellipsoid) = 1 - s.pole_a_truncation
+_x_ratio(::Any) = 1.0
+
+# A cut ellipsoid layer: the surface up to the cut plane and the flat disc.
+function _draw_cut_ellipsoid!(target, (a, b, c), x_ratio, col)
+    _draw_surface!(target, _ellipsoid_mesh_truncated(a, b, c, x_ratio), col)
+    _draw_surface!(target, _ellipsoid_pole_a_cap(a, b, c, x_ratio), col)
+end
+
 function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
     fl = _layer_flags(_scaled_radii(body, sc))
     ax = map(l -> map(x -> _m(x, sc), l), _domed_layers(shape, body))
-
-    _draw_surface!(p, _ellipsoid_mesh(ax.flesh...), cols.flesh)
-    fl.fat_layer && _draw_surface!(p, _ellipsoid_mesh(ax.skin...; θ_end=3π/2), cols.fat_layer)
-    fl.fibrous_layer && _draw_surface!(p, _ellipsoid_mesh(ax.ins...; θ_end=3π/2), cols.fibrous_layer)
+    x_ratio = _x_ratio(shape)
+    if x_ratio < 1
+        # The cut surface has no wedge to open, so the outer layers are drawn
+        # whole (they are translucent).
+        _draw_cut_ellipsoid!(p, ax.flesh, x_ratio, cols.flesh)
+        fl.fat_layer && _draw_cut_ellipsoid!(p, ax.skin, x_ratio, cols.fat_layer)
+        fl.fibrous_layer && _draw_cut_ellipsoid!(p, ax.ins, x_ratio, cols.fibrous_layer)
+    else
+        _draw_surface!(p, _ellipsoid_mesh(ax.flesh...), cols.flesh)
+        fl.fat_layer && _draw_surface!(p, _ellipsoid_mesh(ax.skin...; θ_end=3π/2), cols.fat_layer)
+        fl.fibrous_layer && _draw_surface!(p, _ellipsoid_mesh(ax.ins...; θ_end=3π/2), cols.fibrous_layer)
+    end
 end
 
 function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
@@ -136,6 +154,37 @@ function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
     _draw_box_faces!(p, hl_f, hw_f, hh_f, cols.flesh; full=true)
     fl.fat_layer && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat_layer)
     fl.fibrous_layer && _draw_box_faces!(p, hl_i, hw_i, hh_i, cols.fibrous_layer)
+end
+
+# Each layer of a triangular plate is the skin triangle scaled about its
+# incentre to that layer's inradius: the fur grows every face by its thickness,
+# the flesh is the skin prism scaled down. Returned in the units of `f`.
+function _triangle_layers(body, f)
+    gl = body.geometry.length
+    L, W, H = gl.length_skin, gl.width_skin, gl.height_skin
+    r = _inradius(L, W)
+    map(_radii(body)) do ri
+        t = ri - r
+        height = t >= zero(t) ? H + 2t : H * ri / r
+        (corner = f(-t), length = f(L * ri / r), width = f(W * ri / r), height = f(height))
+    end
+end
+
+function _draw_prism!(target, l, col; top=true)
+    p1 = (l.corner, l.corner); p2 = (l.corner + l.length, l.corner); p3 = (l.corner, l.corner + l.width)
+    faces = Any[_triangle_face(p1, p2, p3, -l.height / 2),
+                _prism_side(p1, p2, l.height), _prism_side(p2, p3, l.height), _prism_side(p3, p1, l.height)]
+    top && push!(faces, _triangle_face(p1, p2, p3, l.height / 2))
+    for f in faces; _draw_surface!(target, f, col); end
+end
+
+# Cutaway lifts the top face off the fat and fur prisms to show the flesh.
+function _draw_cutaway_shape!(p, sh::TriangularPlate, body, sc, cols)
+    fl = _layer_flags(_scaled_radii(body, sc))
+    l = _triangle_layers(body, x -> _m(x, sc))
+    _draw_prism!(p, l.flesh, cols.flesh)
+    fl.fat_layer && _draw_prism!(p, l.skin, cols.fat_layer; top=false)
+    fl.fibrous_layer && _draw_prism!(p, l.ins, cols.fibrous_layer; top=false)
 end
 
 function _draw_cone!(target, r_base, r_top, L, col; θ_end=2π, x0=0.0)
@@ -261,6 +310,10 @@ _rect_pts(hw, hh) =
     Point2f[(-_pu(hw), -_pu(hh)), (_pu(hw), -_pu(hh)),
             ( _pu(hw), _pu(hh)), (-_pu(hw), _pu(hh))]
 
+# Plan view of a triangular plate layer: the right angle at (corner, corner).
+_tri_pts(l) = Point2f[(_pu(l.corner), _pu(l.corner)), (_pu(l.corner + l.length), _pu(l.corner)),
+                      (_pu(l.corner), _pu(l.corner + l.width))]
+
 # Frustum long section: base half-width `rb` at y = -hl, top `rt` at y = +hl.
 _trap_pts(rb, rt, hl) =
     Point2f[(-_pu(rb), -_pu(hl)), (_pu(rb), -_pu(hl)),
@@ -325,8 +378,22 @@ end
 # the transverse section height × width; halves bulge toward +x.
 function _section_layers(sh::Union{Sphere,Ellipsoid,HalfDomed}, body, mode, r, cols)
     pts = sh isa Half ? _half_ellipse_pts : _ellipse_pts
-    geom((a, b, c)) = mode === :long ? pts(c, a) : pts(c, b)
+    # A cut ellipsoid's long section stops at the cut plane, up the plot.
+    cut(points, a) = filter(q -> q[2] <= _pu(a) * _x_ratio(sh), points)
+    geom((a, b, c)) = mode === :long ? cut(pts(c, a), a) : pts(c, b)
     l = _domed_layers(sh, body)
+    [
+        (r.ins > r.skin, () -> geom(l.ins), cols.fibrous_layer),
+        (r.skin > r.flesh, () -> geom(l.skin), cols.fat_layer),
+        (true, () -> geom(l.flesh), cols.flesh),
+    ]
+end
+
+# Triangular plate: the long section is the side view (length × height), the
+# transverse section the plan view of the triangle.
+function _section_layers(sh::TriangularPlate, body, mode, r, cols)
+    l = _triangle_layers(body, identity)
+    geom(x) = mode === :long ? _rect_pts(x.length / 2, x.height / 2) : _tri_pts(x)
     [
         (r.ins > r.skin, () -> geom(l.ins), cols.fibrous_layer),
         (r.skin > r.flesh, () -> geom(l.skin), cols.fat_layer),
@@ -364,6 +431,14 @@ function _section_limits(sh::Union{AbstractCylindrical,Half{<:AbstractCylindrica
     ri = _pu(r.ins) * (1 + pad)
     li = _pu(hl_i) * (1 + pad)
     _limits(ri, li, ri, li)
+end
+
+function _section_limits(sh::TriangularPlate, body, r, pad)
+    o = _triangle_layers(body, _pu).ins
+    span = max(o.length, o.width) * (1 + pad)
+    margin = span * pad
+    (long_x = (-o.length / 2, o.length / 2) .* (1 + pad), long_y = (-span, span) ./ 2,
+     tran_x = (o.corner - margin, o.corner + span), tran_y = (o.corner - margin, o.corner + span))
 end
 
 function _section_limits(sh::Plate, body, r, pad)

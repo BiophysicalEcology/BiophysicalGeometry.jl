@@ -253,6 +253,32 @@ function _part_outer_meshes(sh::Union{Half{<:AbstractEllipsoidal},Half{<:Abstrac
     [_ellipsoid_mesh(d.a, d.b, d.c; φ_end=π/2), _half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
 end
 
+# ── Triangular prism (TriangularPlate) ───────────────────────────────────
+#
+# A triangle is a 2×2 grid with one corner repeated (the second triangle of the
+# cell is degenerate); a side is a 2×2 quad from edge p→q over z ∈ [-h/2, h/2].
+
+_triangle_face(p1, p2, p3, z) =
+    ([p1[1] p3[1]; p2[1] p3[1]], [p1[2] p3[2]; p2[2] p3[2]], fill(Float64(z), 2, 2))
+_prism_side(p, q, h) =
+    ([p[1] p[1]; q[1] q[1]], [p[2] p[2]; q[2] q[2]], [-h/2 h/2; -h/2 h/2])
+
+function _mesh_dims(sh::TriangularPlate, body, sc)
+    o = outer_dims(sh, body)
+    gl = body.geometry.length
+    # The fibrous triangle's right angle sits at (-t, -t), t the inradius growth.
+    t = _inradius(o.length, o.width) - _inradius(gl.length_skin, gl.width_skin)
+    (corner = -_ustrip_m(t, sc), L = _ustrip_m(o.length, sc),
+     W = _ustrip_m(o.width, sc), H = _ustrip_m(o.height, sc))
+end
+
+function _part_outer_meshes(sh::TriangularPlate, body, sc)
+    d = _mesh_dims(sh, body, sc)
+    p1 = (d.corner, d.corner); p2 = (d.corner + d.L, d.corner); p3 = (d.corner, d.corner + d.W)
+    [_triangle_face(p1, p2, p3, -d.H / 2), _triangle_face(p1, p2, p3, d.H / 2),
+     _prism_side(p1, p2, d.H), _prism_side(p2, p3, d.H), _prism_side(p3, p1, d.H)]
+end
+
 # ── Pose application ─────────────────────────────────────────────────────
 
 # Apply a Pose (translation in m, dimensionless rotation) to a triple of

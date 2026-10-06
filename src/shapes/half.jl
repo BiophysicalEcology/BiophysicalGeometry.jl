@@ -61,6 +61,8 @@ HalfSphere(; kw...) = Half(Sphere(; _full_shape_keywords(kw)...))
 # a `Plate` — there's no `Half{<:Plate}`.
 Half(p::Plate) = error("a half plate is a plate: build the half directly with Plate(; ...) " *
                        "(e.g. half the height) instead of Half(Plate(...))")
+Half(p::TriangularPlate) = error("a half triangular plate is a triangular plate: build it " *
+                                 "directly with TriangularPlate(; ...) instead of Half(...)")
 
 # ── Geometry: delegate dimensions to the parent, override area + volume ───
 

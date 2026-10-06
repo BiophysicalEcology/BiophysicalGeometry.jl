@@ -10,8 +10,8 @@ for.
 
 With `pole_a_truncation > 0`, the `+x` end is sliced flat: the cut plane sits at
 `x = (1 - pole_a_truncation) * length / 2`. `pole_a_truncation = 0` is a full
-ellipsoid; `1` cuts through the centre. Surface area and volume are reported for
-the full (untruncated) ellipsoid.
+ellipsoid; `1` cuts through the centre. `length`, `width` and `height` are those of
+the ellipsoid before the cut; volume, mass and surface area are of the cut body.
 """
 struct Ellipsoid{M,D,B,C,T} <: AbstractEllipsoidal
     mass::M
@@ -24,14 +24,16 @@ struct Ellipsoid{M,D,B,C,T} <: AbstractEllipsoidal
         new{M,D,B,C,T}(mass, density, axis_ratio_b, axis_ratio_c, pole_a_truncation)
 end
 
-# volume = (π/6)·length·width·height; ratios as for the box.
-const _ELLIPSOID_SPEC = _ShapeSpec((:length, :width, :height), (1, 1, 1), log(π / 6),
-                                   (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
+# volume = π·k·a·b·c = (π·k/8)·length·width·height, with k = 4/3 for a full
+# ellipsoid (see `_truncated_volume_factor`); ratios as for the box.
+_ellipsoid_spec(truncation) =
+    _ShapeSpec((:length, :width, :height), (1, 1, 1), log(π * _truncated_volume_factor(truncation) / 8),
+               (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
 
 function Ellipsoid(; pole_a_truncation = 0.0, kw...)
     0 <= pole_a_truncation <= 1 || throw(ArgumentError(
         "Ellipsoid `pole_a_truncation` must be in [0, 1], got $pole_a_truncation"))
-    s = _resolve_shape("Ellipsoid", _ELLIPSOID_SPEC, NamedTuple(kw))
+    s = _resolve_shape("Ellipsoid", _ellipsoid_spec(pole_a_truncation), NamedTuple(kw))
     Ellipsoid(_RESOLVED, s.mass, s.density, s.ratios..., pole_a_truncation)
 end
 
@@ -39,6 +41,16 @@ end
 _pole_a_x_ratio(s::Ellipsoid) = 1 - s.pole_a_truncation
 # Radial scale at the truncated pole (so cut disc has y/z extents = scale * b/c).
 _pole_a_radial_scale(s::Ellipsoid) = sqrt(max(0.0, 1 - _pole_a_x_ratio(s)^2))
+
+# Volume of the cut ellipsoid as π·k·a·b·c. The cap beyond x = x_r·a holds
+# π·b·c·∫(1 - x²/a²)dx = π·a·b·c·[(1 - x_r) - (1 - x_r³)/3], so
+#     k = 4/3 - (1 - x_r) + (1 - x_r³)/3,
+# from 4/3 uncut down to 2/3 for a cut through the centre.
+function _truncated_volume_factor(truncation)
+    x = 1 - truncation
+    4 / 3 - (1 - x) + (1 - x^3) / 3
+end
+_truncated_volume_factor(s::Ellipsoid) = _truncated_volume_factor(s.pole_a_truncation)
 
 # The geometry stores full extents (length, width, height); the formulas below
 # work in semi-axes a ≥ b, c along x, y, z.
@@ -103,6 +115,56 @@ function _ellipsoid_area(a, b, c)
     4π * am * bm * cm * _carlson_rg(1 / am^2, 1 / bm^2, 1 / cm^2) * u"m^2"
 end
 
+# Area of a cut ellipsoid: the full surface, less the cap beyond the cut plane
+# x = x_r·a, plus the flat elliptical disc it leaves (semi-axes b·s, c·s with
+# s = √(1 - x_r²)). The cap of a triaxial ellipsoid has no closed form, so it is
+# integrated over x = a·cos α, y = b·sin α·cos β, z = c·sin α·sin β for
+# α ∈ [0, acos x_r]: Gauss–Legendre in α (smooth, non-periodic) and the
+# trapezoid rule in β (periodic, so spectrally accurate). The surface element is
+#     |∂r/∂α × ∂r/∂β| = sin α·√(b²c²·cos²α + a²·sin²α·(c²·cos²β + b²·sin²β)).
+function _ellipsoid_area(a, b, c, truncation)
+    full = _ellipsoid_area(a, b, c)
+    truncation == 0 && return full
+    am, bm, cm = ustrip(u"m", a), ustrip(u"m", b), ustrip(u"m", c)
+    x = 1 - truncation
+    α0 = acos(x)
+    nβ = length(_CAP_ANGLES)
+    cap = 0.0
+    for (t, w) in _GAUSS_LEGENDRE
+        α = α0 * (t + 1) / 2
+        sα, cα = sincos(α)
+        ring = 0.0
+        for β in _CAP_ANGLES
+            sβ, cβ = sincos(β)
+            ring += sqrt((bm * cm * cα)^2 + (am * sα)^2 * ((cm * cβ)^2 + (bm * sβ)^2))
+        end
+        cap += w * sα * ring * 2π / nβ
+    end
+    cap *= α0 / 2
+    disc = π * bm * cm * (1 - x^2)
+    full + (disc - cap) * u"m^2"
+end
+
+# Gauss–Legendre nodes and weights on [-1, 1] by Newton's method on P_n,
+# computed once at load time.
+function _gauss_legendre(n)
+    map(1:n) do i
+        t = cos(π * (i - 0.25) / (n + 0.5))
+        dp = 0.0
+        for _ in 1:20
+            p0, p1 = 1.0, t
+            for k in 2:n
+                p0, p1 = p1, ((2k - 1) * t * p1 - (k - 1) * p0) / k
+            end
+            dp = n * (t * p1 - p0) / (t^2 - 1)
+            t -= p1 / dp
+        end
+        (t, 2 / ((1 - t^2) * dp^2))
+    end
+end
+const _GAUSS_LEGENDRE = _gauss_legendre(24)
+const _CAP_ANGLES = [2π * (j - 0.5) / 64 for j in 1:64]
+
 # ── Geometry ───────────────────────────────────────────────────────────────
 
 # Canonicalise to m^3 to avoid weird unit ratios from mass/density (e.g. g/(kg/m^3))
@@ -111,20 +173,23 @@ _ellipsoid_volume(shape::Ellipsoid) = uconvert(u"m^3", body_volume(shape))
 _ellipsoid_fat_volume(shape::Ellipsoid, fat_layer::FatLayer) =
     uconvert(u"m^3", fat_volume(shape, fat_layer))
 
-# Semi-axes enclosing `volume` at the shape's proportions: with a = r_b·b and
-# a = r_c·c, volume = (4π/3)·a·b·c = (4π/3)·a³/(r_b·r_c).
+# Semi-axes enclosing `volume` at the shape's proportions and truncation: with
+# a = r_b·b and a = r_c·c, volume = π·k·a·b·c = π·k·a³/(r_b·r_c).
 function _ellipsoid_semiaxes(shape::Ellipsoid, volume)
-    a = cbrt(3 * volume * shape.axis_ratio_b * shape.axis_ratio_c / (4π))
+    a = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c / (π * _truncated_volume_factor(shape)))
     (a, a / shape.axis_ratio_b, a / shape.axis_ratio_c)
 end
 
+# Area of the shape's (cut) surface at semi-axes `axes`.
+_shape_area(shape::Ellipsoid, axes) = _ellipsoid_area(axes..., shape.pole_a_truncation)
+
 function _skin_level(shape::Ellipsoid, volume)
     axes = _ellipsoid_semiaxes(shape, volume)
-    (; dims = _extents(:skin, axes), area = _ellipsoid_area(axes...))
+    (; dims = _extents(:skin, axes), area = _shape_area(shape, axes))
 end
 function _fibrous_level(shape::Ellipsoid, skin, thickness)
     axes = _skin_semiaxes(skin) .+ thickness
-    (; dims = _extents(:fibrous, axes), area = _ellipsoid_area(axes...))
+    (; dims = _extents(:fibrous, axes), area = _shape_area(shape, axes))
 end
 
 # Smooth Heaviside on a length: ≈ 1 for fat ≫ ε, ≈ 0 for fat ≪ -ε, smooth
@@ -145,12 +210,12 @@ function _ellipsoid_fat_skin(shape::Ellipsoid, fat_layer::FatLayer)
     volume = _ellipsoid_volume(shape)
     fat_v = _ellipsoid_fat_volume(shape, fat_layer)
     flesh = _ellipsoid_semiaxes(shape, volume - fat_v)
-    raw_fat = _uniform_shell_thickness(flesh, volume)
+    raw_fat = _uniform_shell_thickness(flesh, volume, _truncated_volume_factor(shape))
     full = _ellipsoid_semiaxes(shape, volume)
     w = _smooth_step_meters(raw_fat)
     fat = w * raw_fat # smooth-clamped to ≥ 0
     axes = w .* (flesh .+ raw_fat) .+ (1 - w) .* full
-    (; volume, dims = _extents(:skin, axes), fat, area = _ellipsoid_area(axes...))
+    (; volume, dims = _extents(:skin, axes), fat, area = _shape_area(shape, axes))
 end
 
 function geometry(shape::Ellipsoid, fat_layer::FatLayer)
@@ -165,14 +230,15 @@ function geometry(shape::Ellipsoid, fibrous_layer::FibrousLayer, fat_layer::FatL
                           convection = _convective_area(fibrous_layer, s.area)))
 end
 
-# Fat thickness: the uniform X with (a+X)(b+X)(c+X) = 3·volume/(4π), given the
-# flesh semi-axes. The left side is strictly increasing for X > -min(a, b, c),
-# so there is exactly one root; Newton from X = 0 with a fixed 10 steps reaches
+# Fat thickness: the uniform X with π·k·(a+X)(b+X)(c+X) = volume, given the
+# flesh semi-axes (k as in `_truncated_volume_factor`; a cut body keeps its cut
+# fraction). The left side is strictly increasing for X > -min(a, b, c), so
+# there is exactly one root; Newton from X = 0 with a fixed 10 steps reaches
 # machine precision without branching (AD-friendly). The solve is unitless:
 # lengths are stripped to metres once here and the result re-wrapped.
-function _uniform_shell_thickness(flesh, volume)
+function _uniform_shell_thickness(flesh, volume, k)
     a, b, c = ustrip.(u"m", flesh)
-    target = 3 * ustrip(u"m^3", volume) / (4π)
+    target = ustrip(u"m^3", volume) / (π * k)
     X = 0.0
     for _ in 1:10
         aX, bX, cX = a + X, b + X, c + X
@@ -188,10 +254,71 @@ end
 # other shapes θ runs from the long axis up towards the vertical — the sun in
 # the x–z plane, d = (cos θ, 0, sin θ) — so θ = π/2 looks down on the
 # length × width footprint (`normal`) and θ = 0 looks end-on (`parallel`).
-silhouette(shape::Ellipsoid, a, b, c, θ) = π * b * sqrt(c^2 * cos(θ)^2 + a^2 * sin(θ)^2)
-function silhouette(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody)
-    (a, b, c) = _semiaxes(outer_dims(sh, body))
-    (; normal = π * a * b, parallel = π * b * c)
+function silhouette(shape::Ellipsoid, a, b, c, θ)
+    shape.pole_a_truncation == 0 && return π * b * sqrt(c^2 * cos(θ)^2 + a^2 * sin(θ)^2)
+    _truncated_silhouette(a, b, c, 1 - shape.pole_a_truncation, θ)
+end
+function silhouette(sh::Ellipsoid, ins::AbstractInsulationLayer, body::AbstractBody)
+    (; normal = silhouette(sh, ins, body, π / 2), parallel = silhouette(sh, ins, body, 0.0))
+end
+
+# A cut ellipsoid is convex, so its shadow is the convex hull of the shadows of
+# its boundary's extreme points: the rim where the sun grazes the curved surface
+# (kept only where it isn't cut away, x ≤ x_r·a) and the edge of the cut disc.
+# Through x ↦ (x/a, y/b, z/c) the rim is the great circle ⟂ (d_x/a, d_y/b, d_z/c)
+# on the unit sphere, since the surface normal at a·q is ∝ q ./ (a, b, c). Both curves
+# are sampled densely, projected onto the plane ⟂ d and hulled; the hull area
+# converges as 1/n² in the number of samples. Unitless: metres in, m² out.
+function _truncated_silhouette(a, b, c, x_ratio, θ)
+    am, bm, cm = ustrip(u"m", a), ustrip(u"m", b), ustrip(u"m", c)
+    d = (cos(θ), 0.0, sin(θ))
+    u, v = (0.0, 1.0, 0.0), (-sin(θ), 0.0, cos(θ))      # basis of the plane ⟂ d
+    e = (d[1] / am, d[2] / bm, d[3] / cm)
+    ne = sqrt(e[1]^2 + e[2]^2 + e[3]^2)
+    e = e ./ ne
+    # Orthonormal pair ⟂ e, from whichever axis is least aligned with it.
+    ref = abs(e[1]) < 0.9 ? (1.0, 0.0, 0.0) : (0.0, 1.0, 0.0)
+    w1 = ref .- (ref[1] * e[1] + ref[2] * e[2] + ref[3] * e[3]) .* e
+    w1 = w1 ./ sqrt(w1[1]^2 + w1[2]^2 + w1[3]^2)
+    w2 = (e[2] * w1[3] - e[3] * w1[2], e[3] * w1[1] - e[1] * w1[3], e[1] * w1[2] - e[2] * w1[1])
+    onto(p) = (p[1] * u[1] + p[2] * u[2] + p[3] * u[3], p[1] * v[1] + p[2] * v[2] + p[3] * v[3])
+    n = 720
+    points = NTuple{2,Float64}[]
+    xcut = x_ratio * am
+    for t in range(0, 2π; length = n + 1)[1:n]
+        q = cos(t) .* w1 .+ sin(t) .* w2
+        p = (am * q[1], bm * q[2], cm * q[3])
+        p[1] <= xcut && push!(points, onto(p))
+    end
+    scale = sqrt(max(0.0, 1 - x_ratio^2))
+    for β in range(0, 2π; length = n + 1)[1:n]
+        push!(points, onto((xcut, scale * bm * cos(β), scale * cm * sin(β))))
+    end
+    _hull_area(points) * u"m^2"
+end
+
+# Area of the convex hull of 2D points (Andrew's monotone chain + shoelace).
+function _hull_area(points)
+    pts = sort(unique(points))
+    length(pts) < 3 && return 0.0
+    cross(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
+    hull = NTuple{2,Float64}[]
+    for pass in (pts, reverse(pts))
+        start = length(hull)
+        for p in pass
+            while length(hull) >= start + 2 && cross(hull[end - 1], hull[end], p) <= 0
+                pop!(hull)
+            end
+            push!(hull, p)
+        end
+        pop!(hull)
+    end
+    area = 0.0
+    for i in eachindex(hull)
+        p, q = hull[i], hull[mod1(i + 1, length(hull))]
+        area += p[1] * q[2] - q[1] * p[2]
+    end
+    abs(area) / 2
 end
 function silhouette(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody, θ)
     silhouette(sh, _semiaxes(outer_dims(sh, body))..., θ)

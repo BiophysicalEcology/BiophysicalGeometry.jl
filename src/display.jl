@@ -40,6 +40,14 @@ function Base.show(io::IO, ::MIME"text/plain", s::Plate)
     print(io,   rpad("  axis_ratio_c:", _W), s.axis_ratio_c)
 end
 
+function Base.show(io::IO, ::MIME"text/plain", s::TriangularPlate)
+    println(io, "TriangularPlate")
+    println(io, rpad("  mass:", _W), s.mass)
+    println(io, rpad("  density:", _W), s.density)
+    println(io, rpad("  axis_ratio_b:", _W), s.axis_ratio_b)
+    print(io,   rpad("  axis_ratio_c:", _W), s.axis_ratio_c)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", s::Cone)
     println(io, "Cone")
     println(io, rpad("  mass:", _W), s.mass)

@@ -138,6 +138,18 @@ end
 Radial() = Radial(nothing, nothing)
 
 """
+    Diagonal(position=nothing, z=nothing) <: AbstractSurface
+
+The long diagonal face of a `TriangularPlate`, located by `position` along the
+diagonal from its `+x` end and the height `z`.
+"""
+struct Diagonal{P,Z} <: AbstractSurface
+    position::P
+    z::Z
+end
+Diagonal() = Diagonal(nothing, nothing)
+
+"""
     Top(x=nothing, y=nothing) <: AbstractSurface
 
 Top face of a `Plate` (z = +H/2), located by `(x, y)`.

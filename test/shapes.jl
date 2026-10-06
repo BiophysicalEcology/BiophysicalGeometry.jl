@@ -141,7 +141,9 @@ end
     shapes = (Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Sphere(; mass = 10u"kg", density), Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 3.0),
               Plate(; mass = 10u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 4.0), Cone(; mass = 10u"kg", density, axis_ratio_b = 2.0, top_ratio = 0.3),
               HalfCylinder(; mass = 5u"kg", density, axis_ratio_b = 3.0), HalfCone(; mass = 5u"kg", density, axis_ratio_b = 2.0, top_ratio = 0.3),
-              HalfEllipsoid(; mass = 5u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), HalfSphere(; mass = 5u"kg", density))
+              HalfEllipsoid(; mass = 5u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), HalfSphere(; mass = 5u"kg", density),
+              TriangularPlate(; mass = 5u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 10.0),
+              Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 2.0, axis_ratio_c = 3.0, pole_a_truncation = 0.4))
     for sh in shapes, ins in insulations
         b = Body(sh, ins)
         @test surface_area(b) == total_area(b)
@@ -292,4 +294,69 @@ end
     @test_throws ArgumentError Horizon(Float64[])
     @test_throws ArgumentError silhouette_factors(cb, Sky(0.5); ndirections = 0)
     @test_throws ArgumentError silhouette_rasterized(cb, (0.0, 0.0, 1.0); resolution = 0)
+end
+
+@testset "Truncated ellipsoid" begin
+    for truncation in (0.2, 0.6, 1.0)
+        e = Body(Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 2.0, axis_ratio_c = 3.0,
+                           pole_a_truncation = truncation), Naked())
+        l = e.geometry.length
+        a, b, c = (l.length_skin, l.width_skin, l.height_skin) ./ 2
+        # The cut body holds the volume: π·a·b·c·(4/3 - cap), cap = (1 - x) - (1 - x³)/3.
+        x = 1 - truncation
+        @test π * a * b * c * (4 / 3 - (1 - x) + (1 - x^3) / 3) ≈ 10u"kg" / density
+    end
+    # A cut sphere: the cap of height h has area 2π·r·h, the disc π·r²·(1 - x²).
+    r = 0.1u"m"
+    full = BG._ellipsoid_area(r, r, r)
+    for truncation in (0.1, 0.5, 1.0)
+        x = 1 - truncation
+        h = r * (1 - x)
+        @test BG._ellipsoid_area(r, r, r, truncation) ≈ full - 2π * r * h + π * r^2 * (1 - x^2)
+    end
+    # Cut through the centre: half the triaxial surface plus the elliptical face.
+    a, b, c = 0.3u"m", 0.15u"m", 0.1u"m"
+    @test BG._ellipsoid_area(a, b, c, 1.0) ≈ BG._ellipsoid_area(a, b, c) / 2 + π * b * c rtol = 1e-8
+    # The silhouette matches the cut mesh's.
+    for truncation in (0.3, 1.0), ins in (Naked(), fur)
+        b = Body(Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 2.0, axis_ratio_c = 3.0,
+                           pole_a_truncation = truncation), ins)
+        for θ in (0.0, 0.5, 1.2, π / 2, 2.3)
+            @test silhouette(b, θ) ≈ silhouette_rasterized(single(b), (cos(θ), 0.0, sin(θ)); resolution = 400) rtol = 0.01
+        end
+    end
+end
+
+@testset "TriangularPlate" begin
+    t = TriangularPlate(; length = 0.3u"m", width = 0.2u"m", height = 0.02u"m", density)
+    b = Body(t, Naked())
+    @test b.geometry.volume ≈ 0.3u"m" * 0.2u"m" * 0.02u"m" / 2
+    D = sqrt(0.3^2 + 0.2^2) * u"m"
+    @test total_area(b) ≈ 0.3u"m" * 0.2u"m" + (0.3u"m" + 0.2u"m" + D) * 0.02u"m"
+    @test skin_radius(b) ≈ 0.3u"m" * 0.2u"m" / (0.5u"m" + D)
+    @test all(flesh_centroid(t, b) .≈ (0.1u"m", 0.2u"m" / 3, 0.0u"m"))
+    @test_throws ErrorException Half(t)
+    # Fur offsets every face outward: the outer prism encloses skin + a shell of the fur's thickness.
+    f = Body(t, fur)
+    o = f.geometry.length
+    @test BG._inradius(o.length_fibrous, o.width_fibrous) ≈ skin_radius(b) + 10u"mm"
+    @test o.height_fibrous ≈ 0.02u"m" + 2 * 10u"mm"
+    # Silhouette in any direction matches the mesh.
+    for ins in (Naked(), fur), d in ((0.3, 0.2, 1.0), (1.0, -0.4, 0.2), (-0.2, 1.0, 0.5), (0.0, 0.0, 1.0))
+        body = Body(t, ins)
+        o = outer_dims(t, body)
+        n = sqrt(sum(abs2, d))
+        @test BG._prism_silhouette(o.length, o.width, o.height, d ./ n) ≈
+              silhouette_rasterized(single(body), d; resolution = 400) rtol = 0.01
+    end
+    @test silhouette(b).normal ≈ 0.3u"m" * 0.2u"m" / 2
+    # A wing joined by its leg face to a cylinder's side.
+    torso = Body(Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    wing = Body(TriangularPlate(; mass = 0.2u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 20.0), Naked())
+    patch = Disc(0.005u"m")
+    bird = CompositeBody(; parts = (; torso, wing),
+        joins = (Join(torso = Attachment(Lateral(0.5 * torso.geometry.length.length_skin, 0.0), patch),
+                      wing = Attachment(SideB(wing.geometry.length.width_skin / 2, 0.0u"m"), patch)),))
+    @test total_area(bird) ≈ total_area(torso) + total_area(wing) - 2π * (0.005u"m")^2
+    @test_throws ErrorException BG.validate_range(wing.shape, wing, Diagonal(10u"m", 0.0u"m"))
 end

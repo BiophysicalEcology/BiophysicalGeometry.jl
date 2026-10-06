@@ -4,7 +4,7 @@ using LinearAlgebra: svd
 using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
-export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, Cone
+export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, TriangularPlate, Cone
 export Half, HalfCylinder, HalfCone, HalfEllipsoid, HalfSphere
 export AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab
 export AbstractInsulationLayer, AbstractSolidLayer, AbstractPorousLayer
@@ -13,7 +13,7 @@ export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
 export SurfaceAreas
 export CompositeBody, Join, Attachment, Disc, FullCover, AbstractAttachmentShape, Pose
 export AbstractSurface, EndA, EndB, Lateral, Flat, Dome, PoleA, PoleB, Equator, Radial
-export Top, Bottom, SideA, SideB, SideC, SideD
+export Top, Bottom, SideA, SideB, SideC, SideD, Diagonal
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun, ZenithAngleVarying
 export Beam, Sky, Ground, Horizon
 export SilhouetteResult
@@ -46,6 +46,7 @@ include("geometry.jl")
 include("construction.jl")
 include("composition.jl")
 include("shapes/plate.jl")
+include("shapes/triangular_plate.jl")
 include("shapes/cylinder.jl")
 include("shapes/sphere.jl")
 include("shapes/ellipsoid.jl")

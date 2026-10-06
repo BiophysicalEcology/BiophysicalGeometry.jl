@@ -97,6 +97,11 @@ function flesh_centroid(sh::HalfDomed, body::AbstractBody)
     _, _, c = _domed_semiaxes(sh, body)
     (zero(c), zero(c), 3c / 8)
 end
+# Triangular plate: the triangle's centroid, a third of the way along each leg.
+function flesh_centroid(::TriangularPlate, body::AbstractBody)
+    l = body.geometry.length
+    (l.length_skin / 3, l.width_skin / 3, zero(l.length_skin))
+end
 # Plate: centred at the origin.
 function flesh_centroid(::Plate, body::AbstractBody)
     z = body.geometry.length.height_skin
