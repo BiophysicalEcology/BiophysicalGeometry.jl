@@ -31,9 +31,19 @@ _scaled_radii(body, sc) = map(x -> _m(x, sc), _radii(body))
 
 _layer_flags(r) = (fat_layer=r.skin > r.flesh + 1e-9, fibrous_layer=r.ins > r.skin + 1e-9)
 
-_axis_ratio(::Any) = 1.0
-_axis_ratio(s::Ellipsoid) = Float64(s.axis_ratio_b)
-_axis_ratio(s::Half) = _axis_ratio(s.parent)
+# Semi-axes (a, b, c) along x, y, z of each layer of an ellipsoidal or spherical
+# body: the skin, the flesh inside it (one fat thickness in on every axis) and
+# the outer insulation (the fibrous shell, or the skin when there is none).
+_domed_layers(::Union{Sphere,Half{<:AbstractSpherical}}, body) =
+    map(r -> (r, r, r), _radii(body))
+function _domed_layers(::Union{Ellipsoid,Half{<:AbstractEllipsoidal}}, body)
+    gl = body.geometry.length
+    skin = (gl.length_skin, gl.width_skin, gl.height_skin) ./ 2
+    fat = haskey(gl, :fat) ? gl.fat : zero(skin[1])
+    ins = haskey(gl, :length_fibrous) ?
+        (gl.length_fibrous, gl.width_fibrous, gl.height_fibrous) ./ 2 : skin
+    (flesh = skin .- fat, skin = skin, ins = ins)
+end
 
 _colors(p) = (flesh=p[:flesh_col][], fat_layer=p[:fat_layer_col][], fibrous_layer=p[:fibrous_layer_col][])
 _root_name(::CompositeBody{Root}) where {Root} = Root
@@ -60,10 +70,10 @@ function _draw_surface!(target, (X, Y, Z), color)
     surface!(target, X, Y, Z; color=fill(color, size(X)...), shading=true, backlight=0.4f0)
 end
 
-function _draw_cylinder!(target, r, L, col; θ_end=2π, z0=0.0)
-    _draw_surface!(target, _cylinder_tube(r, L; θ_end, z0), col)
-    _draw_surface!(target, _cylinder_cap(r, z0; θ_end), col)
-    _draw_surface!(target, _cylinder_cap(r, z0 + L; θ_end), col)
+function _draw_cylinder!(target, r, L, col; θ_end=2π, x0=0.0)
+    _draw_surface!(target, _cylinder_tube(r, L; θ_end, x0), col)
+    _draw_surface!(target, _cylinder_cap(r, x0; θ_end), col)
+    _draw_surface!(target, _cylinder_cap(r, x0 + L; θ_end), col)
 end
 
 # Cutaway removes the front face (y = -hw) and the right face (x = +hl).
@@ -90,22 +100,21 @@ function _draw_cutaway_shape!(p, sh::Cylinder, body, sc, cols)
     fl = _layer_flags(r)
 
     L_s = _m(body.geometry.length.length_skin, sc)
-    L_i = _m(outer_dims(sh, body).L, sc)
-    z0_fibrous = -(L_i - L_s) / 2
+    L_i = _m(outer_dims(sh, body).length, sc)
+    x0_fibrous = -(L_i - L_s) / 2
 
     _draw_cylinder!(p, r.flesh, L_s, cols.flesh)
     fl.fat_layer && _draw_cylinder!(p, r.skin, L_s, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_cylinder!(p, r.ins, L_i, cols.fibrous_layer; θ_end=3π/2, z0=z0_fibrous)
+    fl.fibrous_layer && _draw_cylinder!(p, r.ins, L_i, cols.fibrous_layer; θ_end=3π/2, x0=x0_fibrous)
 end
 
 function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
-    r = _scaled_radii(body, sc)
-    fl = _layer_flags(r)
-    ratio = _axis_ratio(shape)
+    fl = _layer_flags(_scaled_radii(body, sc))
+    ax = map(l -> map(x -> _m(x, sc), l), _domed_layers(shape, body))
 
-    _draw_surface!(p, _ellipsoid_mesh(r.flesh * ratio, r.flesh), cols.flesh)
-    fl.fat_layer && _draw_surface!(p, _ellipsoid_mesh(r.skin * ratio, r.skin; θ_end=3π/2), cols.fat_layer)
-    fl.fibrous_layer && _draw_surface!(p, _ellipsoid_mesh(r.ins * ratio, r.ins;  θ_end=3π/2), cols.fibrous_layer)
+    _draw_surface!(p, _ellipsoid_mesh(ax.flesh...), cols.flesh)
+    fl.fat_layer && _draw_surface!(p, _ellipsoid_mesh(ax.skin...; θ_end=3π/2), cols.fat_layer)
+    fl.fibrous_layer && _draw_surface!(p, _ellipsoid_mesh(ax.ins...; θ_end=3π/2), cols.fibrous_layer)
 end
 
 function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
@@ -117,9 +126,9 @@ function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
     hw_s = _m(gl.width_skin, sc) / 2
     hl_s = _m(gl.length_skin, sc) / 2
     hh_s = _m(gl.height_skin, sc) / 2
-    hw_i = _m(di.W, sc) / 2
-    hl_i = _m(di.L, sc) / 2
-    hh_i = _m(di.H, sc) / 2
+    hw_i = _m(di.width, sc) / 2
+    hl_i = _m(di.length, sc) / 2
+    hh_i = _m(di.height, sc) / 2
     hw_f = r.flesh
     hl_f = hw_f * Float64(sh.axis_ratio_b)
     hh_f = hl_f / Float64(sh.axis_ratio_c)
@@ -129,10 +138,10 @@ function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
     fl.fibrous_layer && _draw_box_faces!(p, hl_i, hw_i, hh_i, cols.fibrous_layer)
 end
 
-function _draw_cone!(target, r_base, r_top, L, col; θ_end=2π, z0=0.0)
-    _draw_surface!(target, _cone_tube(r_base, r_top, L; θ_end, z0), col)
-    _draw_surface!(target, _cylinder_cap(r_base, z0; θ_end), col)
-    r_top > 0 && _draw_surface!(target, _cylinder_cap(r_top, z0 + L; θ_end), col)
+function _draw_cone!(target, r_base, r_top, L, col; θ_end=2π, x0=0.0)
+    _draw_surface!(target, _cone_tube(r_base, r_top, L; θ_end, x0), col)
+    _draw_surface!(target, _cylinder_cap(r_base, x0; θ_end), col)
+    r_top > 0 && _draw_surface!(target, _cylinder_cap(r_top, x0 + L; θ_end), col)
 end
 
 function _draw_cutaway_shape!(p, sh::Cone, body, sc, cols)
@@ -140,21 +149,21 @@ function _draw_cutaway_shape!(p, sh::Cone, body, sc, cols)
     fl = _layer_flags(r)
     t = Float64(sh.top_ratio)
     L_s = _m(body.geometry.length.length_skin, sc)
-    L_i = _m(outer_dims(sh, body).L, sc)
-    z0_i = -(L_i - L_s) / 2
+    L_i = _m(outer_dims(sh, body).length, sc)
+    x0_i = -(L_i - L_s) / 2
     _draw_cone!(p, r.flesh, t * r.flesh, L_s, cols.flesh)
     fl.fat_layer && _draw_cone!(p, r.skin, t * r.skin, L_s, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_cone!(p, r.ins,  t * r.ins,  L_i, cols.fibrous_layer; θ_end=3π/2, z0=z0_i)
+    fl.fibrous_layer && _draw_cone!(p, r.ins,  t * r.ins,  L_i, cols.fibrous_layer; θ_end=3π/2, x0=x0_i)
 end
 
 # Half shapes: draw the layers over their half domain, with a wedge removed from
 # the outer (fat/fur) layers to reveal the flesh, plus the flat cut face.
 # A half cylinder or half cone: base radius `r`, top radius `t * r`.
-function _draw_half_frustum!(target, r, t, L, col; θ_end=π, z0=0.0)
-    _draw_surface!(target, _cone_tube(r, t * r, L; θ_end, z0), col)
-    _draw_surface!(target, _cylinder_cap(r, z0; θ_end), col)
-    t > 0 && _draw_surface!(target, _cylinder_cap(t * r, z0 + L; θ_end), col)
-    _draw_surface!(target, _half_cylinder_flat(r, L; r_top=t * r, z0), col)
+function _draw_half_frustum!(target, r, t, L, col; θ_end=π, x0=0.0)
+    _draw_surface!(target, _cone_tube(r, t * r, L; θ_end, x0), col)
+    _draw_surface!(target, _cylinder_cap(r, x0; θ_end), col)
+    t > 0 && _draw_surface!(target, _cylinder_cap(t * r, x0 + L; θ_end), col)
+    _draw_surface!(target, _half_cylinder_flat(r, L; r_top=t * r, x0), col)
 end
 
 function _draw_cutaway_shape!(p, sh::Half{<:AbstractCylindrical}, body, sc, cols)
@@ -162,26 +171,25 @@ function _draw_cutaway_shape!(p, sh::Half{<:AbstractCylindrical}, body, sc, cols
     fl = _layer_flags(r)
     t = Float64(_top_ratio(sh))
     L_s = _m(body.geometry.length.length_skin, sc)
-    L_i = _m(outer_dims(sh, body).L, sc)
-    z0_i = -(L_i - L_s) / 2
+    L_i = _m(outer_dims(sh, body).length, sc)
+    x0_i = -(L_i - L_s) / 2
     _draw_half_frustum!(p, r.flesh, t, L_s, cols.flesh)
     fl.fat_layer && _draw_half_frustum!(p, r.skin, t, L_s, cols.fat_layer; θ_end=3π/4)
-    fl.fibrous_layer && _draw_half_frustum!(p, r.ins, t, L_i, cols.fibrous_layer; θ_end=3π/4, z0=z0_i)
+    fl.fibrous_layer && _draw_half_frustum!(p, r.ins, t, L_i, cols.fibrous_layer; θ_end=3π/4, x0=x0_i)
 end
 
-function _draw_half_ellipsoid!(target, a, b, col; θ_end=2π)
-    _draw_surface!(target, _ellipsoid_mesh(a, b; θ_end, φ_end=π/2), col)
+function _draw_half_ellipsoid!(target, (a, b, c), col; θ_end=2π)
+    _draw_surface!(target, _ellipsoid_mesh(a, b, c; θ_end, φ_end=π/2), col)
     _draw_surface!(target, _half_ellipsoid_flat_mesh(a, b), col)
 end
 
 function _draw_cutaway_shape!(p, sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}},
                               body, sc, cols)
-    r = _scaled_radii(body, sc)
-    fl = _layer_flags(r)
-    ratio = _axis_ratio(sh)
-    _draw_half_ellipsoid!(p, r.flesh * ratio, r.flesh, cols.flesh)
-    fl.fat_layer && _draw_half_ellipsoid!(p, r.skin * ratio, r.skin, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_half_ellipsoid!(p, r.ins  * ratio, r.ins,  cols.fibrous_layer; θ_end=3π/2)
+    fl = _layer_flags(_scaled_radii(body, sc))
+    ax = map(l -> map(x -> _m(x, sc), l), _domed_layers(sh, body))
+    _draw_half_ellipsoid!(p, ax.flesh, cols.flesh)
+    fl.fat_layer && _draw_half_ellipsoid!(p, ax.skin, cols.fat_layer; θ_end=3π/2)
+    fl.fibrous_layer && _draw_half_ellipsoid!(p, ax.ins, cols.fibrous_layer; θ_end=3π/2)
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -273,7 +281,7 @@ _layer!(target, pts, col) = poly!(target, pts; color=col, strokecolor=col, strok
 function _section_layers(sh::Cylinder, body, mode, r, cols)
     r_f, r_s, r_i = r.flesh, r.skin, r.ins
     hl_s = body.geometry.length.length_skin / 2
-    hl_i = outer_dims(sh, body).L / 2
+    hl_i = outer_dims(sh, body).length / 2
     if mode === :long
         [
             (r_i > r_s, () -> _rect_pts(r_i, hl_i), cols.fibrous_layer),
@@ -295,7 +303,7 @@ function _section_layers(sh::Union{Cone,Half{<:AbstractCylindrical}}, body, mode
     t = _top_ratio(sh)
     half = sh isa Half
     hl_s = body.geometry.length.length_skin / 2
-    hl_i = outer_dims(sh, body).L / 2
+    hl_i = outer_dims(sh, body).length / 2
     long(x, hl) = half ? _half_trap_pts(x, t * x, hl) : _trap_pts(x, t * x, hl)
     tran(x) = half ? _half_ellipse_pts(x, x) : _circle_pts(x)
     if mode === :long
@@ -313,13 +321,16 @@ function _section_layers(sh::Union{Cone,Half{<:AbstractCylindrical}}, body, mode
     end
 end
 
-function _section_layers(sh::HalfDomed, _, mode, r, cols)
-    ratio = _axis_ratio(sh)
-    geom = mode === :long ? x -> _half_ellipse_pts(x, x * ratio) : x -> _half_ellipse_pts(x, x)
+# Ellipsoidal sections: the long section shows height (across) × length (up),
+# the transverse section height × width; halves bulge toward +x.
+function _section_layers(sh::Union{Sphere,Ellipsoid,HalfDomed}, body, mode, r, cols)
+    pts = sh isa Half ? _half_ellipse_pts : _ellipse_pts
+    geom((a, b, c)) = mode === :long ? pts(c, a) : pts(c, b)
+    l = _domed_layers(sh, body)
     [
-        (r.ins > r.skin, () -> geom(r.ins), cols.fibrous_layer),
-        (r.skin > r.flesh, () -> geom(r.skin), cols.fat_layer),
-        (true, () -> geom(r.flesh), cols.flesh),
+        (r.ins > r.skin, () -> geom(l.ins), cols.fibrous_layer),
+        (r.skin > r.flesh, () -> geom(l.skin), cols.fat_layer),
+        (true, () -> geom(l.flesh), cols.flesh),
     ]
 end
 
@@ -329,11 +340,11 @@ function _section_layers(sh::Plate, body, mode, r, cols)
     r_f, r_s, r_i = r.flesh, r.skin, r.ins
     if mode === :long
         d_s = (gl.length_skin / 2, gl.height_skin / 2)
-        d_i = (di.L / 2, di.H / 2)
+        d_i = (di.length / 2, di.height / 2)
         d_f = (r_f * sh.axis_ratio_b, r_f * sh.axis_ratio_b / sh.axis_ratio_c)
     else
         d_s = (gl.width_skin / 2, gl.height_skin / 2)
-        d_i = (di.W / 2, di.H / 2)
+        d_i = (di.width / 2, di.height / 2)
         d_f = (r_f, (r_f * sh.axis_ratio_b) / sh.axis_ratio_c)
     end
     [
@@ -343,23 +354,13 @@ function _section_layers(sh::Plate, body, mode, r, cols)
     ]
 end
 
-function _section_layers(shape::Union{Sphere,Ellipsoid}, _, mode, r, cols)
-    r_f, r_s, r_i = r.flesh, r.skin, r.ins
-    ratio = _axis_ratio(shape)
-    geom = mode === :long ? x -> _ellipse_pts(x, x * ratio) : _circle_pts
-    [
-        (r_i > r_s, () -> geom(r_i), cols.fibrous_layer),
-        (r_s > r_f, () -> geom(r_s), cols.fat_layer),
-        (true, () -> geom(r_f), cols.flesh),
-    ]
-end
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 2-D AXIS LIMIT DISPATCH
 # ══════════════════════════════════════════════════════════════════════════════
 
 function _section_limits(sh::Union{AbstractCylindrical,Half{<:AbstractCylindrical}}, body, r, pad)
-    hl_i = outer_dims(sh, body).L / 2
+    hl_i = outer_dims(sh, body).length / 2
     ri = _pu(r.ins) * (1 + pad)
     li = _pu(hl_i) * (1 + pad)
     _limits(ri, li, ri, li)
@@ -367,19 +368,16 @@ end
 
 function _section_limits(sh::Plate, body, r, pad)
     di = outer_dims(sh, body)
-    hl_i = di.L / 2
-    hh_i = di.H / 2
-    hw_i = di.W / 2
+    hl_i = di.length / 2
+    hh_i = di.height / 2
+    hw_i = di.width / 2
     _limits(_pu(hl_i) * (1 + pad), _pu(hh_i) * (1 + pad),
             _pu(hw_i) * (1 + pad), _pu(hh_i) * (1 + pad))
 end
 
 function _section_limits(shape::Union{Sphere,Ellipsoid,HalfDomed}, body, r, pad)
-    ratio = _axis_ratio(shape)
-    ey = r.ins * ratio
-    rx = _pu(r.ins) * (1 + pad)
-    ry = _pu(ey) * (1 + pad)
-    _limits(rx, ry, rx, ry)
+    (a, b, c) = map(x -> _pu(x) * (1 + pad), _domed_layers(shape, body).ins)
+    _limits(c, a, c, b)
 end
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -6,46 +6,61 @@
 # join face, and the mesh are half-specific. Two `Half`s of equal mass joined
 # at their flat faces reconstruct the full shape of double mass.
 
-"""
-    HalfCylinder(mass, density, axis_ratio_b) -> Half{<:Cylinder}
+# The constructors take the same keywords as the full shape, but every value
+# describes the half itself: its own mass and volume, and for a HalfEllipsoid
+# its own height (the dome, half the full ellipsoid's). They are translated to
+# the full parent shape here. The stored geometry of a `Half` is the parent's.
 
-Dorsal/ventral half-cylinder: `Half(Cylinder(2mass, density, axis_ratio_b))`.
-Axis along `+z`, curved surface in `y ≥ 0`, flat face at `y = 0`.
-"""
-HalfCylinder(mass, density, axis_ratio_b) = Half(Cylinder(2mass, density, axis_ratio_b))
-
-"""
-    HalfCone(mass, density, axis_ratio_b, top_ratio=0.0) -> Half{<:Cone}
-
-Dorsal/ventral half-cone (or half-frustum): `Half(Cone(2mass, density,
-axis_ratio_b, top_ratio))`. Axis along `+z` with the base at `z = 0`, curved
-surface in `y ≥ 0`, flat trapezoidal face at `y = 0`.
-"""
-HalfCone(mass, density, axis_ratio_b, top_ratio=0.0) =
-    Half(Cone(2mass, density, axis_ratio_b, top_ratio))
+_double(kw, key) = haskey(kw, key) ? merge(kw, NamedTuple{(key,)}((2 * kw[key],))) : kw
+_full_shape_keywords(kw) = _double(_double(NamedTuple(kw), :mass), :volume)
 
 """
-    HalfEllipsoid(mass, density, axis_ratio_b, axis_ratio_c) -> Half{<:Ellipsoid}
+    HalfCylinder(; mass, density, volume, length, radius, axis_ratio_b) -> Half{<:Cylinder}
 
-Dorsal/ventral half-ellipsoid: `Half(Ellipsoid(2mass, density, b, c))`. Long
-axis along `+x`, dome in `z ≥ 0`, flat elliptical face at `z = 0`.
+Dorsal/ventral half-cylinder, lying along `+x` with its curved surface in
+`z ≥ 0` and its flat face at `z = 0`. Keywords are those of [`Cylinder`](@ref),
+describing the half: `mass` and `volume` are the half's own.
 """
-HalfEllipsoid(mass, density, axis_ratio_b, axis_ratio_c) =
-    Half(Ellipsoid(2mass, density, axis_ratio_b, axis_ratio_c))
+HalfCylinder(; kw...) = Half(Cylinder(; _full_shape_keywords(kw)...))
 
 """
-    HalfSphere(mass, density) -> Half{<:Sphere}
+    HalfCone(; mass, density, volume, length, radius, axis_ratio_b, top_ratio=0.0) -> Half{<:Cone}
 
-Hemisphere: `Half(Sphere(2mass, density))`. Wrapping `Sphere` (not an equal-axis
-ellipsoid) means the geometry uses the fast spherical closed forms rather than
-the eccentricity/asin and fat-cubic of the ellipsoidal path.
+Dorsal/ventral half-cone (or half-frustum), lying along `+x` with its base at
+`x = 0`, its curved surface in `z ≥ 0` and its flat trapezoidal face at `z = 0`.
+Keywords are those of [`Cone`](@ref), describing the half.
 """
-HalfSphere(mass, density) = Half(Sphere(2mass, density))
+HalfCone(; kw...) = Half(Cone(; _full_shape_keywords(kw)...))
+
+"""
+    HalfEllipsoid(; mass, density, volume, length, width, height, axis_ratio_b, axis_ratio_c) -> Half{<:Ellipsoid}
+
+Dorsal/ventral half-ellipsoid: `length` along `x`, `width` along `y`, a dome of
+`height` in `z ≥ 0` over a flat elliptical face at `z = 0`. Keywords describe the
+half: `height` is the dome's and `axis_ratio_c` is the half's length / height
+(each half the full ellipsoid's).
+"""
+function HalfEllipsoid(; kw...)
+    full = _double(_full_shape_keywords(kw), :height)
+    if haskey(full, :axis_ratio_c)
+        full = merge(full, (; axis_ratio_c = full.axis_ratio_c / 2))
+    end
+    Half(Ellipsoid(; full...))
+end
+
+"""
+    HalfSphere(; mass, density, volume, radius) -> Half{<:Sphere}
+
+Hemisphere: a dome of `radius` in `z ≥ 0` over a flat disc at `z = 0`. Wrapping
+`Sphere` (not an equal-axis ellipsoid) means the geometry uses the fast
+spherical closed forms. Keywords describe the half.
+"""
+HalfSphere(; kw...) = Half(Sphere(; _full_shape_keywords(kw)...))
 
 # Halving a box through its centre just gives a thinner box, so a half plate is
 # a `Plate` — there's no `Half{<:Plate}`.
-Half(p::Plate) = error("a half plate is a plate: use Plate(mass / 2, density, axis_ratio_b, " *
-                       "2 * axis_ratio_c) (halved along its height) instead of Half(Plate(...))")
+Half(p::Plate) = error("a half plate is a plate: build the half directly with Plate(; ...) " *
+                       "(e.g. half the height) instead of Half(Plate(...))")
 
 # ── Geometry: delegate dimensions to the parent, override area + volume ───
 
@@ -73,7 +88,7 @@ end
 # 2R and 2tR (a rectangle for a cylinder). The domed cut contains the long
 # axis: an ellipse with semi-axes a and b.
 _cut_face_area(h::Half{<:AbstractCylindrical}, l) = (1 + _top_ratio(h)) * l.radius_skin * l.length_skin
-_cut_face_area(::Half{<:AbstractEllipsoidal}, l) = π * l.a_semi_major_skin * l.b_semi_minor_skin
+_cut_face_area(::Half{<:AbstractEllipsoidal}, l) = π * (l.length_skin / 2) * (l.width_skin / 2)
 _cut_face_area(::Half{<:AbstractSpherical},   l) = π * l.radius_skin^2
 
 function _halve(h::Half, full)
@@ -100,9 +115,8 @@ _top_ratio(h::Half) = _top_ratio(h.parent)
 # in the plane holding the long axis and the flat-face normal, on the dome
 # side, θ from the long axis as for the parent. θ = π/2 looks straight down
 # on the dome (`normal`, the same shadow as the full shape); θ = 0 looks
-# along the axis (`parallel`). In the local frame the sun direction is
-# (0, sin θ, cos θ) for a cylindrical half and (cos θ, 0, sin θ) for a domed
-# half.
+# along the axis (`parallel`). Every half lies along x with its dome up, so in
+# the local frame the sun direction is (cos θ, 0, sin θ).
 #
 # Cauchy's projection formula, A = ½∮|n·d| dA, splits the half's surface into
 # its dome and its flat face. For a centrally symmetric parent (cylinder,
@@ -111,9 +125,9 @@ _top_ratio(h::Half) = _top_ratio(h.parent)
 # A frustum isn't centrally symmetric; its half is handled below.
 
 _outer_cut_face_area(h::Half{<:AbstractCylindrical}, body) =
-    (d = outer_dims(h, body); (1 + _top_ratio(h)) * d.r * d.L)
+    (d = outer_dims(h, body); (1 + _top_ratio(h)) * d.radius * d.length)
 _outer_cut_face_area(h::Half{<:AbstractEllipsoidal}, body) =
-    (d = outer_dims(h, body); π * d.a * d.b)
+    (d = outer_dims(h, body); π * (d.length / 2) * (d.width / 2))
 _outer_cut_face_area(h::Half{<:AbstractSpherical}, body) =
     π * insulation_radius(body)^2
 
@@ -132,13 +146,13 @@ silhouette(h::Half, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
 function silhouette(h::Half{<:AbstractCylindrical}, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(h, body)
     s, c = sin(θ), cos(θ)
-    if s < 0                               # sun on the flat side: same shadow as -d
+    if s < 0 # sun on the flat side: same shadow as -d
         s, c = -s, -c
     end
-    R, r = d.r, _top_ratio(h) * d.r
+    R, r = d.radius, _top_ratio(h) * d.radius
     half_base = π * R^2 * abs(c) / 2
-    c >= 0 ? half_base + (R + r) * d.L * s :
-             _frustum_silhouette(R, r, d.L, θ) - half_base
+    c >= 0 ? half_base + (R + r) * d.length * s :
+             _frustum_silhouette(R, r, d.length, θ) - half_base
 end
 
 function silhouette(h::Half, ins::AbstractInsulationLayer, body::AbstractBody)
@@ -153,7 +167,7 @@ end
 
 # Cylindrical half (cylinder or cone): EndA, EndB (half discs), Lateral (half
 # tube), Flat (axial section). The curved surfaces are the parent's restricted
-# to y ≥ 0 (φ ∈ [0, π]), so points, normals and ranges forward to the parent
+# to z ≥ 0 (angle ∈ [0, π]), so points, normals and ranges forward to the parent
 # and areas are half the parent's; only Flat is half-specific.
 attachment_surfaces(::Half{<:AbstractCylindrical}) = (EndA, EndB, Lateral, Flat)
 
@@ -166,50 +180,50 @@ surface_area(h::Half{<:AbstractCylindrical}, body::AbstractBody, ::Flat) =
 
 function validate_range(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::_CurvedEnd)
     validate_range(h.parent, body, loc)
-    0 ≤ loc.φ ≤ π || error("$(nameof(typeof(loc))) φ out of range [0, π]: $(loc.φ)")
+    0 ≤ loc.angle ≤ π || error("$(nameof(typeof(loc))) angle out of range [0, π]: $(loc.angle)")
 end
-function validate_range(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::Flat)  # (u=z, v=x)
+function validate_range(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::Flat)
     L = body.geometry.length.length_skin
-    loc.u ≥ zero(loc.u) && loc.u ≤ L || error("Flat z out of range [0, $L]: $(loc.u)")
-    r = _half_radius_at(h, body, loc.u)
-    abs(loc.v) ≤ r || error("Flat x out of range ±$r at z = $(loc.u): $(loc.v)")
+    loc.x ≥ zero(loc.x) && loc.x ≤ L || error("Flat x out of range [0, $L]: $(loc.x)")
+    r = _half_radius_at(h, body, loc.x)
+    abs(loc.y) ≤ r || error("Flat y out of range ±$r at x = $(loc.x): $(loc.y)")
 end
 
-# Skin radius of the axial section at height z (linear from R to tR).
-function _half_radius_at(h::Half{<:AbstractCylindrical}, body, z)
+# Skin radius of the axial section at position x (linear from R to tR).
+function _half_radius_at(h::Half{<:AbstractCylindrical}, body, x)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    R * (1 - (1 - _top_ratio(h)) * z / L)
+    R * (1 - (1 - _top_ratio(h)) * x / L)
 end
 
 surface_point(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::_CurvedEnd) =
     surface_point(h.parent, body, loc)
 surface_point(::Half{<:AbstractCylindrical}, body::AbstractBody, loc::Flat) =
-    (loc.v, zero(loc.v), loc.u)
+    (loc.x, loc.y, zero(loc.x))
 
 surface_normal(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::_CurvedEnd) =
     surface_normal(h.parent, body, loc)
-surface_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::Flat) = (0.0, -1.0, 0.0)
+surface_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::Flat) = (0.0, 0.0, -1.0)
 
-# Centroids sit on the half's symmetry plane x = 0: halfway out the end half
+# Centroids sit on the half's symmetry plane y = 0: halfway up the end half
 # discs, on the crest of the lateral surface, and mid-length on the flat face.
 function surface_centroid(h::Half{<:AbstractCylindrical}, body::AbstractBody, ::EndA)
-    R = body.geometry.length.radius_skin; (zero(R), R / 2, zero(R))
+    R = body.geometry.length.radius_skin; (zero(R), zero(R), R / 2)
 end
 function surface_centroid(h::Half{<:AbstractCylindrical}, body::AbstractBody, ::EndB)
     L = body.geometry.length.length_skin
-    (zero(L), _half_radius_at(h, body, L) / 2, L)
+    (L, zero(L), _half_radius_at(h, body, L) / 2)
 end
 surface_centroid(h::Half{<:AbstractCylindrical}, body::AbstractBody, ::Lateral) =
     surface_point(h.parent, body, Lateral(body.geometry.length.length_skin / 2, π / 2))
 function surface_centroid(::Half{<:AbstractCylindrical}, body::AbstractBody, ::Flat)
-    L = body.geometry.length.length_skin; (zero(L), zero(L), L / 2)
+    L = body.geometry.length.length_skin; (L / 2, zero(L), zero(L))
 end
-surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
+surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::EndA) = (-1.0, 0.0, 0.0)
+surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::EndB) = (1.0, 0.0, 0.0)
 surface_centroid_normal(h::Half{<:AbstractCylindrical}, body::AbstractBody, ::Lateral) =
     surface_normal(h.parent, body, Lateral(body.geometry.length.length_skin / 2, π / 2))
-surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::Flat) = (0.0, -1.0, 0.0)
+surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::Flat) = (0.0, 0.0, -1.0)
 
 # Domed half (ellipsoidal or spherical): Dome + Flat (elliptical disc at z = 0).
 # A sphere is the a=b=c case, so both families share one parametrization; only
@@ -217,7 +231,7 @@ surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::Flat) =
 const HalfDomed = Half{<:Union{AbstractEllipsoidal,AbstractSpherical}}
 
 _domed_semiaxes(::Half{<:AbstractEllipsoidal}, body) =
-    (body.geometry.length.a_semi_major_skin, body.geometry.length.b_semi_minor_skin, body.geometry.length.c_semi_minor_skin)
+    _skin_semiaxes(body.geometry.length)
 function _domed_semiaxes(::Half{<:AbstractSpherical}, body)
     r = body.geometry.length.radius_skin; (r, r, r)
 end
@@ -231,26 +245,26 @@ surface_area(sh::HalfDomed, body::AbstractBody, ::Flat) =
     _cut_face_area(sh, body.geometry.length)
 
 function validate_range(::HalfDomed, ::AbstractBody, loc::Dome)
-    0 ≤ loc.α ≤ π || error("Dome α out of range [0, π]: $(loc.α)")
-    0 ≤ loc.β ≤ π || error("Dome β out of range [0, π]: $(loc.β)")
+    0 ≤ loc.polar ≤ π || error("Dome polar angle out of range [0, π]: $(loc.polar)")
+    0 ≤ loc.azimuth ≤ π || error("Dome azimuth out of range [0, π]: $(loc.azimuth)")
 end
-function validate_range(sh::HalfDomed, body::AbstractBody, loc::Flat)  # (u=x, v=y)
+function validate_range(sh::HalfDomed, body::AbstractBody, loc::Flat)
     a, b, _ = _domed_semiaxes(sh, body)
-    (loc.u / a)^2 + (loc.v / b)^2 ≤ 1 + 1e-9 || error("Flat (x,y) outside boundary ellipse")
+    (loc.x / a)^2 + (loc.y / b)^2 ≤ 1 + 1e-9 || error("Flat (x, y) outside boundary ellipse")
 end
 
 function surface_point(sh::HalfDomed, body::AbstractBody, loc::Dome)
     a, b, c = _domed_semiaxes(sh, body)
-    (a * cos(loc.α), b * sin(loc.α) * cos(loc.β), c * sin(loc.α) * sin(loc.β))
+    (a * cos(loc.polar), b * sin(loc.polar) * cos(loc.azimuth), c * sin(loc.polar) * sin(loc.azimuth))
 end
 surface_point(::HalfDomed, body::AbstractBody, loc::Flat) =
-    (loc.u, loc.v, zero(loc.u))
+    (loc.x, loc.y, zero(loc.x))
 
 function surface_normal(sh::HalfDomed, body::AbstractBody, loc::Dome)
     a, b, c = _domed_semiaxes(sh, body)
-    nx = cos(loc.α) * (b * c)
-    ny = sin(loc.α) * cos(loc.β) * (a * c)
-    nz = sin(loc.α) * sin(loc.β) * (a * b)
+    nx = cos(loc.polar) * (b * c)
+    ny = sin(loc.polar) * cos(loc.azimuth) * (a * c)
+    nz = sin(loc.polar) * sin(loc.azimuth) * (a * b)
     n = sqrt(nx^2 + ny^2 + nz^2)
     (nx / n, ny / n, nz / n)
 end

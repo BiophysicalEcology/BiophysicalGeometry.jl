@@ -34,7 +34,7 @@ import BiophysicalGeometry: Cylinder
 # ── Parameters ────────────────────────────────────────────────────────────────
 mass    = 1.0u"kg"
 density = 1000.0u"kg/m^3"
-b_ratio = 4.0
+axis_ratio_b = 4.0
 
 insulation_depth = 10.0u"mm"
 fibre_length     = 14.0u"mm"   # actual fibre length (may exceed layer depth → fibres tilt)
@@ -45,7 +45,7 @@ fibrous_layer = FibrousLayer(insulation_depth, fibre_diameter, fibre_density)
 fat_layer     = FatLayer(0.1, 901.0u"kg/m^3")
 comp          = CompositeInsulation(fibrous_layer, fat_layer)
 
-cyl        = Cylinder(mass, density, b_ratio)
+cyl        = Cylinder(; mass, density, axis_ratio_b)
 ins_list   = [Naked(), fat_layer, fibrous_layer, comp]
 ins_labels = ["Naked", "FatLayer", "FibrousLayer", "FibrousLayer + FatLayer"]
 

@@ -1,13 +1,28 @@
 """
-    Plate <: AbstractShape
+    Plate(; mass, density, volume, length, width, height, axis_ratio_b, axis_ratio_c) <: AbstractShape
 
-A flat plate-shaped organism shape.
+A box-shaped organism shape centred on the origin: `length` along `x`, `width`
+along `y`, `height` along `z`. `axis_ratio_b` is length / width and
+`axis_ratio_c` length / height. Give any sufficient set of keywords — e.g.
+`mass`, `density` and both ratios, or all three dimensions and one of `mass` /
+`density` — and the rest is solved for. Dimensions are at skin level.
 """
 struct Plate{M,D,B,C} <: AbstractSlab
     mass::M
     density::D
     axis_ratio_b::B
     axis_ratio_c::C
+    Plate(::_Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
+        new{M,D,B,C}(mass, density, axis_ratio_b, axis_ratio_c)
+end
+
+# volume = length·width·height; axis_ratio_b = length/width, axis_ratio_c = length/height
+const _BOX_SPEC = _ShapeSpec((:length, :width, :height), (1, 1, 1), 0.0,
+                             (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
+
+function Plate(; kw...)
+    s = _resolve_shape("Plate", _BOX_SPEC, NamedTuple(kw))
+    Plate(_RESOLVED, s.mass, s.density, s.ratios...)
 end
 
 function _skin_level(shape::Plate, volume)
@@ -81,13 +96,13 @@ attachment_surfaces(::Plate) = (Top, Bottom, SideA, SideB, SideC, SideD)
 outer_dims(sh::Plate, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
 outer_dims(::Plate, ::Union{Naked,FatLayer}, body::AbstractBody) =
-    (L = body.geometry.length.length_skin,
-     W = body.geometry.length.width_skin,
-     H = body.geometry.length.height_skin)
+    (length = body.geometry.length.length_skin,
+     width = body.geometry.length.width_skin,
+     height = body.geometry.length.height_skin)
 outer_dims(::Plate, ::FibrousLayer, body::AbstractBody) =
-    (L = body.geometry.length.length_fibrous,
-     W = body.geometry.length.width_fibrous,
-     H = body.geometry.length.height_fibrous)
+    (length = body.geometry.length.length_fibrous,
+     width = body.geometry.length.width_fibrous,
+     height = body.geometry.length.height_fibrous)
 
 # Skin-level dimensions — used for flesh-anchored attachment positions.
 function _plate_skin(body::AbstractBody)
@@ -96,15 +111,15 @@ function _plate_skin(body::AbstractBody)
 end
 
 function surface_area(sh::Plate, body::AbstractBody, ::Top)
-    d = outer_dims(sh, body); d.L * d.W
+    d = outer_dims(sh, body); d.length * d.width
 end
 surface_area(sh::Plate, body::AbstractBody, ::Bottom) = surface_area(sh, body, Top())
 function surface_area(sh::Plate, body::AbstractBody, ::SideA)
-    d = outer_dims(sh, body); d.W * d.H
+    d = outer_dims(sh, body); d.width * d.height
 end
 surface_area(sh::Plate, body::AbstractBody, ::SideB) = surface_area(sh, body, SideA())
 function surface_area(sh::Plate, body::AbstractBody, ::SideC)
-    d = outer_dims(sh, body); d.L * d.H
+    d = outer_dims(sh, body); d.length * d.height
 end
 surface_area(sh::Plate, body::AbstractBody, ::SideD) = surface_area(sh, body, SideC())
 

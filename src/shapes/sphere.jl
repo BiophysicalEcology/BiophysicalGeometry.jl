@@ -1,11 +1,21 @@
 """
-    Sphere <: AbstractShape
+    Sphere(; mass, density, volume, radius) <: AbstractShape
 
-A spherical organism shape.
+A spherical organism shape centred on the origin. Give any two of `mass`,
+`density`, `volume` / `radius` and the rest is solved for. `radius` is at skin level.
 """
 struct Sphere{M,D} <: AbstractSpherical
     mass::M
     density::D
+    Sphere(::_Resolved, mass::M, density::D) where {M,D} = new{M,D}(mass, density)
+end
+
+# volume = (4π/3)·radius³
+const _SPHERE_SPEC = _ShapeSpec((:radius,), (3,), log(4π / 3), ())
+
+function Sphere(; kw...)
+    s = _resolve_shape("Sphere", _SPHERE_SPEC, NamedTuple(kw))
+    Sphere(_RESOLVED, s.mass, s.density)
 end
 
 function _skin_level(shape::Sphere, volume)
@@ -47,7 +57,7 @@ _fibrous_radius(::Sphere, length) = length.radius_fibrous
 attachment_surfaces(::Sphere) = (Radial,)
 
 # Outer (insulation-aware) radius, matching insulation_radius(body).
-outer_dims(::Sphere, body::AbstractBody) = (r = insulation_radius(body),)
+outer_dims(::Sphere, body::AbstractBody) = (radius = insulation_radius(body),)
 
 surface_area(::Sphere, body::AbstractBody, ::Radial) =
     4 * π * insulation_radius(body)^2
@@ -56,10 +66,10 @@ validate_range(::Sphere, ::AbstractBody, ::Radial) = nothing
 
 function surface_point(::Sphere, body::AbstractBody, loc::Radial)
     R = skin_radius(body)
-    (R * sin(loc.θ) * cos(loc.φ), R * sin(loc.θ) * sin(loc.φ), R * cos(loc.θ))
+    (R * sin(loc.polar) * cos(loc.azimuth), R * sin(loc.polar) * sin(loc.azimuth), R * cos(loc.polar))
 end
 surface_normal(::Sphere, ::AbstractBody, loc::Radial) =
-    (sin(loc.θ) * cos(loc.φ), sin(loc.θ) * sin(loc.φ), cos(loc.θ))
+    (sin(loc.polar) * cos(loc.azimuth), sin(loc.polar) * sin(loc.azimuth), cos(loc.polar))
 
 function surface_centroid(::Sphere, body::AbstractBody, ::Radial)
     R = skin_radius(body); (R, zero(R), zero(R))  # arbitrary point

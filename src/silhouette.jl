@@ -5,11 +5,10 @@
 # This handles part-on-part overlap correctly (unlike the per-part summed
 # fallback in composition.jl, which double-counts shadowed regions).
 
-# Pick two orthonormal basis vectors perpendicular to a unit vector `d`.
-# Aligns the screen-`v` axis with world `+z` whenever possible (so the
-# image axis labels stay meaningful and the basis varies continuously as
-# `d` sweeps the upper hemisphere). Falls back to a `+x`-aligned reference
-# when `d` is nearly vertical, to avoid a singularity at the zenith.
+# Pick two orthonormal basis vectors perpendicular to a unit vector `d`, with the
+# screen-`v` axis aligned to world `+z` where possible so image axes stay
+# meaningful. A `+x` reference is used instead when `d` is nearly vertical, to
+# avoid the singularity at the zenith.
 function _ortho_basis(d::NTuple{3,<:Real})
     up = abs(d[3]) > 0.999 ? (1.0, 0.0, 0.0) : (0.0, 0.0, 1.0)
     proj = up[1]*d[1] + up[2]*d[2] + up[3]*d[3]
@@ -22,10 +21,14 @@ function _ortho_basis(d::NTuple{3,<:Real})
 end
 
 function _normalize3(d::NTuple{3,<:Real})
+    all(isfinite, d) || throw(ArgumentError("direction must be finite, got $d"))
     n = sqrt(d[1]^2 + d[2]^2 + d[3]^2)
-    n > 0 || error("sun direction must be non-zero")
+    n > 0 || throw(ArgumentError("direction must be non-zero, got $d"))
     (d[1]/n, d[2]/n, d[3]/n)
 end
+
+_check_count(name, n) =
+    n > 0 || throw(ArgumentError("`$name` must be positive, got $n"))
 
 """
     Beam(direction)
@@ -41,30 +44,24 @@ struct Beam
 end
 Beam(x::Real, y::Real, z::Real) = Beam((x, y, z))
 
-# Rasterise one 2D triangle into a z-buffer, tagging each won pixel with `part`.
-# `depth` is the triangle's distance along the view direction (larger = nearer the
-# source); a pixel is claimed only when this triangle is in front of whatever holds
-# it. This is the per-part occlusion core: the frontmost part at each pixel wins, so
-# a shadowed part contributes nothing there. Signature otherwise mirrors
-# `_rasterize_triangle!`.
-function _rasterize_triangle_zbuf!(part_buf, depth_buf, part, depth, p1, p2, p3, x0, y0, dx, dy, n)
+# Edge-function rasteriser shared by the coverage and depth passes. Calls
+# `f(i, j, w1, w2, w3)` for every pixel whose centre lies inside the 2D triangle
+# (p1, p2, p3), with (w1, w2, w3) the pixel centre's barycentric weights. (x0, y0)
+# is the grid origin, (dx, dy) the cell size and `n` the side length.
+@inline function _each_pixel(f, p1, p2, p3, x0, y0, dx, dy, n)
     s = (p2[1] - p1[1]) * (p3[2] - p1[2]) - (p2[2] - p1[2]) * (p3[1] - p1[1])
     abs(s) < 1e-18 && return  # degenerate
     sgn = sign(s)
+    inv_area = 1 / abs(s)
 
-    xmin_f = min(p1[1], p2[1], p3[1])
-    xmax_f = max(p1[1], p2[1], p3[1])
-    ymin_f = min(p1[2], p2[2], p3[2])
-    ymax_f = max(p1[2], p2[2], p3[2])
-    imin = max(1, floor(Int, (xmin_f - x0) / dx) + 1)
-    imax = min(n, ceil(Int, (xmax_f - x0) / dx))
-    jmin = max(1, floor(Int, (ymin_f - y0) / dy) + 1)
-    jmax = min(n, ceil(Int, (ymax_f - y0) / dy))
+    imin = max(1, floor(Int, (min(p1[1], p2[1], p3[1]) - x0) / dx) + 1)
+    imax = min(n, ceil(Int, (max(p1[1], p2[1], p3[1]) - x0) / dx))
+    jmin = max(1, floor(Int, (min(p1[2], p2[2], p3[2]) - y0) / dy) + 1)
+    jmax = min(n, ceil(Int, (max(p1[2], p2[2], p3[2]) - y0) / dy))
 
     @inbounds for j in jmin:jmax
         y = y0 + (j - 0.5) * dy
         for i in imin:imax
-            depth <= depth_buf[i, j] && continue   # something nearer already holds this pixel
             x = x0 + (i - 0.5) * dx
             e1 = sgn * ((p2[1] - p1[1]) * (y - p1[2]) - (p2[2] - p1[2]) * (x - p1[1]))
             e1 < 0 && continue
@@ -72,42 +69,79 @@ function _rasterize_triangle_zbuf!(part_buf, depth_buf, part, depth, p1, p2, p3,
             e2 < 0 && continue
             e3 = sgn * ((p1[1] - p3[1]) * (y - p3[2]) - (p1[2] - p3[2]) * (x - p3[1]))
             e3 < 0 && continue
-            depth_buf[i, j] = depth
-            part_buf[i, j] = part
+            # e2, e3, e1 are twice the sub-triangle areas opposite p1, p2, p3.
+            f(i, j, e2 * inv_area, e3 * inv_area, e1 * inv_area)
         end
     end
 end
 
-# Rasterise one 2D triangle into `covered`. (x0, y0) is grid origin, (dx, dy)
-# the cell size, and `n` the side length. Pixels whose centre lies inside
-# the triangle are flagged true.
-function _rasterize_triangle!(covered, p1, p2, p3, x0, y0, dx, dy, n)
-    s = (p2[1] - p1[1]) * (p3[2] - p1[2]) - (p2[2] - p1[2]) * (p3[1] - p1[1])
-    abs(s) < 1e-18 && return  # degenerate
-    sgn = sign(s)
+# Flag the pixels a triangle covers.
+_rasterize_triangle!(covered, p1, p2, p3, x0, y0, dx, dy, n) =
+    _each_pixel((i, j, _, _, _) -> (@inbounds covered[i, j] = true), p1, p2, p3, x0, y0, dx, dy, n)
 
-    xmin_f = min(p1[1], p2[1], p3[1])
-    xmax_f = max(p1[1], p2[1], p3[1])
-    ymin_f = min(p1[2], p2[2], p3[2])
-    ymax_f = max(p1[2], p2[2], p3[2])
-    imin = max(1, floor(Int, (xmin_f - x0) / dx) + 1)
-    imax = min(n, ceil(Int, (xmax_f - x0) / dx))
-    jmin = max(1, floor(Int, (ymin_f - y0) / dy) + 1)
-    jmax = min(n, ceil(Int, (ymax_f - y0) / dy))
+# Rasterise a triangle into a depth buffer, keeping the nearest depth per pixel.
+# Depth is interpolated across the triangle from its vertex depths `z`
+# (distance along the view direction; larger = nearer the source), so long
+# triangles — a tube's lateral strips span the whole part — order correctly
+# against other parts at every pixel, not just at their centroids.
+function _rasterize_depth!(depth_buf, p1, p2, p3, z, x0, y0, dx, dy, n)
+    _each_pixel(p1, p2, p3, x0, y0, dx, dy, n) do i, j, w1, w2, w3
+        depth = w1 * z[1] + w2 * z[2] + w3 * z[3]
+        @inbounds depth > depth_buf[i, j] && (depth_buf[i, j] = depth)
+    end
+end
 
-    @inbounds for j in jmin:jmax
-        y = y0 + (j - 0.5) * dy
-        for i in imin:imax
-            covered[i, j] && continue
-            x = x0 + (i - 0.5) * dx
-            e1 = sgn * ((p2[1] - p1[1]) * (y - p1[2]) - (p2[2] - p1[2]) * (x - p1[1]))
-            e1 < 0 && continue
-            e2 = sgn * ((p3[1] - p2[1]) * (y - p2[2]) - (p3[2] - p2[2]) * (x - p2[1]))
-            e2 < 0 && continue
-            e3 = sgn * ((p1[1] - p3[1]) * (y - p3[2]) - (p1[2] - p3[2]) * (x - p3[1]))
-            e3 < 0 && continue
-            covered[i, j] = true
+# ── Shared projection ─────────────────────────────────────────────────────
+
+# Every part's posed outer-mesh triangles in world metres, collected once.
+function _part_triangles(body::CompositeBody)
+    map(propertynames(body.parts)) do name
+        part = getfield(body.parts, name)
+        pose = getfield(body.poses, name)
+        tris = NTuple{3,NTuple{3,Float64}}[]
+        for grid in _part_outer_meshes(part.shape, part, 1.0)  # sc=1 → metres
+            X, Y, Z = _transform_mesh(grid..., pose, 1.0)
+            append!(tris, _each_triangle(X, Y, Z))
         end
+        tris
+    end
+end
+
+# Project each part's triangles onto the plane ⟂ `d` and fit a
+# `resolution × resolution` pixel grid around them all (2% margin so triangles
+# don't clip the grid edge). Each projected triangle keeps its vertex depths
+# along `d`. Returns `nothing` if there are no triangles.
+function _project(part_tris, d, resolution)
+    u, v = _ortho_basis(d)
+    onto(p, a) = p[1]*a[1] + p[2]*a[2] + p[3]*a[3]
+    proj = map(part_tris) do tris
+        map(tris) do (p1, p2, p3)
+            ((onto(p1, u), onto(p1, v)), (onto(p2, u), onto(p2, v)), (onto(p3, u), onto(p3, v)),
+             (onto(p1, d), onto(p2, d), onto(p3, d)))
+        end
+    end
+    xmin, xmax, ymin, ymax = Inf, -Inf, Inf, -Inf
+    for tris in proj, (q1, q2, q3, _) in tris
+        xmin = min(xmin, q1[1], q2[1], q3[1]); xmax = max(xmax, q1[1], q2[1], q3[1])
+        ymin = min(ymin, q1[2], q2[2], q3[2]); ymax = max(ymax, q1[2], q2[2], q3[2])
+    end
+    isfinite(xmin) || return nothing
+    pad = 0.02 * max(xmax - xmin, ymax - ymin)
+    x0, x1 = xmin - pad, xmax + pad
+    y0, y1 = ymin - pad, ymax + pad
+    (; proj, x0, x1, y0, y1, dx = (x1 - x0) / resolution, dy = (y1 - y0) / resolution)
+end
+
+# One depth buffer per part (-Inf where the part doesn't cover a pixel). Keeping
+# them separate lets each pixel be attributed to the part directly in front of
+# another, not just to the frontmost overall.
+function _part_depths(g, resolution)
+    map(g.proj) do tris
+        buf = fill(-Inf, resolution, resolution)
+        for (q1, q2, q3, z) in tris
+            _rasterize_depth!(buf, q1, q2, q3, z, g.x0, g.y0, g.dx, g.dy, resolution)
+        end
+        buf
     end
 end
 
@@ -144,113 +178,50 @@ Increase `resolution` for more accuracy.
 function silhouette_rasterized(body::CompositeBody, sun_direction::NTuple{3,<:Real};
                                 resolution::Integer = 256,
                                 return_image::Bool = false)
+    _check_count("resolution", resolution)
     d = _normalize3(sun_direction)
-    u, v = _ortho_basis(d)
-
-    # Collect 2D triangles + bbox first, then rasterise.
-    tris = NTuple{3, NTuple{2, Float64}}[]
-    xmin, xmax, ymin, ymax = Inf, -Inf, Inf, -Inf
-    for name in propertynames(body.parts)
-        part = getfield(body.parts, name)
-        pose = getfield(body.poses, name)
-        for grid in _part_outer_meshes(part.shape, part, 1.0)  # sc=1 → metres
-            X, Y, Z = _transform_mesh(grid..., pose, 1.0)
-            for tri in _each_triangle(X, Y, Z)
-                p1, p2, p3 = tri
-                q1 = (p1[1]*u[1] + p1[2]*u[2] + p1[3]*u[3],
-                      p1[1]*v[1] + p1[2]*v[2] + p1[3]*v[3])
-                q2 = (p2[1]*u[1] + p2[2]*u[2] + p2[3]*u[3],
-                      p2[1]*v[1] + p2[2]*v[2] + p2[3]*v[3])
-                q3 = (p3[1]*u[1] + p3[2]*u[2] + p3[3]*u[3],
-                      p3[1]*v[1] + p3[2]*v[2] + p3[3]*v[3])
-                push!(tris, (q1, q2, q3))
-                xmin = min(xmin, q1[1], q2[1], q3[1])
-                xmax = max(xmax, q1[1], q2[1], q3[1])
-                ymin = min(ymin, q1[2], q2[2], q3[2])
-                ymax = max(ymax, q1[2], q2[2], q3[2])
-            end
-        end
-    end
-    isempty(tris) && return return_image ?
+    g = _project(_part_triangles(body), d, resolution)
+    g === nothing && return return_image ?
         SilhouetteResult(falses(resolution, resolution), (0.0, 0.0), (0.0, 0.0), 0.0u"m^2") :
         0.0u"m^2"
 
-    # 2% margin so triangles don't clip pixel-grid boundaries.
-    pad = 0.02 * max(xmax - xmin, ymax - ymin)
-    x0 = xmin - pad;  x1 = xmax + pad
-    y0 = ymin - pad;  y1 = ymax + pad
-    dx = (x1 - x0) / resolution
-    dy = (y1 - y0) / resolution
-
     covered = falses(resolution, resolution)
-    for (q1, q2, q3) in tris
-        _rasterize_triangle!(covered, q1, q2, q3, x0, y0, dx, dy, resolution)
+    for tris in g.proj, (q1, q2, q3, _) in tris
+        _rasterize_triangle!(covered, q1, q2, q3, g.x0, g.y0, g.dx, g.dy, resolution)
     end
-    area = count(covered) * dx * dy * u"m^2"
+    area = count(covered) * g.dx * g.dy * u"m^2"
+    (x0, x1, y0, y1) = (g.x0, g.x1, g.y0, g.y1)
     return return_image ? SilhouetteResult(covered, (x0, x1), (y0, y1), area) : area
 end
 
 """
-    silhouette(body::CompositeBody, ::Beam; resolution=256)
+    silhouette(body::CompositeBody, beam::Beam; resolution=256)
 
-Per-part lit (unshadowed) silhouette area projected along `view_direction` — a
-`NamedTuple` keyed like `body.parts`, each a `Quantity` (m²). Every part's posed
-mesh is projected and rasterised into a shared depth buffer, so at each pixel only
-the frontmost part (nearest along `view_direction`) is counted. A part occluded by
-another — a ground-facing half under a sky-facing half toward an overhead sun —
-therefore reports (near) zero, and the parts' areas sum to the composite silhouette
-(no double counting), unlike the per-part analytic `silhouette`.
-
-Run it toward the sun for direct-beam exposure, or toward the sky / ground
-hemispheres for the diffuse view fractions each part sees.
+Per-part lit (unshadowed) silhouette area facing `beam` — a `NamedTuple` keyed
+like `body.parts`, each a `Quantity` (m²). Every part's posed mesh is projected
+along the beam direction and depth-buffered, so at each pixel only the frontmost
+part (nearest the source) is counted. A part occluded by another — a
+ground-facing half under a sky-facing half toward an overhead sun — therefore
+reports (near) zero, and the parts' areas sum to the composite silhouette (no
+double counting), unlike the per-part analytic `silhouette`.
 """
 function silhouette(body::CompositeBody, src::Beam; resolution::Integer = 256)
-    d = src.direction
-    u, v = _ortho_basis(d)
+    _check_count("resolution", resolution)
     names = propertynames(body.parts)
+    g = _project(_part_triangles(body), src.direction, resolution)
+    g === nothing && return NamedTuple{names}(ntuple(_ -> 0.0u"m^2", length(names)))
 
-    # (part index, projected 2D triangle, depth along d). Depth uses the triangle
-    # centroid: larger = nearer the source, so it wins the pixel.
-    tris = Tuple{Int,NTuple{3,NTuple{2,Float64}},Float64}[]
-    xmin, xmax, ymin, ymax = Inf, -Inf, Inf, -Inf
-    for (pidx, name) in enumerate(names)
-        part = getfield(body.parts, name)
-        pose = getfield(body.poses, name)
-        for grid in _part_outer_meshes(part.shape, part, 1.0)
-            X, Y, Z = _transform_mesh(grid..., pose, 1.0)
-            for tri in _each_triangle(X, Y, Z)
-                p1, p2, p3 = tri
-                q1 = (p1[1]*u[1] + p1[2]*u[2] + p1[3]*u[3], p1[1]*v[1] + p1[2]*v[2] + p1[3]*v[3])
-                q2 = (p2[1]*u[1] + p2[2]*u[2] + p2[3]*u[3], p2[1]*v[1] + p2[2]*v[2] + p2[3]*v[3])
-                q3 = (p3[1]*u[1] + p3[2]*u[2] + p3[3]*u[3], p3[1]*v[1] + p3[2]*v[2] + p3[3]*v[3])
-                depth = ((p1[1]+p2[1]+p3[1])*d[1] + (p1[2]+p2[2]+p3[2])*d[2] + (p1[3]+p2[3]+p3[3])*d[3]) / 3
-                push!(tris, (pidx, (q1, q2, q3), depth))
-                xmin = min(xmin, q1[1], q2[1], q3[1]); xmax = max(xmax, q1[1], q2[1], q3[1])
-                ymin = min(ymin, q1[2], q2[2], q3[2]); ymax = max(ymax, q1[2], q2[2], q3[2])
-            end
+    depths = _part_depths(g, resolution)
+    counts = zeros(Int, length(names))
+    @inbounds for j in 1:resolution, i in 1:resolution
+        front, best = 0, -Inf
+        for p in eachindex(depths)
+            depths[p][i, j] > best && ((front, best) = (p, depths[p][i, j]))
         end
+        front > 0 && (counts[front] += 1)
     end
-    if isempty(tris)
-        return NamedTuple{names}(ntuple(_ -> 0.0u"m^2", length(names)))
-    end
-
-    pad = 0.02 * max(xmax - xmin, ymax - ymin)
-    x0 = xmin - pad; x1 = xmax + pad
-    y0 = ymin - pad; y1 = ymax + pad
-    dx = (x1 - x0) / resolution
-    dy = (y1 - y0) / resolution
-
-    part_buf  = zeros(Int, resolution, resolution)
-    depth_buf = fill(-Inf, resolution, resolution)
-    for (pidx, (q1, q2, q3), depth) in tris
-        _rasterize_triangle_zbuf!(part_buf, depth_buf, pidx, depth, q1, q2, q3, x0, y0, dx, dy, resolution)
-    end
-
-    cell = dx * dy
-    areas = ntuple(length(names)) do k
-        count(==(k), part_buf) * cell * u"m^2"
-    end
-    return NamedTuple{names}(areas)
+    cell = g.dx * g.dy * u"m^2"
+    return NamedTuple{names}(ntuple(k -> counts[k] * cell, length(names)))
 end
 
 # Deterministic near-uniform directions on the unit sphere (Fibonacci spiral).
@@ -278,10 +249,14 @@ flat-ground hemisphere, `Sky(0.7)` a mountaintop (sky bulging past horizontal),
 vertical — a slope whose sky leans downhill. `Ground` is its complement; hand either
 to [`silhouette_factors`](@ref) to split every direction into sky and ground.
 """
+_check_size(name, size) = 0 <= size <= 1 ||
+    throw(ArgumentError("$name size must be a fraction of the sphere in [0, 1], got $size"))
+
 struct Sky{S,A}
     size::S
     axis::A
-    Sky(size::S, tilt) where {S} = (a = _normalize3(tilt); new{S,typeof(a)}(size, a))
+    Sky(size::S, tilt) where {S} =
+        (_check_size("Sky", size); a = _normalize3(tilt); new{S,typeof(a)}(size, a))
 end
 Sky(size) = Sky(size, (0.0, 0.0, 1.0))
 
@@ -297,7 +272,8 @@ sealed burrow. `tilt` points the cap off vertical for a slope.
 struct Ground{S,A}
     size::S
     axis::A
-    Ground(size::S, tilt) where {S} = (a = _normalize3(tilt); new{S,typeof(a)}(size, a))
+    Ground(size::S, tilt) where {S} =
+        (_check_size("Ground", size); a = _normalize3(tilt); new{S,typeof(a)}(size, a))
 end
 Ground(size) = Ground(size, (0.0, 0.0, -1.0))
 
@@ -314,6 +290,8 @@ profile, ground every direction below.
 """
 struct Horizon{A}
     angles::A
+    Horizon(angles::A) where {A} = isempty(angles) ?
+        throw(ArgumentError("Horizon needs at least one elevation angle")) : new{A}(angles)
 end
 
 # Sky share of a unit direction `d` (0 or 1) under a region; the ground share is its
@@ -340,8 +318,8 @@ by the *other* parts.
 
 Integrates the depth-buffered per-part silhouette over a Fibonacci-sphere set of
 directions: toward each direction a part's *unoccluded* projected area counts as sky
-or ground per `region`, while the projected area it loses to a frontmost neighbour `k`
-accrues to that neighbour. So the blocked solid angle is never lost — it becomes the
+or ground per `region`, while the projected area it loses accrues to the neighbour
+directly in front of it there. So the blocked solid angle is never lost — it becomes the
 part-to-part term — and the shares exhaust the sphere. General for any parts at any
 pose (no shape/orientation assumption); internal mated faces score zero because the
 neighbour buries them in the depth buffer.
@@ -350,78 +328,50 @@ neighbour buries them in the depth buffer.
 [`Ground`](@ref), or [`Horizon`](@ref) — an idealised cap from either side, or the
 measured horizon profile. The two are complementary, so a single object suffices.
 
+The fractions are true view factors only for convex parts: a part is treated as one
+depth layer per direction, so a concave part's view of itself is not resolved.
+
 `ndirections` sets the angular quadrature, `resolution` the raster grid; both trade
 accuracy for cost. Runs once per pose/solar configuration (an `init!`-time quantity).
 """
 function silhouette_factors(body::CompositeBody, region;
                             ndirections::Integer = 256, resolution::Integer = 96)
+    _check_count("ndirections", ndirections)
+    _check_count("resolution", resolution)
     names = propertynames(body.parts)
     npart = length(names)
-
-    # Each part's posed 3D triangles, collected once (only the projection changes per direction).
-    part_tris = [NTuple{3,NTuple{3,Float64}}[] for _ in 1:npart]
-    for (pidx, name) in enumerate(names)
-        part = getfield(body.parts, name)
-        pose = getfield(body.poses, name)
-        for grid in _part_outer_meshes(part.shape, part, 1.0)
-            X, Y, Z = _transform_mesh(grid..., pose, 1.0)
-            for tri in _each_triangle(X, Y, Z)
-                push!(part_tris[pidx], tri)
-            end
-        end
-    end
+    part_tris = _part_triangles(body) # only the projection changes per direction
 
     sky   = zeros(npart)
     grnd  = zeros(npart)
     neigh = zeros(npart, npart)
 
     for d in _fibonacci_sphere(ndirections)
-        u, v = _ortho_basis(d)
-        # Project every part's triangles onto the plane ⟂ d, tracking a shared bbox.
-        proj = [Tuple{NTuple{2,Float64},NTuple{2,Float64},NTuple{2,Float64},Float64}[] for _ in 1:npart]
-        xmin, xmax, ymin, ymax = Inf, -Inf, Inf, -Inf
-        for pidx in 1:npart, (p1, p2, p3) in part_tris[pidx]
-            q1 = (p1[1]*u[1]+p1[2]*u[2]+p1[3]*u[3], p1[1]*v[1]+p1[2]*v[2]+p1[3]*v[3])
-            q2 = (p2[1]*u[1]+p2[2]*u[2]+p2[3]*u[3], p2[1]*v[1]+p2[2]*v[2]+p2[3]*v[3])
-            q3 = (p3[1]*u[1]+p3[2]*u[2]+p3[3]*u[3], p3[1]*v[1]+p3[2]*v[2]+p3[3]*v[3])
-            depth = ((p1[1]+p2[1]+p3[1])*d[1] + (p1[2]+p2[2]+p3[2])*d[2] + (p1[3]+p2[3]+p3[3])*d[3]) / 3
-            push!(proj[pidx], (q1, q2, q3, depth))
-            xmin = min(xmin, q1[1], q2[1], q3[1]); xmax = max(xmax, q1[1], q2[1], q3[1])
-            ymin = min(ymin, q1[2], q2[2], q3[2]); ymax = max(ymax, q1[2], q2[2], q3[2])
-        end
-        isfinite(xmin) || continue
+        g = _project(part_tris, d, resolution)
+        g === nothing && continue
+        depths = _part_depths(g, resolution)
+        # Pixel area; the shared dω cancels in the per-part normalisation, so it is omitted.
+        cell = g.dx * g.dy
+        sky_fraction = _sky_share(region, d) # 0–1; split each exposed pixel sky/ground
 
-        pad = 0.02 * max(xmax - xmin, ymax - ymin)
-        x0 = xmin - pad; y0 = ymin - pad
-        dx = (xmax + pad - x0) / resolution
-        dy = (ymax + pad - y0) / resolution
-        cell = dx * dy
-
-        # Frontmost part per pixel (depth buffer over all triangles).
-        part_buf  = zeros(Int, resolution, resolution)
-        depth_buf = fill(-Inf, resolution, resolution)
-        for pidx in 1:npart, (q1, q2, q3, depth) in proj[pidx]
-            _rasterize_triangle_zbuf!(part_buf, depth_buf, pidx, depth, q1, q2, q3, x0, y0, dx, dy, resolution)
-        end
-
-        # For each part: pixels it wins → sky/ground exposure; pixels it covers but a
-        # neighbour won → that neighbour's part-to-part share. `cell` weights each pixel
-        # by area; the shared `dω` cancels in the per-part normalisation, so it is omitted.
-        sky_fraction = _sky_share(region, d)   # 0–1; split each won pixel sky/ground
-        cov = falses(resolution, resolution)
-        for pidx in 1:npart
-            fill!(cov, false)
-            for (q1, q2, q3, _) in proj[pidx]
-                _rasterize_triangle!(cov, q1, q2, q3, x0, y0, dx, dy, resolution)
-            end
-            @inbounds for j in 1:resolution, i in 1:resolution
-                cov[i, j] || continue
-                w = part_buf[i, j]
-                if w == pidx
-                    sky[pidx]  += cell * sky_fraction
-                    grnd[pidx] += cell * (1 - sky_fraction)
-                elseif w != 0
-                    neigh[pidx, w] += cell
+        # At each pixel every covering part looks toward the source: the frontmost
+        # sees sky/ground, and every other part sees the part *directly* in front of
+        # it — the covering part with the smallest depth beyond its own. (For
+        # source → A → B → C, C sees B, not A.)
+        @inbounds for j in 1:resolution, i in 1:resolution
+            for p in 1:npart
+                dp = depths[p][i, j]
+                dp == -Inf && continue
+                blocker, nearest = 0, Inf
+                for k in 1:npart
+                    dk = depths[k][i, j]
+                    k != p && dp < dk < nearest && ((blocker, nearest) = (k, dk))
+                end
+                if blocker == 0
+                    sky[p]  += cell * sky_fraction
+                    grnd[p] += cell * (1 - sky_fraction)
+                else
+                    neigh[p, blocker] += cell
                 end
             end
         end

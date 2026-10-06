@@ -101,10 +101,10 @@ end
 # Ellipsoid silhouette area (shadow on plane perpendicular to view direction n̂):
 #   A = π × abc × √( (n_x/a)² + (n_y/b)² + (n_z/c)² )
 # Body's long axis (a) along x; θ measured from the long axis (as for the
-# cylinder, θ = 0 is end-on) → n̂ = (cos θ, sin θ, 0).
+# cylinder, θ = 0 is end-on) → n̂ = (cos θ, 0, sin θ).
 sil_ell_normal(a, b)       = π * a * b                        # n̂ = (0,1,0) → πac = πab
 sil_ell_parallel(b, c)     = π * b * c                        # n̂ = (1,0,0) → πbc
-sil_ell_zenith(a, b, c, θ) = π * a * b * c * sqrt((cos(θ)/a)^2 + (sin(θ)/b)^2)
+sil_ell_zenith(a, b, c, θ) = π * a * b * c * sqrt((cos(θ)/a)^2 + (sin(θ)/c)^2)
 
 # === Comparison harness ===
 

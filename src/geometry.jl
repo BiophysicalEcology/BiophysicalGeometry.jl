@@ -142,7 +142,11 @@ end
 CompositeInsulation(i::AbstractInsulationLayer) = CompositeInsulation((i,))
 CompositeInsulation(is::AbstractInsulationLayer...) = CompositeInsulation((is...,))
 
-geometry(shape, ins::CompositeInsulation) = geometry(shape, ins.layers...)
+# Shapes define geometry for (fibrous, fat) in that order; accept the layers of
+# a composite in either order by putting the porous (outer) layers first.
+geometry(shape, ins::CompositeInsulation) =
+    geometry(shape, filter(l -> l isa AbstractPorousLayer, ins.layers)...,
+             filter(l -> !(l isa AbstractPorousLayer), ins.layers)...)
 
 abstract type AbstractGeometryPars end
 
@@ -419,9 +423,12 @@ end
 """
     body_volume(shape::AbstractShape)
 
-Return the body volume `mass / density` for `shape`.
+Return the body volume `mass / density` for `shape`, in m³ when unitful — so
+mixing units (grams with kg/m³) doesn't leave odd units in every length.
 """
-body_volume(shape::AbstractShape) = shape.mass / shape.density
+body_volume(shape::AbstractShape) = _in_m³(shape.mass / shape.density)
+_in_m³(v::Unitful.Volume) = uconvert(u"m^3", v)
+_in_m³(v) = v
 
 """
     fat_volume(shape::AbstractShape, fat_layer::FatLayer)

@@ -1,5 +1,6 @@
 module BiophysicalGeometry
 
+using LinearAlgebra: svd
 using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
@@ -42,6 +43,7 @@ plot_insulation_properties(args...; kwargs...) = error("plot_insulation_properti
 plot_body_silhouette(args...; kwargs...) = error("plot_body_silhouette $REQUIRES_MAKIE")
 
 include("geometry.jl")
+include("construction.jl")
 include("composition.jl")
 include("shapes/plate.jl")
 include("shapes/cylinder.jl")
