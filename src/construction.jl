@@ -1,127 +1,91 @@
-# Keyword construction for shapes.
-#
-# Every shape is built from keywords — `mass`, `density`, `volume`, its own
-# dimensions and its own axis ratios — and whatever isn't given is solved for.
-# Each shape struct stores only mass, density and its dimensionless ratios; the
-# solve here gets any sufficient set of keywords down to those.
-#
-# All the relations are products of powers:
-#
-#     mass   = density · volume
-#     volume = k · ∏ dimensionᵢ^pᵢ          (e.g. π·radius²·length)
-#     ratio  = dimensionᵢ / (s · dimensionⱼ)  (e.g. length / (2·radius))
-#
-# so in log space they are linear, and one small linear solve covers every
-# combination of inputs: given values fix some unknowns, the relations tie the
-# rest together, and the rank tells us whether the inputs are enough. Each shape
-# only declares its dimensions, its volume monomial and its ratios.
+# Shapes are built from any sufficient set of keywords. Mass, volume, dimensions
+# and ratios are all products of powers of each other, so in log space they form
+# a small linear system, solved here by least squares.
 
 """
-    _ShapeSpec(dimensions, powers, log_constant, ratios)
+    ShapeSpec(dimensions, powers, log_constant, ratios)
 
-How a shape's dimensions relate to its volume and ratios. `dimensions` are the
-keyword names, `volume = exp(log_constant) · ∏ dimensionᵢ^powersᵢ`, and each
-entry of `ratios` is `name => (i, j, scale)` meaning `name = dimᵢ / (scale · dimⱼ)`.
+`volume = exp(log_constant) · ∏ dimensionᵢ^powersᵢ`, and each entry of `ratios`
+is `name => (i, j, scale)` meaning `name = dimᵢ / (scale · dimⱼ)`.
 """
-struct _ShapeSpec{D,P,R}
-    dimensions::D
+struct ShapeSpec{Dims,Ratios,P,R}
     powers::P
     log_constant::Float64
     ratios::R
 end
+ShapeSpec(dims, powers, log_constant, ratios) =
+    ShapeSpec{dims,map(first, ratios),typeof(powers),typeof(map(last, ratios))}(
+        powers, log_constant, map(last, ratios))
 
-# SI units the solve works in. Inputs are converted to these; plain numbers are
-# taken to be in them already.
-const _MASS_UNIT = u"kg"
-const _LENGTH_UNIT = u"m"
-const _VOLUME_UNIT = u"m^3"
-const _DENSITY_UNIT = u"kg/m^3"
+_si(x, unit) = Float64(ustrip(unit, x))
 
-_to_si(x::Unitful.AbstractQuantity, unit) = Float64(ustrip(unit, x))
-_to_si(x::Real, _) = Float64(x)
+# Unknowns: the log of each dimension, then of the volume, mass and density.
+_nunknowns(::ShapeSpec{D}) where {D} = Val(length(D) + 3)
+_e(::Val{N}, i) where {N} = SVector(ntuple(j -> Float64(j == i), Val(N)))
 
-function _check_positive(name, x)
-    x isa Union{Real,Unitful.AbstractQuantity} ||
-        throw(ArgumentError("`$name` must be a number, got $(repr(x))"))
-    v = ustrip(x)
-    isfinite(v) && v > 0 || throw(ArgumentError("`$name` must be positive and finite, got $x"))
-    return x
+_unit(::ShapeSpec, ::Val{:mass}) = u"kg"
+_unit(::ShapeSpec, ::Val{:density}) = u"kg/m^3"
+_unit(::ShapeSpec, ::Val{:volume}) = u"m^3"
+_unit(::ShapeSpec{D,R}, ::Val{k}) where {D,R,k} = k in D ? u"m" : k in R ? NoUnits : nothing
+
+function _check_keyword(name, spec::ShapeSpec{D,R}, key::Val{k}, x) where {D,R,k}
+    unit = _unit(spec, key)
+    unit === nothing && throw(ArgumentError("$name has no keyword `$k`; use any sufficient set of: " *
+                                            join((:mass, :density, :volume, D..., R...), ", ")))
+    dimension(x) == dimension(unit) || throw(ArgumentError(
+        "`$k` must be $(unit == NoUnits ? "a plain number" : "a quantity like $unit"), got $(repr(x))"))
+    isfinite(ustrip(x)) && ustrip(x) > 0 ||
+        throw(ArgumentError("`$k` must be positive and finite, got $(repr(x))"))
+    nothing
 end
 
-"""
-    _resolve_shape(name, spec, kw) -> (; mass, density, ratios)
-
-Solve for a shape's mass, density and axis ratios (in `spec.ratios` order) from
-the keywords `kw` (a NamedTuple of the inputs actually given). Inputs that are
-given come back unchanged; solved ones are in SI units if any input was
-unitful, plain numbers otherwise.
-"""
-function _resolve_shape(name::AbstractString, spec::_ShapeSpec, kw::NamedTuple)
-    dims = spec.dimensions
-    ratio_names = map(first, spec.ratios)
-    known = (:mass, :density, :volume, dims..., ratio_names...)
-    for k in keys(kw)
-        k in known || throw(ArgumentError(
-            "$name has no keyword `$k`; use any sufficient set of: $(join(known, ", "))"))
-        _check_positive(k, kw[k])
-    end
-
-    # Fast path: the stored fields themselves. No solve, so the given values
-    # (and their types — units, AD duals) pass straight through.
-    if haskey(kw, :mass) && haskey(kw, :density) && all(r -> haskey(kw, r), ratio_names) &&
-            !haskey(kw, :volume) && !any(d -> haskey(kw, d), dims)
-        return (; mass = kw.mass, density = kw.density, ratios = map(r -> kw[r], ratio_names))
-    end
-
-    # Unknowns: log of each dimension, then log volume, log mass, log density.
-    n = length(dims)
-    iV, iM, iρ = n + 1, n + 2, n + 3
-    rows = Vector{Float64}[]
-    rhs = Float64[]
-    row() = zeros(n + 3)
-    # volume = k · ∏ dimᵢ^pᵢ
-    r = row(); r[iV] = 1; for i in 1:n; r[i] = -spec.powers[i]; end
-    push!(rows, r); push!(rhs, spec.log_constant)
-    # mass = density · volume
-    r = row(); r[iM] = 1; r[iρ] = -1; r[iV] = -1
-    push!(rows, r); push!(rhs, 0.0)
-    for (i, d) in enumerate(dims)
-        haskey(kw, d) || continue
-        r = row(); r[i] = 1; push!(rows, r); push!(rhs, log(_to_si(kw[d], _LENGTH_UNIT)))
-    end
-    for (rname, (i, j, s)) in spec.ratios
-        haskey(kw, rname) || continue
-        r = row(); r[i] = 1; r[j] = -1; push!(rows, r); push!(rhs, log(Float64(kw[rname]) * s))
-    end
-    for (k, i, unit) in ((:volume, iV, _VOLUME_UNIT), (:mass, iM, _MASS_UNIT), (:density, iρ, _DENSITY_UNIT))
-        haskey(kw, k) || continue
-        r = row(); r[i] = 1; push!(rows, r); push!(rhs, log(_to_si(kw[k], unit)))
-    end
-
-    A = reduce(vcat, permutedims.(rows))
-    F = svd(A)
-    tol = maximum(F.S) * 1e-10
-    rank = count(>(tol), F.S)
-    given = isempty(kw) ? "nothing" : join(keys(kw), ", ")
-    rank < n + 3 && throw(ArgumentError(
-        "$name is under-determined: given $given; give $(n + 3 - rank) more of: " *
-        join(filter(k -> !haskey(kw, k), known), ", ")))
-    x = A \ rhs
-    resid = A * x - rhs
-    maximum(abs, resid) < 1e-8 || throw(ArgumentError(
-        "$name inputs are inconsistent: $given don't fit together"))
-
-    unitful = any(v -> v isa Unitful.AbstractQuantity, values(kw))
-    wrap(v, unit) = unitful ? v * unit : v
-    mass = haskey(kw, :mass) ? kw.mass : wrap(exp(x[iM]), _MASS_UNIT)
-    density = haskey(kw, :density) ? kw.density : wrap(exp(x[iρ]), _DENSITY_UNIT)
-    ratios = map(spec.ratios) do (rname, (i, j, s))
-        haskey(kw, rname) ? kw[rname] : exp(x[i] - x[j]) / s
-    end
-    return (; mass, density, ratios)
+_row(spec::ShapeSpec{D}, ::Val{:volume}, x) where {D} = (_e(_nunknowns(spec), length(D) + 1), log(_si(x, u"m^3")))
+_row(spec::ShapeSpec{D}, ::Val{:mass}, x) where {D} = (_e(_nunknowns(spec), length(D) + 2), log(_si(x, u"kg")))
+_row(spec::ShapeSpec{D}, ::Val{:density}, x) where {D} = (_e(_nunknowns(spec), length(D) + 3), log(_si(x, u"kg/m^3")))
+function _row(spec::ShapeSpec{D,R}, ::Val{k}, x) where {D,R,k}
+    n = _nunknowns(spec)
+    i = findfirst(==(k), D)
+    i === nothing || return (_e(n, i), log(_si(x, u"m")))
+    (a, b, scale) = spec.ratios[findfirst(==(k), R)]
+    (_e(n, a) - _e(n, b), log(x * scale))
 end
 
-# Marker for the shape structs' only inner constructor: shapes are built by
-# keyword, never positionally (positional arguments carry no meaning).
-struct _Resolved end
-const _RESOLVED = _Resolved()
+_pick(kw::NamedTuple{K}, ::Val{k}, solved) where {K,k} = k in K ? kw[k] : solved
+
+"""
+    _resolve_shape(name, spec, kw) -> NamedTuple{(:mass, :density, ratios...)}
+
+Solve for a shape's mass, density and axis ratios from the keywords `kw`. Given
+values come back unchanged; solved ones are in kg and kg/m³.
+"""
+function _resolve_shape(name, spec::ShapeSpec{D,R}, kw::NamedTuple{K}) where {D,R,K}
+    keys = map(Val, K)
+    map((key, x) -> _check_keyword(name, spec, key, x), keys, values(kw))
+
+    n = _nunknowns(spec)
+    iV, iM, iρ = length(D) + 1, length(D) + 2, length(D) + 3
+    volume = _e(n, iV) - sum(ntuple(i -> spec.powers[i] * _e(n, i), Val(length(D))); init = zero(_e(n, 1)))
+    rows = ((volume, spec.log_constant), (_e(n, iM) - _e(n, iρ) - _e(n, iV), 0.0),
+            map((key, x) -> _row(spec, key, x), keys, values(kw))...)
+    A = transpose(hcat(map(first, rows)...))
+    b = SVector(map(last, rows))
+
+    # The rows are integer, so the normal matrix is singular exactly when something is free.
+    M = transpose(A) * A
+    abs(det(M)) > 0.5 || throw(ArgumentError(
+        "$name is under-determined: given $(join(K, ", ")); give more of: " *
+        join(filter(k -> !(k in K), (:mass, :density, :volume, D..., R...)), ", ")))
+    x = M \ (transpose(A) * b)
+    maximum(abs, A * x - b) < 1e-8 || throw(ArgumentError(
+        "$name inputs are inconsistent: $(join(K, ", ")) don't fit together"))
+
+    ratios = map(map(Val, R), spec.ratios) do key, (i, j, scale)
+        _pick(kw, key, exp(x[i] - x[j]) / scale)
+    end
+    NamedTuple{(:mass, :density, R...)}((_pick(kw, Val(:mass), exp(x[iM]) * u"kg"),
+                                         _pick(kw, Val(:density), exp(x[iρ]) * u"kg/m^3"), ratios...))
+end
+
+# Marker for the shapes' only inner constructor, so they can't be built positionally.
+struct Resolved end
+const RESOLVED = Resolved()

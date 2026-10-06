@@ -309,22 +309,21 @@ _child(::Join{P, C}) where {P, C} = C
 # ── Pose ──────────────────────────────────────────────────────────────────
 
 """
-    Pose{T,M}
+    Pose(translation, rotation)
 
 World-frame pose of a part: a translation (3-tuple of length quantities)
-and a 3×3 rotation matrix (dimensionless). Rotation matrices are never
-mutated after construction, so the identity matrix is shared.
+and a 3×3 rotation matrix (dimensionless), whose columns are where the
+part's x, y and z axes point.
 """
-struct Pose{T,M<:AbstractMatrix}
+struct Pose{T}
     translation::NTuple{3,T}
-    rotation::M
+    rotation::SMatrix{3,3,Float64,9}
 end
 
-# TODO: this should be a static array
-const _IDENTITY_ROTATION = [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
+const IDENTITY_ROTATION = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, 1)
 
 identity_pose(::Type{T}) where {T} =
-    Pose((zero(T), zero(T), zero(T)), _IDENTITY_ROTATION)
+    Pose((zero(T), zero(T), zero(T)), IDENTITY_ROTATION)
 
 """
     apply_pose(pose, point) -> NTuple{3,Length}
@@ -354,16 +353,16 @@ end
 function rotation_axis_angle(axis::NTuple{3,<:Real}, θ::Real)
     c = cos(θ); s = sin(θ); t = 1 - c
     x, y, z = axis
-    [t*x*x + c     t*x*y - s*z   t*x*z + s*y;
-     t*x*y + s*z   t*y*y + c     t*y*z - s*x;
-     t*x*z - s*y   t*y*z + s*x   t*z*z + c]
+    @SMatrix [t*x*x + c     t*x*y - s*z   t*x*z + s*y;
+              t*x*y + s*z   t*y*y + c     t*y*z - s*x;
+              t*x*z - s*y   t*y*z + s*x   t*z*z + c]
 end
 
 # Rotation matrix that takes unit vector `a` to unit vector `b`.
 function rotation_align(a::NTuple{3,<:Real}, b::NTuple{3,<:Real})
     d = a[1]*b[1] + a[2]*b[2] + a[3]*b[3]
     if d > 1.0 - 1e-12
-        return _IDENTITY_ROTATION
+        return IDENTITY_ROTATION
     elseif d < -1.0 + 1e-12
         # 180° rotation; pick any axis ⟂ a
         ax = abs(a[1]) < 0.9 ? (1.0, 0.0, 0.0) : (0.0, 1.0, 0.0)

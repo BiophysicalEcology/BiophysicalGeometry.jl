@@ -89,7 +89,7 @@ end
 # The cylindrical cut is the axial section: a trapezoid with parallel sides
 # 2R and 2tR (a rectangle for a cylinder). The domed cut contains the long
 # axis: an ellipse with semi-axes a and b.
-_cut_face_area(h::Half{<:AbstractCylindrical}, l) = (1 + _top_ratio(h)) * l.radius_skin * l.length_skin
+_cut_face_area(h::Half{<:AbstractCylindrical}, l) = (1 + top_ratio(h)) * l.radius_skin * l.length_skin
 _cut_face_area(::Half{<:AbstractEllipsoidal}, l) = π * (l.length_skin / 2) * (l.width_skin / 2)
 _cut_face_area(::Half{<:AbstractSpherical},   l) = π * l.radius_skin^2
 
@@ -108,7 +108,7 @@ end
 _skin_radius(h::Half, length)    = _skin_radius(h.parent, length)
 _fibrous_radius(h::Half, length) = _fibrous_radius(h.parent, length)
 outer_dims(h::Half, body::AbstractBody) = outer_dims(h.parent, body)
-_top_ratio(h::Half) = _top_ratio(h.parent)
+top_ratio(h::Half) = top_ratio(h.parent)
 
 # ── Silhouette ────────────────────────────────────────────────────────────
 #
@@ -127,7 +127,7 @@ _top_ratio(h::Half) = _top_ratio(h.parent)
 # A frustum isn't centrally symmetric; its half is handled below.
 
 _outer_cut_face_area(h::Half{<:AbstractCylindrical}, body) =
-    (d = outer_dims(h, body); (1 + _top_ratio(h)) * d.radius * d.length)
+    (d = outer_dims(h, body); (1 + top_ratio(h)) * d.radius * d.length)
 _outer_cut_face_area(h::Half{<:AbstractEllipsoidal}, body) =
     (d = outer_dims(h, body); π * (d.length / 2) * (d.width / 2))
 _outer_cut_face_area(h::Half{<:AbstractSpherical}, body) =
@@ -151,7 +151,7 @@ function silhouette(h::Half{<:AbstractCylindrical}, ::AbstractInsulationLayer, b
     if s < 0 # sun on the flat side: same shadow as -d
         s, c = -s, -c
     end
-    R, r = d.radius, _top_ratio(h) * d.radius
+    R, r = d.radius, top_ratio(h) * d.radius
     half_base = π * R^2 * abs(c) / 2
     c >= 0 ? half_base + (R + r) * d.length * s :
              _frustum_silhouette(R, r, d.length, θ) - half_base
@@ -173,14 +173,14 @@ end
 # and areas are half the parent's; only Flat is half-specific.
 attachment_surfaces(::Half{<:AbstractCylindrical}) = (EndA, EndB, Lateral, Flat)
 
-const _CurvedEnd = Union{EndA,EndB,Lateral}
+const CurvedEnd = Union{EndA,EndB,Lateral}
 
-surface_area(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::_CurvedEnd) =
+surface_area(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::CurvedEnd) =
     surface_area(h.parent, body, loc) / 2
 surface_area(h::Half{<:AbstractCylindrical}, body::AbstractBody, ::Flat) =
     _cut_face_area(h, body.geometry.length)
 
-function validate_range(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::_CurvedEnd)
+function validate_range(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::CurvedEnd)
     validate_range(h.parent, body, loc)
     0 ≤ loc.angle ≤ π || error("$(nameof(typeof(loc))) angle out of range [0, π]: $(loc.angle)")
 end
@@ -195,15 +195,15 @@ end
 function _half_radius_at(h::Half{<:AbstractCylindrical}, body, x)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    R * (1 - (1 - _top_ratio(h)) * x / L)
+    R * (1 - (1 - top_ratio(h)) * x / L)
 end
 
-surface_point(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::_CurvedEnd) =
+surface_point(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::CurvedEnd) =
     surface_point(h.parent, body, loc)
 surface_point(::Half{<:AbstractCylindrical}, body::AbstractBody, loc::Flat) =
     (loc.x, loc.y, zero(loc.x))
 
-surface_normal(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::_CurvedEnd) =
+surface_normal(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::CurvedEnd) =
     surface_normal(h.parent, body, loc)
 surface_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::Flat) = (0.0, 0.0, -1.0)
 

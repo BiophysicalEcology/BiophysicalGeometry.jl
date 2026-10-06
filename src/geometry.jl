@@ -1,12 +1,9 @@
-# TODO: remove AbstractGeometryModel
-abstract type AbstractGeometryModel end
-
 """
     AbstractShape
 
 Abstract supertype for the shape of the organism being modelled.
 """
-abstract type AbstractShape <: AbstractGeometryModel end
+abstract type AbstractShape end
 
 # Physics-relevant family intermediates between `AbstractShape` and the
 # concrete shapes. Thermal consumers (HeatExchange) dispatch on these —
@@ -74,7 +71,7 @@ mass(h::Half) = mass(h.parent) / 2
 
 Abstract supertype for all insulation layers of an organism being modelled.
 """
-abstract type AbstractInsulationLayer <: AbstractGeometryModel end
+abstract type AbstractInsulationLayer end
 
 """
     AbstractSolidLayer <: AbstractInsulationLayer
@@ -235,9 +232,9 @@ end
 #   _fibrous_level(shape, skin_dims, t)    -> (; dims, area)   fur NamedTuple + outer area
 #   _fat_thickness(shape, skin_dims, flesh_volume, fat_volume) -> Length
 #
-# `Half` is not in `_StandardShape`; it keeps its own `geometry` methods.
+# `Half` is not in `StandardShape`; it keeps its own `geometry` methods.
 
-const _StandardShape = Union{AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab}
+const StandardShape = Union{AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab}
 
 _flesh_volume(shape::AbstractShape, fat_layer::FatLayer) =
     body_volume(shape) - fat_volume(shape, fat_layer)
@@ -248,12 +245,12 @@ _convective_area(fibrous_layer::FibrousLayer, skin_area) =
 # volume scaled by its axis ratio, so the cube-root formula lives in one place.
 _sphere_radius(volume) = cbrt((3 / 4) * volume / π)
 
-function geometry(shape::_StandardShape, ::Naked)
+function geometry(shape::StandardShape, ::Naked)
     volume = body_volume(shape)
     skin = _skin_level(shape, volume)
     Geometry(volume, skin.dims, SurfaceAreas(; total = skin.area))
 end
-function geometry(shape::_StandardShape, fibrous_layer::FibrousLayer)
+function geometry(shape::StandardShape, fibrous_layer::FibrousLayer)
     volume = body_volume(shape)
     skin = _skin_level(shape, volume)
     fibrous = _fibrous_level(shape, skin.dims, fibrous_layer.thickness)
@@ -261,14 +258,14 @@ function geometry(shape::_StandardShape, fibrous_layer::FibrousLayer)
              SurfaceAreas(; total = fibrous.area, skin = skin.area,
                           convection = _convective_area(fibrous_layer, skin.area)))
 end
-function geometry(shape::_StandardShape, fat_layer::FatLayer)
+function geometry(shape::StandardShape, fat_layer::FatLayer)
     volume = body_volume(shape)
     flesh_volume = _flesh_volume(shape, fat_layer)
     skin = _skin_level(shape, volume)
     fat = _fat_thickness(shape, skin.dims, flesh_volume, volume - flesh_volume)
     Geometry(volume, merge(skin.dims, (; fat)), SurfaceAreas(; total = skin.area))
 end
-function geometry(shape::_StandardShape, fibrous_layer::FibrousLayer, fat_layer::FatLayer)
+function geometry(shape::StandardShape, fibrous_layer::FibrousLayer, fat_layer::FatLayer)
     volume = body_volume(shape)
     flesh_volume = _flesh_volume(shape, fat_layer)
     skin = _skin_level(shape, volume)

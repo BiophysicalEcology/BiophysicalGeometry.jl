@@ -223,6 +223,24 @@ end
     @test_throws ArgumentError Cylinder(; mass = 10u"kg", density, axis_ratio = 3.0) # unknown keyword
     @test_throws ArgumentError Sphere(; mass = -1u"kg", density)
     @test_throws ArgumentError Cone(; mass = 1u"kg", density, axis_ratio_b = 2.0, top_ratio = 1.5)
+    # Quantities need their units; ratios are plain numbers.
+    @test_throws ArgumentError Cylinder(; mass = 10.0, density, axis_ratio_b = 3.0)
+    @test_throws ArgumentError Cylinder(; length = 0.5u"kg", radius = 0.05u"m", density)
+    @test_throws ArgumentError Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0u"m")
+end
+
+# Measured in a function, so that nothing is a non-constant global.
+allocations(f) = (f(); @allocated f())
+
+@testset "Keyword construction allocates nothing" begin
+    @test allocations(() -> Cylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0)) == 0
+    @test allocations(() -> Cylinder(; length = 0.5u"m", radius = 0.05u"m", density)) == 0
+    @test allocations(() -> Sphere(; radius = 0.1u"m", mass = 10.0u"kg")) == 0
+    @test allocations(() -> Plate(; mass = 500.0u"g", density, length = 0.3u"m", width = 0.1u"m")) == 0
+    @test allocations(() -> Ellipsoid(; length = 0.6u"m", width = 0.2u"m", height = 0.1u"m", density)) == 0
+    @test allocations(() -> Cone(; mass = 1.0u"kg", density, axis_ratio_b = 2.0, top_ratio = 0.4)) == 0
+    @test allocations(() -> HalfEllipsoid(; mass = 5.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0)) == 0
+    @test allocations(() -> TriangularPlate(; length = 0.3u"m", width = 0.2u"m", height = 0.01u"m", density)) == 0
 end
 
 @testset "Triaxial ellipsoid" begin
@@ -339,7 +357,7 @@ end
     # Fur offsets every face outward: the outer prism encloses skin + a shell of the fur's thickness.
     f = Body(t, fur)
     o = f.geometry.length
-    @test BG._inradius(o.length_fibrous, o.width_fibrous) ≈ skin_radius(b) + 10u"mm"
+    @test BG.inradius(o.length_fibrous, o.width_fibrous) ≈ skin_radius(b) + 10u"mm"
     @test o.height_fibrous ≈ 0.02u"m" + 2 * 10u"mm"
     # Silhouette in any direction matches the mesh.
     for ins in (Naked(), fur), d in ((0.3, 0.2, 1.0), (1.0, -0.4, 0.2), (-0.2, 1.0, 0.5), (0.0, 0.0, 1.0))

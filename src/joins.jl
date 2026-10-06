@@ -87,7 +87,7 @@ end
 function flesh_centroid(h::Half{<:AbstractCylindrical}, body::AbstractBody)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    t = _top_ratio(h)
+    t = top_ratio(h)
     k = 1 + t + t^2
     ((L / 4) * (1 + 2t + 3t^2) / k, zero(R), (R / π) * (1 + t) * (1 + t^2) / k)
 end

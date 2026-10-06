@@ -99,8 +99,8 @@ function _part_triangles(body::CompositeBody)
         part = getfield(body.parts, name)
         pose = getfield(body.poses, name)
         tris = NTuple{3,NTuple{3,Float64}}[]
-        for grid in _part_outer_meshes(part.shape, part, 1.0)  # sc=1 → metres
-            X, Y, Z = _transform_mesh(grid..., pose, 1.0)
+        for grid in part_outer_meshes(part.shape, part, 1.0)  # sc=1 → metres
+            X, Y, Z = transform_mesh(grid..., pose, 1.0)
             append!(tris, _each_triangle(X, Y, Z))
         end
         tris

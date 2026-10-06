@@ -1,9 +1,10 @@
 module BiophysicalGeometry
 
-using LinearAlgebra: svd
+using LinearAlgebra: det
+using StaticArrays: SVector, SMatrix, @SMatrix
 using Unitful
 
-export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
+export AbstractGeometryPars, AbstractBody, Body
 export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, TriangularPlate, Cone
 export Half, HalfCylinder, HalfCone, HalfEllipsoid, HalfSphere
 export AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab

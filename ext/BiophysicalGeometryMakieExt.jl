@@ -7,13 +7,12 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, TriangularPlate,
 import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
 import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
-# Mesh helpers now live in core (src/meshes.jl); reuse them here.
-# TODO: these should not have leading underscores and be imported in an extension
-import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh, _cone_tube,
-    _half_cylinder_flat, _half_ellipsoid_flat_mesh,
-    _box_face_x, _box_face_y, _box_face_z,
-    _part_outer_meshes, _transform_mesh, outer_dims, _top_ratio, HalfDomed,
-    _triangle_face, _prism_side, _inradius, _ellipsoid_mesh_truncated, _ellipsoid_pole_a_cap
+# Mesh helpers live in core (src/meshes.jl).
+import BiophysicalGeometry: cylinder_tube, cylinder_cap, ellipsoid_mesh, cone_tube,
+    half_cylinder_flat, half_ellipsoid_flat_mesh,
+    box_face_x, box_face_y, box_face_z,
+    part_outer_meshes, transform_mesh, outer_dims, top_ratio, HalfDomed,
+    triangle_face, prism_side, inradius, ellipsoid_mesh_truncated, ellipsoid_pole_a_cap
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
@@ -72,22 +71,22 @@ function _draw_surface!(target, (X, Y, Z), color)
 end
 
 function _draw_cylinder!(target, r, L, col; θ_end=2π, x0=0.0)
-    _draw_surface!(target, _cylinder_tube(r, L; θ_end, x0), col)
-    _draw_surface!(target, _cylinder_cap(r, x0; θ_end), col)
-    _draw_surface!(target, _cylinder_cap(r, x0 + L; θ_end), col)
+    _draw_surface!(target, cylinder_tube(r, L; θ_end, x0), col)
+    _draw_surface!(target, cylinder_cap(r, x0; θ_end), col)
+    _draw_surface!(target, cylinder_cap(r, x0 + L; θ_end), col)
 end
 
 # Cutaway removes the front face (y = -hw) and the right face (x = +hl).
 function _draw_box_faces!(target, hl, hw, hh, color; full=false)
     faces = [
-        _box_face_z(-hl, hl, -hw, hw, -hh),
-        _box_face_z(-hl, hl, -hw, hw, hh),
-        _box_face_y(-hl, hl, hw, -hh, hh),
-        _box_face_x(-hl, -hw, hw, -hh, hh),
+        box_face_z(-hl, hl, -hw, hw, -hh),
+        box_face_z(-hl, hl, -hw, hw, hh),
+        box_face_y(-hl, hl, hw, -hh, hh),
+        box_face_x(-hl, -hw, hw, -hh, hh),
     ]
     full && append!(faces, [
-        _box_face_y(-hl, hl, -hw, -hh, hh),
-        _box_face_x( hl, -hw, hw, -hh, hh),
+        box_face_y(-hl, hl, -hw, -hh, hh),
+        box_face_x( hl, -hw, hw, -hh, hh),
     ])
     for f in faces; _draw_surface!(target, f, color); end
 end
@@ -114,8 +113,8 @@ _x_ratio(::Any) = 1.0
 
 # A cut ellipsoid layer: the surface up to the cut plane and the flat disc.
 function _draw_cut_ellipsoid!(target, (a, b, c), x_ratio, col)
-    _draw_surface!(target, _ellipsoid_mesh_truncated(a, b, c, x_ratio), col)
-    _draw_surface!(target, _ellipsoid_pole_a_cap(a, b, c, x_ratio), col)
+    _draw_surface!(target, ellipsoid_mesh_truncated(a, b, c, x_ratio), col)
+    _draw_surface!(target, ellipsoid_pole_a_cap(a, b, c, x_ratio), col)
 end
 
 function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
@@ -129,9 +128,9 @@ function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
         fl.fat_layer && _draw_cut_ellipsoid!(p, ax.skin, x_ratio, cols.fat_layer)
         fl.fibrous_layer && _draw_cut_ellipsoid!(p, ax.ins, x_ratio, cols.fibrous_layer)
     else
-        _draw_surface!(p, _ellipsoid_mesh(ax.flesh...), cols.flesh)
-        fl.fat_layer && _draw_surface!(p, _ellipsoid_mesh(ax.skin...; θ_end=3π/2), cols.fat_layer)
-        fl.fibrous_layer && _draw_surface!(p, _ellipsoid_mesh(ax.ins...; θ_end=3π/2), cols.fibrous_layer)
+        _draw_surface!(p, ellipsoid_mesh(ax.flesh...), cols.flesh)
+        fl.fat_layer && _draw_surface!(p, ellipsoid_mesh(ax.skin...; θ_end=3π/2), cols.fat_layer)
+        fl.fibrous_layer && _draw_surface!(p, ellipsoid_mesh(ax.ins...; θ_end=3π/2), cols.fibrous_layer)
     end
 end
 
@@ -162,7 +161,7 @@ end
 function _triangle_layers(body, f)
     gl = body.geometry.length
     L, W, H = gl.length_skin, gl.width_skin, gl.height_skin
-    r = _inradius(L, W)
+    r = inradius(L, W)
     map(_radii(body)) do ri
         t = ri - r
         height = t >= zero(t) ? H + 2t : H * ri / r
@@ -172,9 +171,9 @@ end
 
 function _draw_prism!(target, l, col; top=true)
     p1 = (l.corner, l.corner); p2 = (l.corner + l.length, l.corner); p3 = (l.corner, l.corner + l.width)
-    faces = Any[_triangle_face(p1, p2, p3, -l.height / 2),
-                _prism_side(p1, p2, l.height), _prism_side(p2, p3, l.height), _prism_side(p3, p1, l.height)]
-    top && push!(faces, _triangle_face(p1, p2, p3, l.height / 2))
+    faces = Any[triangle_face(p1, p2, p3, -l.height / 2),
+                prism_side(p1, p2, l.height), prism_side(p2, p3, l.height), prism_side(p3, p1, l.height)]
+    top && push!(faces, triangle_face(p1, p2, p3, l.height / 2))
     for f in faces; _draw_surface!(target, f, col); end
 end
 
@@ -188,9 +187,9 @@ function _draw_cutaway_shape!(p, sh::TriangularPlate, body, sc, cols)
 end
 
 function _draw_cone!(target, r_base, r_top, L, col; θ_end=2π, x0=0.0)
-    _draw_surface!(target, _cone_tube(r_base, r_top, L; θ_end, x0), col)
-    _draw_surface!(target, _cylinder_cap(r_base, x0; θ_end), col)
-    r_top > 0 && _draw_surface!(target, _cylinder_cap(r_top, x0 + L; θ_end), col)
+    _draw_surface!(target, cone_tube(r_base, r_top, L; θ_end, x0), col)
+    _draw_surface!(target, cylinder_cap(r_base, x0; θ_end), col)
+    r_top > 0 && _draw_surface!(target, cylinder_cap(r_top, x0 + L; θ_end), col)
 end
 
 function _draw_cutaway_shape!(p, sh::Cone, body, sc, cols)
@@ -209,16 +208,16 @@ end
 # the outer (fat/fur) layers to reveal the flesh, plus the flat cut face.
 # A half cylinder or half cone: base radius `r`, top radius `t * r`.
 function _draw_half_frustum!(target, r, t, L, col; θ_end=π, x0=0.0)
-    _draw_surface!(target, _cone_tube(r, t * r, L; θ_end, x0), col)
-    _draw_surface!(target, _cylinder_cap(r, x0; θ_end), col)
-    t > 0 && _draw_surface!(target, _cylinder_cap(t * r, x0 + L; θ_end), col)
-    _draw_surface!(target, _half_cylinder_flat(r, L; r_top=t * r, x0), col)
+    _draw_surface!(target, cone_tube(r, t * r, L; θ_end, x0), col)
+    _draw_surface!(target, cylinder_cap(r, x0; θ_end), col)
+    t > 0 && _draw_surface!(target, cylinder_cap(t * r, x0 + L; θ_end), col)
+    _draw_surface!(target, half_cylinder_flat(r, L; r_top=t * r, x0), col)
 end
 
 function _draw_cutaway_shape!(p, sh::Half{<:AbstractCylindrical}, body, sc, cols)
     r = _scaled_radii(body, sc)
     fl = _layer_flags(r)
-    t = Float64(_top_ratio(sh))
+    t = Float64(top_ratio(sh))
     L_s = _m(body.geometry.length.length_skin, sc)
     L_i = _m(outer_dims(sh, body).length, sc)
     x0_i = -(L_i - L_s) / 2
@@ -228,8 +227,8 @@ function _draw_cutaway_shape!(p, sh::Half{<:AbstractCylindrical}, body, sc, cols
 end
 
 function _draw_half_ellipsoid!(target, (a, b, c), col; θ_end=2π)
-    _draw_surface!(target, _ellipsoid_mesh(a, b, c; θ_end, φ_end=π/2), col)
-    _draw_surface!(target, _half_ellipsoid_flat_mesh(a, b), col)
+    _draw_surface!(target, ellipsoid_mesh(a, b, c; θ_end, φ_end=π/2), col)
+    _draw_surface!(target, half_ellipsoid_flat_mesh(a, b), col)
 end
 
 function _draw_cutaway_shape!(p, sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}},
@@ -253,8 +252,8 @@ function _draw_composite!(p, b::CompositeBody, sc, cols)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
         col = _part_color(part, cols)
-        for mesh in _part_outer_meshes(part.shape, part, sc)
-            _draw_surface!(p, _transform_mesh(mesh..., pose, sc), col)
+        for mesh in part_outer_meshes(part.shape, part, sc)
+            _draw_surface!(p, transform_mesh(mesh..., pose, sc), col)
         end
     end
 end
@@ -267,8 +266,8 @@ function _composite_bbox(b::CompositeBody, sc)
     for name in propertynames(b.parts)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
-        for grid in _part_outer_meshes(part.shape, part, sc)
-            X, Y, Z = _transform_mesh(grid..., pose, sc)
+        for grid in part_outer_meshes(part.shape, part, sc)
+            X, Y, Z = transform_mesh(grid..., pose, sc)
             xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
             ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
             zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -287,8 +286,8 @@ function _part_bbox(shape, body, pose::Pose, sc)
     xmin, xmax = Inf, -Inf
     ymin, ymax = Inf, -Inf
     zmin, zmax = Inf, -Inf
-    for grid in _part_outer_meshes(shape, body, sc)
-        X, Y, Z = _transform_mesh(grid..., pose, sc)
+    for grid in part_outer_meshes(shape, body, sc)
+        X, Y, Z = transform_mesh(grid..., pose, sc)
         xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
         ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
         zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -353,7 +352,7 @@ end
 # Cone and the cylindrical halves are frustums with top/base ratio t (t = 1
 # for a half cylinder); the long section runs base (bottom) to top.
 function _section_layers(sh::Union{Cone,Half{<:AbstractCylindrical}}, body, mode, r, cols)
-    t = _top_ratio(sh)
+    t = top_ratio(sh)
     half = sh isa Half
     hl_s = body.geometry.length.length_skin / 2
     hl_i = outer_dims(sh, body).length / 2

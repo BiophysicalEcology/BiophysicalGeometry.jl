@@ -10,16 +10,16 @@ struct Cylinder{M,D,B} <: AbstractCylindrical
     mass::M
     density::D
     axis_ratio_b::B
-    Cylinder(::_Resolved, mass::M, density::D, axis_ratio_b::B) where {M,D,B} =
+    Cylinder(::Resolved, mass::M, density::D, axis_ratio_b::B) where {M,D,B} =
         new{M,D,B}(mass, density, axis_ratio_b)
 end
 
 # volume = π·radius²·length; axis_ratio_b = length / (2·radius)
-const _CYLINDER_SPEC = _ShapeSpec((:length, :radius), (1, 2), log(π), (:axis_ratio_b => (1, 2, 2.0),))
+const CYLINDER_SPEC = ShapeSpec((:length, :radius), (1, 2), log(π), (:axis_ratio_b => (1, 2, 2.0),))
 
 function Cylinder(; kw...)
-    s = _resolve_shape("Cylinder", _CYLINDER_SPEC, NamedTuple(kw))
-    Cylinder(_RESOLVED, s.mass, s.density, s.ratios...)
+    s = _resolve_shape("Cylinder", CYLINDER_SPEC, NamedTuple(kw))
+    Cylinder(RESOLVED, s.mass, s.density, s.axis_ratio_b)
 end
 
 # Radial dimension from an enclosed volume; used for both skin and flesh radii.
@@ -65,7 +65,7 @@ _fibrous_radius(::AbstractCylindrical, length) = length.radius_fibrous
 # Ratio of the end-B (top) radius to the end-A (base) radius: 1 for a
 # cylinder, `top_ratio` for a cone. Lets cylindrical halves, meshes and plots
 # treat every cylindrical shape as a frustum.
-_top_ratio(::Cylinder) = 1.0
+top_ratio(::Cylinder) = 1.0
 
 # Composition
 
