@@ -324,6 +324,7 @@ struct Pose{T}
     translation::NTuple{3,T}
     rotation::SMatrix{3,3,Float64,9}
 end
+Pose(translation, rotation::AbstractMatrix) = Pose(translation, SMatrix{3,3,Float64}(rotation))
 
 const IDENTITY_ROTATION = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, 1)
 
@@ -579,22 +580,22 @@ _attach_point(sh, body, att::Attachment) =
         surface_centroid(sh, body, att.location) :
         surface_point(sh, body, att.location)
 
-_attach_normal(sh, body, att::Attachment) =
+attach_normal(sh, body, att::Attachment) =
     att.shape isa FullCover ?
         surface_centroid_normal(sh, body, att.location) :
         surface_normal(sh, body, att.location)
 
-function _child_pose(parent_body, parent_pose::Pose, child_body, j::Join)
+function child_pose(parent_body, parent_pose::Pose, child_body, j::Join)
     sh_p = shape(parent_body); sh_c = shape(child_body)
     pa = j.parent_attachment;  ca = j.child_attachment
 
     p_local = _attach_point(sh_p, parent_body, pa)
-    n_local = _attach_normal(sh_p, parent_body, pa)
+    n_local = attach_normal(sh_p, parent_body, pa)
     p_world = apply_pose(parent_pose, p_local)
     n_world = apply_rotation(parent_pose.rotation, n_local)
 
     c_point = _attach_point(sh_c, child_body, ca)
-    c_normal = _attach_normal(sh_c, child_body, ca)
+    c_normal = attach_normal(sh_c, child_body, ca)
     target_normal = (-n_world[1], -n_world[2], -n_world[3])
 
     R0 = rotation_align(c_normal, target_normal)
@@ -612,12 +613,12 @@ function _apply_join(parts::NamedTuple, j::Join{P, C}, poses::NamedTuple) where 
     parent_known = haskey(poses, P)
     child_known = haskey(poses, C)
     if parent_known && !child_known
-        cp = _child_pose(getfield(parts, P), getfield(poses, P),
+        cp = child_pose(getfield(parts, P), getfield(poses, P),
                          getfield(parts, C), j)
         return merge(poses, NamedTuple{(C,)}((cp,)))
     elseif child_known && !parent_known
         rj = _reverse_join(j)
-        pp = _child_pose(getfield(parts, C), getfield(poses, C),
+        pp = child_pose(getfield(parts, C), getfield(poses, C),
                          getfield(parts, P), rj)
         return merge(poses, NamedTuple{(P,)}((pp,)))
     elseif parent_known && child_known

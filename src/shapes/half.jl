@@ -232,9 +232,9 @@ surface_centroid_normal(::Half{<:AbstractCylindrical}, ::AbstractBody, ::Flat) =
 # the skin semi-axes are read differently.
 const HalfDomed = Half{<:Union{AbstractEllipsoidal,AbstractSpherical}}
 
-_domed_semiaxes(::Half{<:AbstractEllipsoidal}, body) =
-    _skin_semiaxes(body.geometry.length)
-function _domed_semiaxes(::Half{<:AbstractSpherical}, body)
+domed_semiaxes(::Half{<:AbstractEllipsoidal}, body) =
+    skin_semiaxes(body.geometry.length)
+function domed_semiaxes(::Half{<:AbstractSpherical}, body)
     r = body.geometry.length.radius_skin; (r, r, r)
 end
 
@@ -251,19 +251,19 @@ function validate_range(::HalfDomed, ::AbstractBody, loc::Dome)
     0 ≤ loc.azimuth ≤ π || error("Dome azimuth out of range [0, π]: $(loc.azimuth)")
 end
 function validate_range(sh::HalfDomed, body::AbstractBody, loc::Flat)
-    a, b, _ = _domed_semiaxes(sh, body)
+    a, b, _ = domed_semiaxes(sh, body)
     (loc.x / a)^2 + (loc.y / b)^2 ≤ 1 + 1e-9 || error("Flat (x, y) outside boundary ellipse")
 end
 
 function surface_point(sh::HalfDomed, body::AbstractBody, loc::Dome)
-    a, b, c = _domed_semiaxes(sh, body)
+    a, b, c = domed_semiaxes(sh, body)
     (a * cos(loc.polar), b * sin(loc.polar) * cos(loc.azimuth), c * sin(loc.polar) * sin(loc.azimuth))
 end
 surface_point(::HalfDomed, body::AbstractBody, loc::Flat) =
     (loc.x, loc.y, zero(loc.x))
 
 function surface_normal(sh::HalfDomed, body::AbstractBody, loc::Dome)
-    a, b, c = _domed_semiaxes(sh, body)
+    a, b, c = domed_semiaxes(sh, body)
     nx = cos(loc.polar) * (b * c)
     ny = sin(loc.polar) * cos(loc.azimuth) * (a * c)
     nz = sin(loc.polar) * sin(loc.azimuth) * (a * b)
@@ -273,10 +273,10 @@ end
 surface_normal(::HalfDomed, ::AbstractBody, ::Flat) = (0.0, 0.0, -1.0)
 
 function surface_centroid(sh::HalfDomed, body::AbstractBody, ::Dome)
-    _, _, c = _domed_semiaxes(sh, body); (zero(c), zero(c), c)
+    _, _, c = domed_semiaxes(sh, body); (zero(c), zero(c), c)
 end
 function surface_centroid(sh::HalfDomed, body::AbstractBody, ::Flat)
-    a, = _domed_semiaxes(sh, body); (zero(a), zero(a), zero(a))
+    a, = domed_semiaxes(sh, body); (zero(a), zero(a), zero(a))
 end
 surface_centroid_normal(::HalfDomed, ::AbstractBody, ::Dome) = (0.0, 0.0, 1.0)
 surface_centroid_normal(::HalfDomed, ::AbstractBody, ::Flat) = (0.0, 0.0, -1.0)

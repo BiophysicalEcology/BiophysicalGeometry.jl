@@ -214,7 +214,7 @@ end
     h = HalfEllipsoid(; length = 0.6u"m", width = 0.2u"m", height = 0.1u"m", density)
     # Its full ellipsoid is twice e's height, so the half weighs the same as e.
     @test BG.mass(h) ≈ BG.mass(e)
-    @test BG._domed_semiaxes(h, Body(h, Naked()))[3] ≈ 0.1u"m"
+    @test BG.domed_semiaxes(h, Body(h, Naked()))[3] ≈ 0.1u"m"
     @test BG.mass(HalfCylinder(; mass = 5u"kg", density, axis_ratio_b = 3.0)) == 5u"kg"
     # Positional construction is gone; bad keyword sets say what's wrong.
     @test_throws MethodError Cylinder(10u"kg", density, 3.0)

@@ -55,7 +55,7 @@ _truncated_volume_factor(s::Ellipsoid) = _truncated_volume_factor(s.pole_a_trunc
 # The geometry stores full extents (length, width, height); the formulas below
 # work in semi-axes a ≥ b, c along x, y, z.
 _semiaxes(d) = (d.length / 2, d.width / 2, d.height / 2)
-_skin_semiaxes(l) = (l.length_skin / 2, l.width_skin / 2, l.height_skin / 2)
+skin_semiaxes(l) = (l.length_skin / 2, l.width_skin / 2, l.height_skin / 2)
 _extents(level, (a, b, c)) = level === :skin ?
     (; length_skin = 2a, width_skin = 2b, height_skin = 2c) :
     (; length_fibrous = 2a, width_fibrous = 2b, height_fibrous = 2c)
@@ -188,7 +188,7 @@ function _skin_level(shape::Ellipsoid, volume)
     (; dims = _extents(:skin, axes), area = _shape_area(shape, axes))
 end
 function _fibrous_level(shape::Ellipsoid, skin, thickness)
-    axes = _skin_semiaxes(skin) .+ thickness
+    axes = skin_semiaxes(skin) .+ thickness
     (; dims = _extents(:fibrous, axes), area = _shape_area(shape, axes))
 end
 
@@ -347,7 +347,7 @@ outer_dims(::Ellipsoid, ::FibrousLayer, body::AbstractBody) =
      height = body.geometry.length.height_fibrous)
 
 # Skin-level semi-axes — used for flesh-anchored attachment positions.
-_ellipsoid_skin(body::AbstractBody) = _skin_semiaxes(body.geometry.length)
+_ellipsoid_skin(body::AbstractBody) = skin_semiaxes(body.geometry.length)
 
 # Notional area for pole attachments. For a truncated pole_a this is the
 # actual flat-disc area exposed by the cut; for an untruncated pole it's
