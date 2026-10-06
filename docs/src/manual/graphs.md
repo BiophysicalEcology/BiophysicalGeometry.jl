@@ -20,8 +20,8 @@ using BiophysicalGeometry, Unitful
 density = 1000.0u"kg/m^3"
 thick = FibrousLayer(20.0u"mm", 30.0u"μm", 3000u"cm^-2")
 thin = FibrousLayer(5.0u"mm", 30.0u"μm", 3000u"cm^-2")
-dorsal = Body(HalfEllipsoid(1.0u"kg", density, 3.0, 1.0), thick)
-ventral = Body(HalfEllipsoid(1.0u"kg", density, 3.0, 1.0), thin)
+dorsal = Body(HalfEllipsoid(; mass = 1.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), thick)
+ventral = Body(HalfEllipsoid(; mass = 1.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), thin)
 
 animal = CompositeBody(;
     parts = (; dorsal, ventral),
@@ -43,15 +43,14 @@ Limbs and a head are more nodes, each with an edge to the part it grows from. On
 names, as `leg` is for the four legs:
 
 ```@example graphs
-torso = Body(Cylinder(20.0u"kg", density, 3.0), Naked())
-head = Body(Ellipsoid(2.0u"kg", density, 1.5, 1.0), Naked())
-leg = Body(Cylinder(1.0u"kg", density, 5.0), Naked())
+torso = Body(Cylinder(; mass = 20.0u"kg", density, axis_ratio_b = 3.0), Naked())
+head = Body(Ellipsoid(; mass = 2.0u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), Naked())
+leg = Body(Cylinder(; mass = 1.0u"kg", density, axis_ratio_b = 5.0), Naked())
 
 torso_length = torso.geometry.length.length_skin
 r = skin_radius(leg)
 hip(z, φ) = Attachment(Lateral(z * torso_length, φ), Disc(r))
 leg_top = Attachment(EndA(0.0u"m", 0.0), Disc(r))
-lying = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 0.0 1.0; 1.0 0.0 0.0; 0.0 1.0 0.0])  # torso along x
 
 dog = CompositeBody(;
     parts = (; torso, head, leg_fl = leg, leg_fr = leg, leg_bl = leg, leg_br = leg),
@@ -62,7 +61,6 @@ dog = CompositeBody(;
         Join(torso = hip(0.2, -π / 2 + 0.35), leg_bl = leg_top),
         Join(torso = hip(0.2, -π / 2 - 0.35), leg_br = leg_top),
     ),
-    root_pose = lying,
 )
 body_graph(dog) # hide
 ```
@@ -87,7 +85,7 @@ A join can hang from any part, so a neck can go between the torso and the head. 
 edge:
 
 ```@example graphs
-neck = Body(Cone(1.5u"kg", density, 1.2, 0.7), Naked())
+neck = Body(Cone(; mass = 1.5u"kg", density, axis_ratio_b = 1.2, top_ratio = 0.7), Naked())
 r_top = 0.7 * skin_radius(neck)
 long_neck = CompositeBody(;
     parts = (; torso, neck, head),
@@ -95,7 +93,6 @@ long_neck = CompositeBody(;
         Join(torso = Attachment(EndB(0.0u"m", 0.0), Disc(6.0u"cm")), neck = Attachment(EndA(0.0u"m", 0.0), Disc(6.0u"cm"))),
         Join(neck = Attachment(EndB(0.0u"m", 0.0), Disc(r_top)), head = Attachment(PoleB(), Disc(r_top))),
     ),
-    root_pose = lying,
 )
 body_graph(long_neck; size = (760, 240)) # hide
 ```

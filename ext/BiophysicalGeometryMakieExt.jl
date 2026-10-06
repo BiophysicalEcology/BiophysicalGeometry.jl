@@ -506,7 +506,7 @@ end
 function _section_layers(sh::Union{Sphere,Ellipsoid,HalfDomed}, body, mode, r, cols)
     pts = sh isa Half ? _half_ellipse_pts : _ellipse_pts
     # A cut ellipsoid's long section stops at the cut plane, up the plot.
-    cut(points, a) = filter(q -> q[2] <= _pu(a) * _x_ratio(sh), points)
+    cut(points, a) = _x_ratio(sh) < 1 ? filter(q -> q[2] <= _pu(a) * _x_ratio(sh), points) : points
     geom((a, b, c)) = mode === :long ? cut(pts(c, a), a) : pts(c, b)
     l = _domed_layers(sh, body)
     [

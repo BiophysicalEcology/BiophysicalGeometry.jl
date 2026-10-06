@@ -12,7 +12,7 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Cone, Plate, Top, Botto
 ```@example layers
 using BiophysicalGeometry, Unitful
 
-shape = Cylinder(2.0u"kg", 1000.0u"kg/m^3", 2.0)
+shape = Cylinder(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0)
 fur = FibrousLayer(20.0u"mm", 30.0u"μm", 3000u"cm^-2")   # thickness, fibre diameter, fibres per area of skin
 fat = FatLayer(0.2, 901.0u"kg/m^3")                      # fraction of body mass, density
 layer_diagram("Naked()" => Body(shape, Naked()), # hide
@@ -137,10 +137,10 @@ The shells of each shape family, cut across the long axis and along it:
 
 ```@example layers
 layers = CompositeInsulation(fur, fat) # hide
-layer_sections("Cylinder" => Body(Cylinder(2.0u"kg", 1000.0u"kg/m^3", 2.0), layers), # hide
-    "Sphere" => Body(Sphere(2.0u"kg", 1000.0u"kg/m^3"), layers), # hide
-    "Ellipsoid" => Body(Ellipsoid(2.0u"kg", 1000.0u"kg/m^3", 2.0, 1.0), layers), # hide
-    "Cone" => Body(Cone(2.0u"kg", 1000.0u"kg/m^3", 2.0, 0.4), layers)) # hide
+layer_sections("Cylinder" => Body(Cylinder(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0), layers), # hide
+    "Sphere" => Body(Sphere(; mass = 2.0u"kg", density = 1000.0u"kg/m^3"), layers), # hide
+    "Ellipsoid" => Body(Ellipsoid(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0, axis_ratio_c = 2.0), layers), # hide
+    "Cone" => Body(Cone(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0, top_ratio = 0.4), layers)) # hide
 ```
 
 Fat is an even layer under the skin. On a cylinder or cone it lines the sides and not the ends. Fibres cover the

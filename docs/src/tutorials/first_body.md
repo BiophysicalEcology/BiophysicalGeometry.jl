@@ -18,7 +18,7 @@ using BiophysicalGeometry, Unitful
 
 mass = 500.0u"g"
 density = 1000.0u"kg/m^3"
-sphere = Body(Sphere(mass, density), Naked())
+sphere = Body(Sphere(; mass, density), Naked())
 uconvert(u"cm", skin_radius(sphere)), uconvert(u"cm^2", total_area(sphere))
 ```
 
@@ -29,7 +29,7 @@ uconvert(u"cm", skin_radius(sphere)), uconvert(u"cm^2", total_area(sphere))
 A cylinder with a length three times its diameter is more like a rat. Only the shape changes:
 
 ```@example first
-cylinder = Body(Cylinder(mass, density, 3.0), Naked())
+cylinder = Body(Cylinder(; mass, density, axis_ratio_b = 3.0), Naked())
 uconvert(u"cm^2", total_area(cylinder))
 ```
 
@@ -42,7 +42,7 @@ map(x -> uconvert(u"cm", x), cylinder.geometry.length)
 An ellipsoid has rounded ends:
 
 ```@example first
-ellipsoid = Body(Ellipsoid(mass, density, 3.0, 1.0), Naked())
+ellipsoid = Body(Ellipsoid(; mass, density, axis_ratio_b = 3.0, axis_ratio_c = 3.0), Naked())
 shape_gallery("Sphere" => sphere, "Cylinder" => cylinder, "Ellipsoid" => ellipsoid) # hide
 ```
 
@@ -58,7 +58,7 @@ Fur is a [`FibrousLayer`](@ref): a depth, the diameter of a hair, and the number
 
 ```@example first
 fur = FibrousLayer(8.0u"mm", 20.0u"μm", 8000u"cm^-2")
-furry = Body(Cylinder(mass, density, 3.0), fur)
+furry = Body(Cylinder(; mass, density, axis_ratio_b = 3.0), fur)
 uconvert(u"cm", skin_radius(furry)), uconvert(u"cm", insulation_radius(furry))
 ```
 
@@ -75,7 +75,7 @@ shrinks and the outside stays the same:
 
 ```@example first
 fat = FatLayer(0.15, 901.0u"kg/m^3")
-fat_and_fur = Body(Cylinder(mass, density, 3.0), CompositeInsulation(fur, fat))
+fat_and_fur = Body(Cylinder(; mass, density, axis_ratio_b = 3.0), CompositeInsulation(fur, fat))
 map(x -> uconvert(u"cm", x), (flesh_radius(fat_and_fur), skin_radius(fat_and_fur), insulation_radius(fat_and_fur)))
 ```
 

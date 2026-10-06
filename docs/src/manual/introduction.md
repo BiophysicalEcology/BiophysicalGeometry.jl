@@ -24,7 +24,7 @@ import BiologicalScaling
 
 mass = 70.0u"kg"
 allometric_area = BiologicalScaling.surface_area(BiologicalScaling.EutherianMammal(), mass)
-geometric_area = total_area(Body(Cylinder(mass, 1000.0u"kg/m^3", 4.0), Naked()))
+geometric_area = total_area(Body(Cylinder(; mass, density = 1000.0u"kg/m^3", axis_ratio_b = 4.0), Naked()))
 allometric_area, geometric_area
 ```
 
@@ -44,9 +44,9 @@ A [`Body`](@ref) is a shape and its layers of insulation. The shape type decides
 fur = FibrousLayer(20.0u"mm", 30.0u"μm", 3000u"cm^-2") # hide
 fat = FatLayer(0.2, 901.0u"kg/m^3") # hide
 layers = CompositeInsulation(fur, fat) # hide
-shape_gallery("Sphere" => Body(Sphere(2.0u"kg", 1000.0u"kg/m^3"), layers), # hide
-    "Cylinder" => Body(Cylinder(2.0u"kg", 1000.0u"kg/m^3", 2.0), layers), # hide
-    "Ellipsoid" => Body(Ellipsoid(2.0u"kg", 1000.0u"kg/m^3", 2.0, 1.0), layers)) # hide
+shape_gallery("Sphere" => Body(Sphere(; mass = 2.0u"kg", density = 1000.0u"kg/m^3"), layers), # hide
+    "Cylinder" => Body(Cylinder(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0), layers), # hide
+    "Ellipsoid" => Body(Ellipsoid(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0, axis_ratio_c = 2.0), layers)) # hide
 ```
 
 ## Origins
@@ -103,7 +103,7 @@ All inputs and outputs are [Unitful.jl](https://github.com/PainterQubits/Unitful
 the right dimension. Ratios, fractions and angles in radians are plain numbers:
 
 ```@example intro
-small = Body(Sphere(20.0u"g", 1.0u"g/cm^3"), Naked())
+small = Body(Sphere(; mass = 20.0u"g", density = 1.0u"g/cm^3"), Naked())
 uconvert(u"cm^2", total_area(small)), uconvert(u"mm", skin_radius(small))
 ```
 

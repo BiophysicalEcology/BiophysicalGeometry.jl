@@ -22,8 +22,10 @@ Cylinder
 Cone
 Ellipsoid
 Plate
+TriangularPlate
 Half
 HalfCylinder
+HalfCone
 HalfEllipsoid
 HalfSphere
 AbstractShape
@@ -40,6 +42,7 @@ Naked
 FibrousLayer
 FatLayer
 CompositeInsulation
+outer_insulation
 AbstractInsulationLayer
 AbstractPorousLayer
 AbstractSolidLayer
@@ -95,6 +98,7 @@ SideA
 SideB
 SideC
 SideD
+Diagonal
 ```
 
 ## Silhouettes

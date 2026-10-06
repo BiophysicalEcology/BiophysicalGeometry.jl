@@ -16,13 +16,14 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Cone, Plate, Top, Botto
 
 ## A body
 
-A body is a shape with its insulation. A shape is sized from a mass, a density and, for most shapes, a ratio of
-length to width:
+A body is a shape with its insulation. A shape is given by keywords — here a mass, a density, and the ratio of
+its length to its diameter:
 
 ```@example get_started
 using BiophysicalGeometry, Unitful
 
-shape = Cylinder(2.0u"kg", 1000.0u"kg/m^3", 3.0)
+density = 1000.0u"kg/m^3"
+shape = Cylinder(; mass = 2.0u"kg", density, axis_ratio_b = 3.0)
 body = Body(shape, Naked())
 total_area(body)
 ```
@@ -31,6 +32,14 @@ The dimensions and volume are in `body.geometry`:
 
 ```@example get_started
 body.geometry.length, body.geometry.volume
+```
+
+Any other sufficient set of keywords gives a shape too, and whatever is missing is worked out. If you measured the
+animal instead of weighing it:
+
+```@example get_started
+measured = Cylinder(; length = 0.3u"m", radius = 0.05u"m", density)
+BiophysicalGeometry.mass(measured)
 ```
 
 ## Other shapes
@@ -42,25 +51,25 @@ The same functions work for every shape. Here are four bodies of the same mass:
 == Sphere
 
 ```@example get_started
-total_area(Body(Sphere(2.0u"kg", 1000.0u"kg/m^3"), Naked()))
+total_area(Body(Sphere(; mass = 2.0u"kg", density), Naked()))
 ```
 
 == Cylinder
 
 ```@example get_started
-total_area(Body(Cylinder(2.0u"kg", 1000.0u"kg/m^3", 3.0), Naked()))
+total_area(Body(Cylinder(; mass = 2.0u"kg", density, axis_ratio_b = 3.0), Naked()))
 ```
 
 == Ellipsoid
 
 ```@example get_started
-total_area(Body(Ellipsoid(2.0u"kg", 1000.0u"kg/m^3", 3.0, 1.0), Naked()))
+total_area(Body(Ellipsoid(; mass = 2.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 3.0), Naked()))
 ```
 
 == Plate
 
 ```@example get_started
-total_area(Body(Plate(2.0u"kg", 1000.0u"kg/m^3", 3.0, 6.0), Naked()))
+total_area(Body(Plate(; mass = 2.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), Naked()))
 ```
 
 :::
@@ -106,8 +115,9 @@ common body of more than one part is therefore a shape split into a dorsal and a
 flat faces into a [`CompositeBody`](@ref):
 
 ```@example get_started
-dorsal = Body(HalfEllipsoid(1.0u"kg", 1000.0u"kg/m^3", 3.0, 1.0), FibrousLayer(20.0u"mm", 30.0u"μm", 3000u"cm^-2"))
-ventral = Body(HalfEllipsoid(1.0u"kg", 1000.0u"kg/m^3", 3.0, 1.0), FibrousLayer(5.0u"mm", 30.0u"μm", 3000u"cm^-2"))
+half = HalfEllipsoid(; mass = 1.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0)
+dorsal = Body(half, FibrousLayer(20.0u"mm", 30.0u"μm", 3000u"cm^-2"))
+ventral = Body(half, FibrousLayer(5.0u"mm", 30.0u"μm", 3000u"cm^-2"))
 animal = CompositeBody(;
     parts = (; dorsal, ventral),
     joins = (Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover())),),

@@ -14,51 +14,54 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Cone, Plate, Top, Botto
 using BiophysicalGeometry, Unitful
 
 mass, density = 2.0u"kg", 1000.0u"kg/m^3"
-surface_diagram("Cylinder" => Body(Cylinder(mass, density, 2.0), Naked()), # hide
-    "Cone" => Body(Cone(mass, density, 2.0, 0.4), Naked()), # hide
-    "Ellipsoid" => Body(Ellipsoid(mass, density, 2.0, 1.0), Naked()), # hide
-    "Ellipsoid, truncated" => Body(Ellipsoid(mass, density, 2.0, 1.0, 0.3), Naked()), # hide
-    "HalfCylinder" => Body(HalfCylinder(mass / 2, density, 2.0), Naked()), # hide
-    "HalfEllipsoid" => Body(HalfEllipsoid(mass / 2, density, 2.0, 1.0), Naked()); ncols = 3) # hide
+surface_diagram("Cylinder" => Body(Cylinder(; mass, density, axis_ratio_b = 2.0), Naked()), # hide
+    "Cone" => Body(Cone(; mass, density, axis_ratio_b = 2.0, top_ratio = 0.4), Naked()), # hide
+    "Ellipsoid" => Body(Ellipsoid(; mass, density, axis_ratio_b = 2.0, axis_ratio_c = 2.0), Naked()), # hide
+    "Ellipsoid, truncated" => Body(Ellipsoid(; mass, density, axis_ratio_b = 2.0, axis_ratio_c = 2.0, pole_a_truncation = 0.3), Naked()), # hide
+    "HalfCylinder" => Body(HalfCylinder(; mass = mass / 2, density, axis_ratio_b = 2.0), Naked()), # hide
+    "HalfEllipsoid" => Body(HalfEllipsoid(; mass = mass / 2, density, axis_ratio_b = 2.0, axis_ratio_c = 4.0), Naked()); ncols = 3) # hide
 ```
 
 ```@example surfaces
-surface_diagram("Sphere" => Body(Sphere(mass, density), Naked()), # hide
-    "Plate" => Body(Plate(mass, density, 2.0, 4.0), Naked())) # hide
+surface_diagram("Sphere" => Body(Sphere(; mass, density), Naked()), # hide
+    "Plate" => Body(Plate(; mass, density, axis_ratio_b = 2.0, axis_ratio_c = 4.0), Naked()), # hide
+    "TriangularPlate" => Body(TriangularPlate(; mass, density, axis_ratio_b = 1.5, axis_ratio_c = 6.0), Naked())) # hide
 ```
 
 [`attachment_surfaces`](@ref) lists the surfaces of a shape:
 
 ```@example surfaces
-attachment_surfaces(Cylinder(mass, density, 2.0))
+attachment_surfaces(Cylinder(; mass, density, axis_ratio_b = 2.0))
 ```
 
 ## The surfaces
 
 | Surface | On | Where | Point on it |
 |:--|:--|:--|:--|
-| [`EndA`](@ref) | cylinder, cone, half-cylinder | flat end at ``z = 0``; the base of a cone | `EndA(r, φ)`: distance from the axis, angle around it |
-| [`EndB`](@ref) | cylinder, cone, half-cylinder | flat end at ``z`` = length; the top of a cone | `EndB(r, φ)` |
-| [`Lateral`](@ref) | cylinder, cone, half-cylinder | the curved side | `Lateral(z, φ)`: distance along the axis, angle around it |
+| [`EndA`](@ref) | cylinder, cone, half-cylinder, half-cone | flat end at ``x = 0``; the base of a cone | `EndA(radius, angle)`: distance from the axis, angle around it |
+| [`EndB`](@ref) | cylinder, cone, half-cylinder, half-cone | flat end at ``x`` = length; the top of a cone | `EndB(radius, angle)` |
+| [`Lateral`](@ref) | cylinder, cone, half-cylinder, half-cone | the curved side | `Lateral(position, angle)`: distance along the axis, angle around it |
 | [`PoleA`](@ref) | ellipsoid | tip of the long axis at ``+x``; a disc if truncated | `PoleA()` |
 | [`PoleB`](@ref) | ellipsoid | tip of the long axis at ``-x`` | `PoleB()` |
-| [`Equator`](@ref) | ellipsoid | the ring around the middle | `Equator(φ)`: angle around the long axis |
-| [`Radial`](@ref) | sphere | anywhere | `Radial(θ, φ)`: angle from ``+z``, angle around it |
-| [`Flat`](@ref) | half shapes | the cut face | `Flat(u, v)`: position on the face |
-| [`Dome`](@ref) | half-ellipsoid, half-sphere | the curved side | `Dome(α, β)`: angle from ``+x``, angle around it |
-| [`Top`](@ref), [`Bottom`](@ref) | plate | faces at ``\pm z`` | `Top(x, y)` |
-| [`SideA`](@ref), [`SideB`](@ref) | plate | faces at ``\pm x`` | `SideA(y, z)` |
-| [`SideC`](@ref), [`SideD`](@ref) | plate | faces at ``\pm y`` | `SideC(x, z)` |
+| [`Equator`](@ref) | ellipsoid | the ring around the middle | `Equator(angle)`: angle around the long axis |
+| [`Radial`](@ref) | sphere | anywhere | `Radial(polar, azimuth)`: angle from ``+z``, angle around it from ``+x`` |
+| [`Flat`](@ref) | half shapes | the cut face, at ``z = 0`` | `Flat(x, y)`: position on the face |
+| [`Dome`](@ref) | half-ellipsoid, half-sphere | the curved side | `Dome(polar, azimuth)`: angle from ``+x``, angle around it |
+| [`Top`](@ref), [`Bottom`](@ref) | plate, triangular plate | faces at ``\pm z`` | `Top(x, y)` |
+| [`SideA`](@ref), [`SideB`](@ref) | plate; `SideB` on a triangular plate | faces at ``\pm x`` | `SideA(y, z)` |
+| [`SideC`](@ref), [`SideD`](@ref) | plate; `SideD` on a triangular plate | faces at ``\pm y`` | `SideC(x, z)` |
+| [`Diagonal`](@ref) | triangular plate | the long edge | `Diagonal(position, z)`: distance along it from its ``+x`` end, height |
 
-Distances have units and angles are in radians. On a half-cylinder the angle ``φ`` runs from 0 to ``π``, over the
-curved side only.
+Distances have units and angles are in radians. Angles around the axis of a cylinder or cone run from ``+y``
+towards ``+z``. On a half-cylinder the angle runs from 0 to ``π``, over the curved side only, with ``π / 2`` at
+its top.
 
 ## A whole surface or a point on it
 
 A surface is written in two ways. With no arguments it means the whole surface, as when asking for its area:
 
 ```@example surfaces
-body = Body(Cylinder(mass, density, 2.0), Naked())
+body = Body(Cylinder(; mass, density, axis_ratio_b = 2.0), Naked())
 surface_area(body.shape, body, EndA()), surface_area(body.shape, body, Lateral())
 ```
 
