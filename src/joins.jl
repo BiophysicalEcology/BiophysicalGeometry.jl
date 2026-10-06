@@ -94,7 +94,7 @@ end
 # Domed half (ellipsoidal/spherical): dome along +z from the flat face; centroid
 # sits at 3c/8 off the flat plane (hemisphere centroid generalised).
 function flesh_centroid(sh::HalfDomed, body::AbstractBody)
-    _, _, c = _domed_semiaxes(sh, body)
+    _, _, c = domed_semiaxes(sh, body)
     (zero(c), zero(c), 3c / 8)
 end
 # Triangular plate: the triangle's centroid, a third of the way along each leg.
