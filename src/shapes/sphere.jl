@@ -7,15 +7,15 @@ A spherical organism shape centred on the origin. Give any two of `mass`,
 struct Sphere{M,D} <: AbstractSpherical
     mass::M
     density::D
-    Sphere(::_Resolved, mass::M, density::D) where {M,D} = new{M,D}(mass, density)
+    Sphere(::Resolved, mass::M, density::D) where {M,D} = new{M,D}(mass, density)
 end
 
 # volume = (4π/3)·radius³
-const _SPHERE_SPEC = _ShapeSpec((:radius,), (3,), log(4π / 3), ())
+const SPHERE_SPEC = ShapeSpec((:radius,), (3,), log(4π / 3), ())
 
 function Sphere(; kw...)
-    s = _resolve_shape("Sphere", _SPHERE_SPEC, NamedTuple(kw))
-    Sphere(_RESOLVED, s.mass, s.density)
+    s = _resolve_shape("Sphere", SPHERE_SPEC, NamedTuple(kw))
+    Sphere(RESOLVED, s.mass, s.density)
 end
 
 function _skin_level(shape::Sphere, volume)

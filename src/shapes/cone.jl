@@ -13,18 +13,18 @@ struct Cone{M,D,B,T} <: AbstractCylindrical
     density::D
     axis_ratio_b::B
     top_ratio::T
-    Cone(::_Resolved, mass::M, density::D, axis_ratio_b::B, top_ratio::T) where {M,D,B,T} =
+    Cone(::Resolved, mass::M, density::D, axis_ratio_b::B, top_ratio::T) where {M,D,B,T} =
         new{M,D,B,T}(mass, density, axis_ratio_b, top_ratio)
 end
 
 # volume = (π/3)(1 + t + t²)·radius²·length; axis_ratio_b = length / (2·radius)
-_cone_spec(t) = _ShapeSpec((:length, :radius), (1, 2), log(π / 3 * _cone_volume_factor(t)),
+_cone_spec(t) = ShapeSpec((:length, :radius), (1, 2), log(π / 3 * _cone_volume_factor(t)),
                            (:axis_ratio_b => (1, 2, 2.0),))
 
 function Cone(; top_ratio = 0.0, kw...)
     0 <= top_ratio <= 1 || throw(ArgumentError("Cone `top_ratio` must be in [0, 1], got $top_ratio"))
     s = _resolve_shape("Cone", _cone_spec(top_ratio), NamedTuple(kw))
-    Cone(_RESOLVED, s.mass, s.density, s.ratios..., top_ratio)
+    Cone(RESOLVED, s.mass, s.density, s.axis_ratio_b, top_ratio)
 end
 
 # Volume of a frustum = (π/3) · L · (R² + R·r + r²) with r = top_ratio·R.
@@ -88,7 +88,7 @@ end
 
 # Radii come from the shared `AbstractCylindrical` dispatch in cylinder.jl.
 
-_top_ratio(sh::Cone) = sh.top_ratio
+top_ratio(sh::Cone) = sh.top_ratio
 
 # Composition
 #

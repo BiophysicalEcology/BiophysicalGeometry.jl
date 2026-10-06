@@ -17,7 +17,7 @@
 # The axial meshes take `x0` / `L` along the axis and sweep `θ` from 0 to
 # `θ_end`, so `θ_end = π` is the upper (z ≥ 0) half.
 
-function _cylinder_tube(r, L; nθ=72, nx=2, θ_end=2π, x0=0.0)
+function cylinder_tube(r, L; nθ=72, nx=2, θ_end=2π, x0=0.0)
     θ = LinRange(0.0, θ_end, nθ)
     x = LinRange(x0, x0 + Float64(L), nx)
 
@@ -26,7 +26,7 @@ function _cylinder_tube(r, L; nθ=72, nx=2, θ_end=2π, x0=0.0)
     [r*sin(θi) for θi in θ, _ in x]
 end
 
-function _cylinder_cap(r, x0; nθ=72, nr=12, θ_end=2π)
+function cylinder_cap(r, x0; nθ=72, nr=12, θ_end=2π)
     θ = LinRange(0.0, θ_end, nθ)
     rv = LinRange(0.0, r, nr)
 
@@ -35,11 +35,11 @@ function _cylinder_cap(r, x0; nθ=72, nr=12, θ_end=2π)
     [rr*sin(θi) for θi in θ, rr in rv]
 end
 
-# ── Ellipsoid (sphere is the special case _ellipsoid_mesh(r, r)) ─────────
+# ── Ellipsoid (sphere is the special case ellipsoid_mesh(r, r)) ─────────
 
 # `φ_end=π/2` gives the upper (z ≥ 0) dome — the half-ellipsoid / hemisphere.
 # Semi-axes a, b, c along x, y, z; `c` defaults to `b` (a spheroid).
-function _ellipsoid_mesh(a, b, c=b; n=60, θ_end=2π, φ_end=π)
+function ellipsoid_mesh(a, b, c=b; n=60, θ_end=2π, φ_end=π)
     θ = LinRange(0.0, θ_end, n)
     φ = LinRange(0.0, φ_end, n)
 
@@ -52,7 +52,7 @@ end
 # x = a·cos(α), y = b·sin(α)·cos(β), z = c·sin(α)·sin(β). α ∈ [α_min, π],
 # β ∈ [0, 2π]. `α_min = acos(x_ratio)` with `x_ratio` ∈ (-1, 1] is the
 # fraction-of-a where the cut sits (1 → no cut).
-function _ellipsoid_mesh_truncated(a, b, c, x_ratio; n=60)
+function ellipsoid_mesh_truncated(a, b, c, x_ratio; n=60)
     α_min = acos(clamp(x_ratio, -1.0, 1.0))
     α = LinRange(α_min, π, n)
     β = LinRange(0.0, 2π, n)
@@ -64,7 +64,7 @@ end
 
 # Flat elliptical disc at x = x_cut perpendicular to the long axis, with
 # y/z extents = scale·b and scale·c where scale = sqrt(1 - (x_cut/a)²).
-function _ellipsoid_pole_a_cap(a, b, c, x_ratio; n=40)
+function ellipsoid_pole_a_cap(a, b, c, x_ratio; n=40)
     scale = sqrt(max(0.0, 1 - x_ratio^2))
     rs = LinRange(0.0, 1.0, n)
     βs = LinRange(0.0, 2π, n)
@@ -75,12 +75,12 @@ function _ellipsoid_pole_a_cap(a, b, c, x_ratio; n=40)
 end
 
 # ── Half-cylinder (axis +x, dome z ≥ 0, flat at z = 0) ───────────────────
-# The dome and end caps are `_cylinder_tube` / `_cylinder_cap` at `θ_end=π`;
+# The dome and end caps are `cylinder_tube` / `cylinder_cap` at `θ_end=π`;
 # only the flat cut face at z = 0 is unique to the half.
 
 # Flat axial face of a half cylinder in z = 0, |y| ≤ radius. With `r_top` it is
 # the trapezoidal face of a half cone, radius linear from `r` to `r_top`.
-function _half_cylinder_flat(r, L; r_top=r, nx=2, ny=12, x0=0.0)
+function half_cylinder_flat(r, L; r_top=r, nx=2, ny=12, x0=0.0)
     xs = LinRange(x0, x0 + Float64(L), nx)
     us = LinRange(-1.0, 1.0, ny)
     [xi for _ in us, xi in xs],
@@ -89,10 +89,10 @@ function _half_cylinder_flat(r, L; r_top=r, nx=2, ny=12, x0=0.0)
 end
 
 # ── Half-ellipsoid (long axis +x, dome z ≥ 0, flat at z = 0) ─────────────
-# The dome is `_ellipsoid_mesh(a, b; φ_end=π/2)`; only the flat cut face at
+# The dome is `ellipsoid_mesh(a, b; φ_end=π/2)`; only the flat cut face at
 # z = 0 is unique to the half.
 
-function _half_ellipsoid_flat_mesh(a, b; n=60)
+function half_ellipsoid_flat_mesh(a, b; n=60)
     rs = LinRange(0.0, 1.0, n)
     ts = LinRange(0.0, 2π, n)
     [a*r*cos(t) for t in ts, r in rs],
@@ -103,7 +103,7 @@ end
 # ── Cone / frustum (axis +x, base at x0 of radius r_base, top at x0 + L of
 #                   radius r_top = top_ratio*r_base; r_top = 0 for sharp cone)
 
-function _cone_tube(r_base, r_top, L; nθ=72, nx=2, θ_end=2π, x0=0.0)
+function cone_tube(r_base, r_top, L; nθ=72, nx=2, θ_end=2π, x0=0.0)
     θ = LinRange(0.0, θ_end, nθ)
     x = LinRange(x0, x0 + Float64(L), nx)
     [xi                                                  for _  in θ, xi in x],
@@ -113,31 +113,31 @@ end
 
 # ── Box faces (Plate) ────────────────────────────────────────────────────
 
-_box_face_z(x1, x2, y1, y2, z) =
+box_face_z(x1, x2, y1, y2, z) =
     ([xi for xi in (x1, x2), _ in (y1, y2)],
      [yi for _ in (x1, x2), yi in (y1, y2)],
      fill(Float64(z), 2, 2))
 
-_box_face_y(x1, x2, y, z1, z2) =
+box_face_y(x1, x2, y, z1, z2) =
     ([xi for xi in (x1, x2), _ in (z1, z2)],
      fill(Float64(y), 2, 2),
      [zi for _ in (x1, x2), zi in (z1, z2)])
 
-_box_face_x(x, y1, y2, z1, z2) =
+box_face_x(x, y1, y2, z1, z2) =
     (fill(Float64(x), 2, 2),
      [yi for yi in (y1, y2), _ in (z1, z2)],
      [zi for _ in (y1, y2), zi in (z1, z2)])
 
 # ── Per-shape outer mesh tiles ────────────────────────────────────────────
 #
-# Each `_part_outer_meshes` returns a Vector of (X, Y, Z) matrix triplets
+# Each `part_outer_meshes` returns a Vector of (X, Y, Z) matrix triplets
 # in part-local metres scaled by `sc`. Used by the Makie ext for plotting
 # and by silhouette.jl for rasterisation (with sc=1 to stay in metres).
 #
 # Unit handling is confined to one boundary per shape: `_mesh_dims(shape,
 # body, sc)` reads dimensional fields off `body.geometry`, ustrips them
 # once, and returns a NamedTuple of plain `Float64` scaled by `sc`. The
-# mesh helpers (`_cylinder_tube`, `_ellipsoid_mesh`, etc.) know nothing
+# mesh helpers (`cylinder_tube`, `ellipsoid_mesh`, etc.) know nothing
 # about units.
 
 _ustrip_m(x, sc) = ustrip(u"m", x) * sc
@@ -177,7 +177,7 @@ function _mesh_dims(sh::Half{<:AbstractCylindrical}, body, sc)
     (r = _ustrip_m(d.radius, sc),
      Lo = Lo, Ls = Ls, pad = (Lo - Ls) / 2,
      r_skin = _ustrip_m(body.geometry.length.radius_skin, sc),
-     t = Float64(_top_ratio(sh)))
+     t = Float64(top_ratio(sh)))
 end
 
 function _mesh_dims(sh::Half{<:AbstractEllipsoidal}, body, sc)
@@ -195,62 +195,62 @@ function _mesh_dims(sh::Half{<:AbstractSpherical}, body, sc)
     (a = r, b = r, c = r, a_skin = rs, b_skin = rs)
 end
 
-function _part_outer_meshes(sh::Cylinder, body, sc)
+function part_outer_meshes(sh::Cylinder, body, sc)
     d = _mesh_dims(sh, body, sc)
     x0 = -d.pad
-    [_cylinder_tube(d.r, d.Lo; x0=x0), _cylinder_cap(d.r, x0), _cylinder_cap(d.r, x0 + d.Lo)]
+    [cylinder_tube(d.r, d.Lo; x0=x0), cylinder_cap(d.r, x0), cylinder_cap(d.r, x0 + d.Lo)]
 end
 
-function _part_outer_meshes(sh::Cone, body, sc)
+function part_outer_meshes(sh::Cone, body, sc)
     d = _mesh_dims(sh, body, sc)
     x0 = -d.pad
     Rtop = sh.top_ratio * d.r
-    meshes = Any[_cone_tube(d.r, Rtop, d.Lo; x0=x0), _cylinder_cap(d.r, x0)]
+    meshes = Any[cone_tube(d.r, Rtop, d.Lo; x0=x0), cylinder_cap(d.r, x0)]
     if Rtop > 0
-        push!(meshes, _cylinder_cap(Rtop, x0 + d.Lo))
+        push!(meshes, cylinder_cap(Rtop, x0 + d.Lo))
     end
     meshes
 end
 
-function _part_outer_meshes(sh::Sphere, body, sc)
+function part_outer_meshes(sh::Sphere, body, sc)
     d = _mesh_dims(sh, body, sc)
-    [_ellipsoid_mesh(d.r, d.r)]
+    [ellipsoid_mesh(d.r, d.r)]
 end
 
-function _part_outer_meshes(sh::Ellipsoid, body, sc)
+function part_outer_meshes(sh::Ellipsoid, body, sc)
     d = _mesh_dims(sh, body, sc)
     if sh.pole_a_truncation == 0
-        [_ellipsoid_mesh(d.a, d.b, d.c)]
+        [ellipsoid_mesh(d.a, d.b, d.c)]
     else
         x_ratio = 1 - sh.pole_a_truncation
-        [_ellipsoid_mesh_truncated(d.a, d.b, d.c, x_ratio),
-         _ellipsoid_pole_a_cap(d.a, d.b, d.c, x_ratio)]
+        [ellipsoid_mesh_truncated(d.a, d.b, d.c, x_ratio),
+         ellipsoid_pole_a_cap(d.a, d.b, d.c, x_ratio)]
     end
 end
 
-function _part_outer_meshes(sh::Plate, body, sc)
+function part_outer_meshes(sh::Plate, body, sc)
     d = _mesh_dims(sh, body, sc)
-    [_box_face_z(-d.hL, d.hL, -d.hW, d.hW, -d.hH),
-     _box_face_z(-d.hL, d.hL, -d.hW, d.hW, d.hH),
-     _box_face_y(-d.hL, d.hL, -d.hW, -d.hH, d.hH),
-     _box_face_y(-d.hL, d.hL, d.hW, -d.hH, d.hH),
-     _box_face_x(-d.hL, -d.hW, d.hW, -d.hH, d.hH),
-     _box_face_x( d.hL, -d.hW, d.hW, -d.hH, d.hH)]
+    [box_face_z(-d.hL, d.hL, -d.hW, d.hW, -d.hH),
+     box_face_z(-d.hL, d.hL, -d.hW, d.hW, d.hH),
+     box_face_y(-d.hL, d.hL, -d.hW, -d.hH, d.hH),
+     box_face_y(-d.hL, d.hL, d.hW, -d.hH, d.hH),
+     box_face_x(-d.hL, -d.hW, d.hW, -d.hH, d.hH),
+     box_face_x( d.hL, -d.hW, d.hW, -d.hH, d.hH)]
 end
 
-function _part_outer_meshes(sh::Half{<:AbstractCylindrical}, body, sc)
+function part_outer_meshes(sh::Half{<:AbstractCylindrical}, body, sc)
     d = _mesh_dims(sh, body, sc)
     x0 = -d.pad
-    meshes = Any[_cone_tube(d.r, d.t * d.r, d.Lo; θ_end=π, x0=x0),
-                 _cylinder_cap(d.r, x0; θ_end=π),
-                 _half_cylinder_flat(d.r_skin, d.Ls; r_top=d.t * d.r_skin, x0=0.0)]
-    d.t > 0 && push!(meshes, _cylinder_cap(d.t * d.r, x0 + d.Lo; θ_end=π))
+    meshes = Any[cone_tube(d.r, d.t * d.r, d.Lo; θ_end=π, x0=x0),
+                 cylinder_cap(d.r, x0; θ_end=π),
+                 half_cylinder_flat(d.r_skin, d.Ls; r_top=d.t * d.r_skin, x0=0.0)]
+    d.t > 0 && push!(meshes, cylinder_cap(d.t * d.r, x0 + d.Lo; θ_end=π))
     meshes
 end
 
-function _part_outer_meshes(sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}}, body, sc)
+function part_outer_meshes(sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}}, body, sc)
     d = _mesh_dims(sh, body, sc)
-    [_ellipsoid_mesh(d.a, d.b, d.c; φ_end=π/2), _half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
+    [ellipsoid_mesh(d.a, d.b, d.c; φ_end=π/2), half_ellipsoid_flat_mesh(d.a_skin, d.b_skin)]
 end
 
 # ── Triangular prism (TriangularPlate) ───────────────────────────────────
@@ -258,32 +258,32 @@ end
 # A triangle is a 2×2 grid with one corner repeated (the second triangle of the
 # cell is degenerate); a side is a 2×2 quad from edge p→q over z ∈ [-h/2, h/2].
 
-_triangle_face(p1, p2, p3, z) =
+triangle_face(p1, p2, p3, z) =
     ([p1[1] p3[1]; p2[1] p3[1]], [p1[2] p3[2]; p2[2] p3[2]], fill(Float64(z), 2, 2))
-_prism_side(p, q, h) =
+prism_side(p, q, h) =
     ([p[1] p[1]; q[1] q[1]], [p[2] p[2]; q[2] q[2]], [-h/2 h/2; -h/2 h/2])
 
 function _mesh_dims(sh::TriangularPlate, body, sc)
     o = outer_dims(sh, body)
     gl = body.geometry.length
     # The fibrous triangle's right angle sits at (-t, -t), t the inradius growth.
-    t = _inradius(o.length, o.width) - _inradius(gl.length_skin, gl.width_skin)
+    t = inradius(o.length, o.width) - inradius(gl.length_skin, gl.width_skin)
     (corner = -_ustrip_m(t, sc), L = _ustrip_m(o.length, sc),
      W = _ustrip_m(o.width, sc), H = _ustrip_m(o.height, sc))
 end
 
-function _part_outer_meshes(sh::TriangularPlate, body, sc)
+function part_outer_meshes(sh::TriangularPlate, body, sc)
     d = _mesh_dims(sh, body, sc)
     p1 = (d.corner, d.corner); p2 = (d.corner + d.L, d.corner); p3 = (d.corner, d.corner + d.W)
-    [_triangle_face(p1, p2, p3, -d.H / 2), _triangle_face(p1, p2, p3, d.H / 2),
-     _prism_side(p1, p2, d.H), _prism_side(p2, p3, d.H), _prism_side(p3, p1, d.H)]
+    [triangle_face(p1, p2, p3, -d.H / 2), triangle_face(p1, p2, p3, d.H / 2),
+     prism_side(p1, p2, d.H), prism_side(p2, p3, d.H), prism_side(p3, p1, d.H)]
 end
 
 # ── Pose application ─────────────────────────────────────────────────────
 
 # Apply a Pose (translation in m, dimensionless rotation) to a triple of
 # mesh coordinate arrays expressed in (m * sc) units; output in same units.
-function _transform_mesh(X, Y, Z, pose::Pose, sc)
+function transform_mesh(X, Y, Z, pose::Pose, sc)
     R = pose.rotation
     tx = _ustrip_m(pose.translation[1], sc)
     ty = _ustrip_m(pose.translation[2], sc)

@@ -12,17 +12,17 @@ struct Plate{M,D,B,C} <: AbstractSlab
     density::D
     axis_ratio_b::B
     axis_ratio_c::C
-    Plate(::_Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
+    Plate(::Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
         new{M,D,B,C}(mass, density, axis_ratio_b, axis_ratio_c)
 end
 
 # volume = length·width·height; axis_ratio_b = length/width, axis_ratio_c = length/height
-const _BOX_SPEC = _ShapeSpec((:length, :width, :height), (1, 1, 1), 0.0,
+const BOX_SPEC = ShapeSpec((:length, :width, :height), (1, 1, 1), 0.0,
                              (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
 
 function Plate(; kw...)
-    s = _resolve_shape("Plate", _BOX_SPEC, NamedTuple(kw))
-    Plate(_RESOLVED, s.mass, s.density, s.ratios...)
+    s = _resolve_shape("Plate", BOX_SPEC, NamedTuple(kw))
+    Plate(RESOLVED, s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c)
 end
 
 function _skin_level(shape::Plate, volume)

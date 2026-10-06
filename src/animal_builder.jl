@@ -193,7 +193,7 @@ dims(::BiophysicalGeometry.AbstractSlab, g) =
     (L = ustrip(u"m", g.length_skin), W = ustrip(u"m", g.width_skin), H = ustrip(u"m", g.height_skin))
 
 attachment(r::Recipe, location, patch) = (text = "Attachment($location, $patch)"; (text, evaluate(r, text)))
-normal_of(b, att) = BiophysicalGeometry._attach_normal(shape(b), b, att)
+normal_of(b, att) = BiophysicalGeometry.attach_normal(shape(b), b, att)
 
 # The twist that turns the child's own direction `axis` as near as it can to the world direction `towards`; none if
 # `towards` lies along the join, where any twist serves.
@@ -220,7 +220,7 @@ function join!(r::Recipe, parent::Symbol, on, child::Symbol, alias::Symbol, at, 
     twist_text = abs(t) > 1e-9 ? "; twist = $(num(t, 7))" : ""
     text = "Join($parent = $on_text, $child = $at_text$twist_text),"
     j = evaluate(r, text[1:end-1])
-    pose = BiophysicalGeometry._child_pose(pb, r.poses[parent], cb, j)
+    pose = BiophysicalGeometry.child_pose(pb, r.poses[parent], cb, j)
     r.poses = merge(r.poses, NamedTuple{(child,)}((pose,)))
     push!(r.joins, text)
     return cb

@@ -14,22 +14,22 @@ struct TriangularPlate{M,D,B,C} <: AbstractSlab
     density::D
     axis_ratio_b::B
     axis_ratio_c::C
-    TriangularPlate(::_Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
+    TriangularPlate(::Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
         new{M,D,B,C}(mass, density, axis_ratio_b, axis_ratio_c)
 end
 
 # volume = length·width·height / 2; ratios as for the box.
-const _TRIANGLE_SPEC = _ShapeSpec((:length, :width, :height), (1, 1, 1), log(1 / 2),
+const TRIANGLE_SPEC = ShapeSpec((:length, :width, :height), (1, 1, 1), log(1 / 2),
                                   (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
 
 function TriangularPlate(; kw...)
-    s = _resolve_shape("TriangularPlate", _TRIANGLE_SPEC, NamedTuple(kw))
-    TriangularPlate(_RESOLVED, s.mass, s.density, s.ratios...)
+    s = _resolve_shape("TriangularPlate", TRIANGLE_SPEC, NamedTuple(kw))
+    TriangularPlate(RESOLVED, s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c)
 end
 
 _diagonal(length, width) = sqrt(length^2 + width^2)
 # Inradius of the right triangle (legs L, W): area / semi-perimeter.
-_inradius(length, width) = length * width / (length + width + _diagonal(length, width))
+inradius(length, width) = length * width / (length + width + _diagonal(length, width))
 
 surface_area(::TriangularPlate, length, width, height) =
     length * width + (length + width + _diagonal(length, width)) * height
@@ -45,7 +45,7 @@ end
 # scaled about its incentre by (r + t)/r, r the inradius; the thickness grows by
 # t on each face. The right-angle corner moves to (-t, -t).
 function _fibrous_level(shape::TriangularPlate, skin, thickness)
-    scale = 1 + thickness / _inradius(skin.length_skin, skin.width_skin)
+    scale = 1 + thickness / inradius(skin.length_skin, skin.width_skin)
     length_fibrous = skin.length_skin * scale
     width_fibrous = skin.width_skin * scale
     height_fibrous = skin.height_skin + 2 * thickness
@@ -56,7 +56,7 @@ end
 # fat thickness is the difference in equivalent (in)radius.
 function _fat_thickness(shape::TriangularPlate, skin, flesh_volume, fat_volume)
     flesh = _skin_level(shape, flesh_volume).dims
-    _inradius(skin.length_skin, skin.width_skin) - _inradius(flesh.length_skin, flesh.width_skin)
+    inradius(skin.length_skin, skin.width_skin) - inradius(flesh.length_skin, flesh.width_skin)
 end
 
 # Silhouette. A convex polytope's shadow along a unit direction d is half the sum
@@ -78,8 +78,8 @@ function silhouette(sh::TriangularPlate, ins::AbstractInsulationLayer, body::Abs
 end
 
 # Radius accessors — the equivalent radius is the triangle's inradius.
-_skin_radius(::TriangularPlate, l) = _inradius(l.length_skin, l.width_skin)
-_fibrous_radius(::TriangularPlate, l) = _inradius(l.length_fibrous, l.width_fibrous)
+_skin_radius(::TriangularPlate, l) = inradius(l.length_skin, l.width_skin)
+_fibrous_radius(::TriangularPlate, l) = inradius(l.length_fibrous, l.width_fibrous)
 
 # Composition: the two triangular faces, the two leg faces and the diagonal.
 

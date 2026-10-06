@@ -19,7 +19,7 @@ struct Ellipsoid{M,D,B,C,T} <: AbstractEllipsoidal
     axis_ratio_b::B
     axis_ratio_c::C
     pole_a_truncation::T
-    Ellipsoid(::_Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C,
+    Ellipsoid(::Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C,
               pole_a_truncation::T) where {M,D,B,C,T} =
         new{M,D,B,C,T}(mass, density, axis_ratio_b, axis_ratio_c, pole_a_truncation)
 end
@@ -27,14 +27,14 @@ end
 # volume = π·k·a·b·c = (π·k/8)·length·width·height, with k = 4/3 for a full
 # ellipsoid (see `_truncated_volume_factor`); ratios as for the box.
 _ellipsoid_spec(truncation) =
-    _ShapeSpec((:length, :width, :height), (1, 1, 1), log(π * _truncated_volume_factor(truncation) / 8),
+    ShapeSpec((:length, :width, :height), (1, 1, 1), log(π * _truncated_volume_factor(truncation) / 8),
                (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
 
 function Ellipsoid(; pole_a_truncation = 0.0, kw...)
     0 <= pole_a_truncation <= 1 || throw(ArgumentError(
         "Ellipsoid `pole_a_truncation` must be in [0, 1], got $pole_a_truncation"))
     s = _resolve_shape("Ellipsoid", _ellipsoid_spec(pole_a_truncation), NamedTuple(kw))
-    Ellipsoid(_RESOLVED, s.mass, s.density, s.ratios..., pole_a_truncation)
+    Ellipsoid(RESOLVED, s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c, pole_a_truncation)
 end
 
 # x-position of the truncated pole_a (as a fraction of a). 1.0 = full ellipsoid.
@@ -128,13 +128,13 @@ function _ellipsoid_area(a, b, c, truncation)
     am, bm, cm = ustrip(u"m", a), ustrip(u"m", b), ustrip(u"m", c)
     x = 1 - truncation
     α0 = acos(x)
-    nβ = length(_CAP_ANGLES)
+    nβ = length(CAP_ANGLES)
     cap = 0.0
-    for (t, w) in _GAUSS_LEGENDRE
+    for (t, w) in GAUSS_LEGENDRE
         α = α0 * (t + 1) / 2
         sα, cα = sincos(α)
         ring = 0.0
-        for β in _CAP_ANGLES
+        for β in CAP_ANGLES
             sβ, cβ = sincos(β)
             ring += sqrt((bm * cm * cα)^2 + (am * sα)^2 * ((cm * cβ)^2 + (bm * sβ)^2))
         end
@@ -162,8 +162,8 @@ function _gauss_legendre(n)
         (t, 2 / ((1 - t^2) * dp^2))
     end
 end
-const _GAUSS_LEGENDRE = _gauss_legendre(24)
-const _CAP_ANGLES = [2π * (j - 0.5) / 64 for j in 1:64]
+const GAUSS_LEGENDRE = _gauss_legendre(24)
+const CAP_ANGLES = [2π * (j - 0.5) / 64 for j in 1:64]
 
 # ── Geometry ───────────────────────────────────────────────────────────────
 

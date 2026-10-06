@@ -156,8 +156,8 @@ function body_mesh(animal)
     vertices, faces, colours = Point3f[], Int[], RGBf[]
     for (name, part) in pairs(animal.parts)
         pose = getfield(animal.poses, name)
-        for grid in BiophysicalGeometry._part_outer_meshes(part.shape, part, 100.0)
-            add_grid!(vertices, faces, colours, BiophysicalGeometry._transform_mesh(grid..., pose, 100.0)..., part_colour(name))
+        for grid in BiophysicalGeometry.part_outer_meshes(part.shape, part, 100.0)
+            add_grid!(vertices, faces, colours, BiophysicalGeometry.transform_mesh(grid..., pose, 100.0)..., part_colour(name))
         end
     end
     return vertices, permutedims(reshape(faces, 3, :)), colours

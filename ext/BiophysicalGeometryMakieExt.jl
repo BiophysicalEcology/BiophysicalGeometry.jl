@@ -7,13 +7,12 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, TriangularPlate,
 import BiophysicalGeometry: Naked
 import BiophysicalGeometry: CompositeBody, Pose, apply_pose, apply_rotation, silhouette_rasterized
 import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
-# Mesh helpers now live in core (src/meshes.jl); reuse them here.
-# TODO: these should not have leading underscores and be imported in an extension
-import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh, _cone_tube,
-    _half_cylinder_flat, _half_ellipsoid_flat_mesh,
-    _box_face_x, _box_face_y, _box_face_z,
-    _part_outer_meshes, _transform_mesh, outer_dims, _top_ratio, HalfDomed,
-    _triangle_face, _prism_side, _inradius, _ellipsoid_mesh_truncated, _ellipsoid_pole_a_cap
+# Mesh helpers live in core (src/meshes.jl).
+import BiophysicalGeometry: cylinder_tube, cylinder_cap, ellipsoid_mesh, cone_tube,
+    half_cylinder_flat, half_ellipsoid_flat_mesh,
+    box_face_x, box_face_y, box_face_z,
+    part_outer_meshes, transform_mesh, outer_dims, top_ratio, HalfDomed,
+    triangle_face, prism_side, inradius, ellipsoid_mesh_truncated, ellipsoid_pole_a_cap
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
@@ -35,9 +34,9 @@ _layer_flags(r) = (fat_layer=r.skin > r.flesh + 1e-9, fibrous_layer=r.ins > r.sk
 # Semi-axes (a, b, c) along x, y, z of each layer of an ellipsoidal or spherical
 # body: the skin, the flesh inside it (one fat thickness in on every axis) and
 # the outer insulation (the fibrous shell, or the skin when there is none).
-_domed_layers(::Union{Sphere,Half{<:AbstractSpherical}}, body) =
+domed_layers(::Union{Sphere,Half{<:AbstractSpherical}}, body) =
     map(r -> (r, r, r), _radii(body))
-function _domed_layers(::Union{Ellipsoid,Half{<:AbstractEllipsoidal}}, body)
+function domed_layers(::Union{Ellipsoid,Half{<:AbstractEllipsoidal}}, body)
     gl = body.geometry.length
     skin = (gl.length_skin, gl.width_skin, gl.height_skin) ./ 2
     fat = haskey(gl, :fat) ? gl.fat : zero(skin[1])
@@ -63,8 +62,8 @@ function _draw_layers!(target, layers)
     end
 end
 
-_x_ratio(s::Ellipsoid) = 1 - s.pole_a_truncation
-_x_ratio(::Any) = 1.0
+cut_position(s::Ellipsoid) = 1 - s.pole_a_truncation
+cut_position(::Any) = 1.0
 
 # Each layer of a triangular plate is the skin triangle scaled about its
 # incentre to that layer's inradius: the fur grows every face by its thickness,
@@ -72,7 +71,7 @@ _x_ratio(::Any) = 1.0
 function _triangle_layers(body, f)
     gl = body.geometry.length
     L, W, H = gl.length_skin, gl.width_skin, gl.height_skin
-    r = _inradius(L, W)
+    r = inradius(L, W)
     map(_radii(body)) do ri
         t = ri - r
         height = t >= zero(t) ? H + 2t : H * ri / r
@@ -91,7 +90,7 @@ end
 #
 # A tile is `(X, Y, Z, colour)`: a parametric grid of vertices, as in `src/meshes.jl`.
 
-_view_direction(azimuth, elevation) =
+view_direction(azimuth, elevation) =
     (cos(elevation) * cos(azimuth), cos(elevation) * sin(azimuth), sin(elevation))
 
 _opaque(c) = (c = RGBAf(c); RGBf(c.r, c.g, c.b))
@@ -132,8 +131,8 @@ function _shade_at(X, Y, Z, i, j, light)
     return len > 1e-10 ? abs(n[1] * light[1] + n[2] * light[2] + n[3] * light[3]) / len : NaN
 end
 
-function _mesh_tiles!(target, tiles, azimuth, elevation)
-    d = _view_direction(azimuth, elevation)
+function mesh_tiles!(target, tiles, azimuth, elevation)
+    d = view_direction(azimuth, elevation)
     light = (d[1] - 0.35 * d[2], d[2] + 0.35 * d[1], d[3] + 0.6)
     light = light ./ sqrt(sum(abs2, light))
     points = Point3f[]; colours = RGBAf[]; faces = Int[]
@@ -187,12 +186,12 @@ _grid(f, us, vs) = ([f(u, v)[1] for u in us, v in vs], [f(u, v)[2] for u in us, 
 # The angle around a shape's axis that a view direction `d` (in its frame) comes from.
 _view_angle(::Union{AbstractCylindrical,Half{<:AbstractCylindrical}}, d) = atan(d[3], d[2])
 _view_angle(::Any, d) = atan(d[2], d[1])
-_cut_angles(shape, d, cut) =
+cut_angles(shape, d, cut) =
     (a = _view_angle(shape, d); range(a + cut/2, a + 2π - cut/2; length=73))
 
 # Radii and lengths of an axial shape; radius `r * taper(x)` at position x along it.
-function _axial_layers(body, sc)
-    t = Float64(_top_ratio(body.shape))
+function axial_layers(body, sc)
+    t = Float64(top_ratio(body.shape))
     L = _m(body.geometry.length.length_skin, sc)
     pad = _m(outer_dims(body.shape, body).length, sc) / 2 - L / 2
     taper(x) = 1 - (1 - t) * clamp(x, 0, L) / L
@@ -243,19 +242,19 @@ function _runs_within(θs, lo, hi)
     return runs
 end
 
-_cutaway_tiles(::Union{Cylinder,Cone}, body, sc, cols, θs) =
-    _axial_shells!(_Tile[], _axial_layers(body, sc), cols, range(0, 2π; length=73), [θs], ())
+cutaway_tiles(::Union{Cylinder,Cone}, body, sc, cols, θs) =
+    _axial_shells!(_Tile[], axial_layers(body, sc), cols, range(0, 2π; length=73), [θs], ())
 
-_cutaway_tiles(sh::Union{Sphere,Ellipsoid}, body, sc, cols, θs) = _ellipsoidal_tiles(sh, body, sc, cols, θs, π)
-_cutaway_tiles(sh::HalfDomed, body, sc, cols, θs) = _ellipsoidal_tiles(sh.parent, body, sc, cols, θs, π / 2)
+cutaway_tiles(sh::Union{Sphere,Ellipsoid}, body, sc, cols, θs) = _ellipsoidal_tiles(sh, body, sc, cols, θs, π)
+cutaway_tiles(sh::HalfDomed, body, sc, cols, θs) = _ellipsoidal_tiles(sh.parent, body, sc, cols, θs, π / 2)
 
 # `φ_max = π` is the whole shape; `π / 2` the upper half, closed by its flat face.
 # Each layer has its own semi-axes (a, b, c). On a cut ellipsoid, points beyond the
 # cut plane are pressed onto it, which draws the flat face where the cap was.
 function _ellipsoidal_tiles(sh, body, sc, cols, θs, φ_max)
     fl = _layer_flags(_scaled_radii(body, sc))
-    l = map(axes -> map(x -> _m(x, sc), axes), _domed_layers(body.shape, body))
-    x_ratio = _x_ratio(sh)
+    l = map(axes -> map(x -> _m(x, sc), axes), domed_layers(body.shape, body))
+    x_ratio = cut_position(sh)
     φs = range(0, φ_max; length=49)
     full = range(0, 2π; length=73)
     point((a, b, c), θ, φ) = (min(a * sin(φ) * cos(θ), x_ratio * a), b * sin(φ) * sin(θ), c * cos(φ))
@@ -281,8 +280,8 @@ end
 
 # A half cylinder or half cone shows its layers on its flat face (z = 0), which is a
 # section along it, and its dome is cut away like a cylinder's.
-function _cutaway_tiles(::Half{<:AbstractCylindrical}, body, sc, cols, θs)
-    layers = _axial_layers(body, sc)
+function cutaway_tiles(::Half{<:AbstractCylindrical}, body, sc, cols, θs)
+    layers = axial_layers(body, sc)
     (; L, pad, taper, rf, rs, ri) = layers
     fl = _layer_flags((flesh=rf, skin=rs, ins=ri))
     tiles = _axial_shells!(_Tile[], layers, cols, range(0, π; length=37), _runs_within(θs, 0.0, π), (0.0, π))
@@ -300,7 +299,7 @@ function _cutaway_tiles(::Half{<:AbstractCylindrical}, body, sc, cols, θs)
 end
 
 # A plate: nested boxes, the outer two without their top and the two sides nearest the viewer.
-function _cutaway_tiles(sh::Plate, body, sc, cols, θs)
+function cutaway_tiles(sh::Plate, body, sc, cols, θs)
     r = _scaled_radii(body, sc)
     fl = _layer_flags(r)
     gl = body.geometry.length
@@ -312,11 +311,11 @@ function _cutaway_tiles(sh::Plate, body, sc, cols, θs)
     sx, sy = cos(az) >= 0 ? 1 : -1, sin(az) >= 0 ? 1 : -1
     tiles = _Tile[]
     function box(hl, hw, hh, col; open=false)
-        push!(tiles, (_box_face_z(-hl, hl, -hw, hw, -hh)..., col))
-        open || push!(tiles, (_box_face_z(-hl, hl, -hw, hw, hh)..., col))
+        push!(tiles, (box_face_z(-hl, hl, -hw, hw, -hh)..., col))
+        open || push!(tiles, (box_face_z(-hl, hl, -hw, hw, hh)..., col))
         for s in (-1, 1)
-            (open && s == sx) || push!(tiles, (_box_face_x(s * hl, -hw, hw, -hh, hh)..., col))
-            (open && s == sy) || push!(tiles, (_box_face_y(-hl, hl, s * hw, -hh, hh)..., col))
+            (open && s == sx) || push!(tiles, (box_face_x(s * hl, -hw, hw, -hh, hh)..., col))
+            (open && s == sy) || push!(tiles, (box_face_y(-hl, hl, s * hw, -hh, hh)..., col))
         end
     end
     box(hl_f, hw_f, hh_f, cols.flesh)
@@ -328,16 +327,16 @@ function _cutaway_tiles(sh::Plate, body, sc, cols, θs)
 end
 
 # A triangular plate: nested prisms, the outer two without their top.
-function _cutaway_tiles(::TriangularPlate, body, sc, cols, θs)
+function cutaway_tiles(::TriangularPlate, body, sc, cols, θs)
     fl = _layer_flags(_scaled_radii(body, sc))
     l = _triangle_layers(body, x -> _m(x, sc))
     tiles = _Tile[]
     function prism(l, col; open=false)
         p1 = (l.corner, l.corner); p2 = (l.corner + l.length, l.corner); p3 = (l.corner, l.corner + l.width)
-        push!(tiles, (_triangle_face(p1, p2, p3, -l.height / 2)..., col))
-        open || push!(tiles, (_triangle_face(p1, p2, p3, l.height / 2)..., col))
+        push!(tiles, (triangle_face(p1, p2, p3, -l.height / 2)..., col))
+        open || push!(tiles, (triangle_face(p1, p2, p3, l.height / 2)..., col))
         for (p, q) in ((p1, p2), (p2, p3), (p3, p1))
-            push!(tiles, (_prism_side(p, q, l.height)..., col))
+            push!(tiles, (prism_side(p, q, l.height)..., col))
         end
     end
     prism(l.flesh, cols.flesh)
@@ -359,8 +358,8 @@ function _composite_tiles(b::CompositeBody, sc, cols)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
         col = _part_color(part, cols)
-        for mesh in _part_outer_meshes(part.shape, part, sc)
-            push!(tiles, (_transform_mesh(mesh..., pose, sc)..., col))
+        for mesh in part_outer_meshes(part.shape, part, sc)
+            push!(tiles, (transform_mesh(mesh..., pose, sc)..., col))
         end
     end
     return tiles
@@ -369,7 +368,7 @@ end
 # Each part of a composite (those in `parts`, or all) cut open, in place: the cut faces the viewer, whose direction
 # is turned into the part's own frame.
 function _composite_cutaway_tiles(b::CompositeBody, sc, cols, azimuth, elevation, cut, parts)
-    d = _view_direction(azimuth, elevation)
+    d = view_direction(azimuth, elevation)
     tiles = _Tile[]
     for name in propertynames(b.parts)
         parts === nothing || name in parts || continue
@@ -380,8 +379,8 @@ end
 
 function _append_cutaway!(tiles, part, pose, sc, cols, d, cut)
     l = apply_rotation(transpose(pose.rotation), d)
-    for (X, Y, Z, col) in _cutaway_tiles(part.shape, part, sc, cols, _cut_angles(part.shape, l, cut))
-        push!(tiles, (_transform_mesh(X, Y, Z, pose, sc)..., col))
+    for (X, Y, Z, col) in cutaway_tiles(part.shape, part, sc, cols, cut_angles(part.shape, l, cut))
+        push!(tiles, (transform_mesh(X, Y, Z, pose, sc)..., col))
     end
     return tiles
 end
@@ -394,8 +393,8 @@ function _composite_bbox(b::CompositeBody, sc)
     for name in propertynames(b.parts)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
-        for grid in _part_outer_meshes(part.shape, part, sc)
-            X, Y, Z = _transform_mesh(grid..., pose, sc)
+        for grid in part_outer_meshes(part.shape, part, sc)
+            X, Y, Z = transform_mesh(grid..., pose, sc)
             xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
             ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
             zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -414,8 +413,8 @@ function _part_bbox(shape, body, pose::Pose, sc)
     xmin, xmax = Inf, -Inf
     ymin, ymax = Inf, -Inf
     zmin, zmax = Inf, -Inf
-    for grid in _part_outer_meshes(shape, body, sc)
-        X, Y, Z = _transform_mesh(grid..., pose, sc)
+    for grid in part_outer_meshes(shape, body, sc)
+        X, Y, Z = transform_mesh(grid..., pose, sc)
         xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
         ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
         zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -480,7 +479,7 @@ end
 # Cone and the cylindrical halves are frustums with top/base ratio t (t = 1
 # for a half cylinder); the long section runs base (bottom) to top.
 function _section_layers(sh::Union{Cone,Half{<:AbstractCylindrical}}, body, mode, r, cols)
-    t = _top_ratio(sh)
+    t = top_ratio(sh)
     half = sh isa Half
     hl_s = body.geometry.length.length_skin / 2
     hl_i = outer_dims(sh, body).length / 2
@@ -506,9 +505,9 @@ end
 function _section_layers(sh::Union{Sphere,Ellipsoid,HalfDomed}, body, mode, r, cols)
     pts = sh isa Half ? _half_ellipse_pts : _ellipse_pts
     # A cut ellipsoid's long section stops at the cut plane, up the plot.
-    cut(points, a) = _x_ratio(sh) < 1 ? filter(q -> q[2] <= _pu(a) * _x_ratio(sh), points) : points
+    cut(points, a) = cut_position(sh) < 1 ? filter(q -> q[2] <= _pu(a) * cut_position(sh), points) : points
     geom((a, b, c)) = mode === :long ? cut(pts(c, a), a) : pts(c, b)
-    l = _domed_layers(sh, body)
+    l = domed_layers(sh, body)
     [
         (r.ins > r.skin, () -> geom(l.ins), cols.fibrous_layer),
         (r.skin > r.flesh, () -> geom(l.skin), cols.fat_layer),
@@ -578,7 +577,7 @@ function _section_limits(sh::Plate, body, r, pad)
 end
 
 function _section_limits(shape::Union{Sphere,Ellipsoid,HalfDomed}, body, r, pad)
-    (a, b, c) = map(x -> _pu(x) * (1 + pad), _domed_layers(shape, body).ins)
+    (a, b, c) = map(x -> _pu(x) * (1 + pad), domed_layers(shape, body).ins)
     _limits(c, a, c, b)
 end
 
@@ -606,9 +605,9 @@ function Makie.plot!(p::BodyCutaway)
     tiles = if body isa CompositeBody
         _composite_cutaway_tiles(body, sc, cols, az, p[:elevation][], cut, p[:parts][])
     else
-        _cutaway_tiles(body.shape, body, sc, cols, _cut_angles(body.shape, _view_direction(az, p[:elevation][]), cut))
+        cutaway_tiles(body.shape, body, sc, cols, cut_angles(body.shape, view_direction(az, p[:elevation][]), cut))
     end
-    _mesh_tiles!(p, tiles, az, p[:elevation][])
+    mesh_tiles!(p, tiles, az, p[:elevation][])
     p
 end
 
@@ -733,7 +732,7 @@ function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
                xlabel="u (cm)", ylabel="v (cm)")
 
     cols = map(_opaque, (flesh=flesh_col, fat_layer=fat_layer_col, fibrous_layer=fibrous_layer_col))
-    _mesh_tiles!(ax3, _composite_tiles(body, sc, cols), _view_angles(ax3)...)
+    mesh_tiles!(ax3, _composite_tiles(body, sc, cols), _view_angles(ax3)...)
 
     sg = SliderGrid(fig[2, 1:2],
         (label="zenith θ (0=overhead, π/2=horizon)", range=range(0.0, π/2, length=91),
