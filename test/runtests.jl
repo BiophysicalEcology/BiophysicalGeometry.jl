@@ -13,3 +13,4 @@ end
 
 @safetestset "geometry" begin include("geometry.jl") end
 @safetestset "composition" begin include("composition.jl") end
+@safetestset "animal builder" begin include("animal_builder.jl") end

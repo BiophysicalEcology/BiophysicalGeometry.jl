@@ -184,7 +184,7 @@ function _part_outer_meshes(sh::Cone, body, sc)
     d = _mesh_dims(sh, body, sc)
     z0 = -d.pad
     Rtop = sh.top_ratio * d.r
-    meshes = Any[_cone_tube(d.r, Rtop, d.Lo; z0=z0), _cylinder_cap(d.r, z0)]
+    meshes = [_cone_tube(d.r, Rtop, d.Lo; z0=z0), _cylinder_cap(d.r, z0)]
     if Rtop > 0
         push!(meshes, _cylinder_cap(Rtop, z0 + d.Lo))
     end

@@ -11,9 +11,6 @@ CairoMakie.activate!(type = "png")
 # Helpers for the figures, loaded in the examples with `using Main.FigureHelpers`
 include("figure_helpers.jl")
 
-# The "Build an animal" page computes in the browser; check its geometry against the package
-include("check_builder.jl")
-
 makedocs(
     modules = [BiophysicalGeometry, Base.get_extension(BiophysicalGeometry, :BiophysicalGeometryMakieExt)],
     sitename = "BiophysicalGeometry.jl",

@@ -127,6 +127,22 @@ struct SilhouetteResult
     area::typeof(1.0u"m^2")
 end
 
+# Project the triangles of one posed mesh onto the plane spanned by `u` and `v`, append them to `tris`, and widen the
+# bounding box `(xmin, xmax, ymin, ymax)`. A function barrier: the mesh tiles arrive untyped, and the loop over their
+# triangles must not be.
+function _project_triangles!(tris, box, X::Matrix{Float64}, Y::Matrix{Float64}, Z::Matrix{Float64}, u, v)
+    xmin, xmax, ymin, ymax = box
+    for (p1, p2, p3) in _each_triangle(X, Y, Z)
+        q1 = (p1[1]*u[1] + p1[2]*u[2] + p1[3]*u[3], p1[1]*v[1] + p1[2]*v[2] + p1[3]*v[3])
+        q2 = (p2[1]*u[1] + p2[2]*u[2] + p2[3]*u[3], p2[1]*v[1] + p2[2]*v[2] + p2[3]*v[3])
+        q3 = (p3[1]*u[1] + p3[2]*u[2] + p3[3]*u[3], p3[1]*v[1] + p3[2]*v[2] + p3[3]*v[3])
+        push!(tris, (q1, q2, q3))
+        xmin = min(xmin, q1[1], q2[1], q3[1]); xmax = max(xmax, q1[1], q2[1], q3[1])
+        ymin = min(ymin, q1[2], q2[2], q3[2]); ymax = max(ymax, q1[2], q2[2], q3[2])
+    end
+    return (xmin, xmax, ymin, ymax)
+end
+
 """
     silhouette_rasterized(body::CompositeBody, sun_direction; resolution=256, return_image=false)
 
@@ -149,28 +165,15 @@ function silhouette_rasterized(body::CompositeBody, sun_direction::NTuple{3,<:Re
 
     # Collect 2D triangles + bbox first, then rasterise.
     tris = NTuple{3, NTuple{2, Float64}}[]
-    xmin, xmax, ymin, ymax = Inf, -Inf, Inf, -Inf
+    box = (Inf, -Inf, Inf, -Inf)
     for name in propertynames(body.parts)
         part = getfield(body.parts, name)
         pose = getfield(body.poses, name)
         for grid in _part_outer_meshes(part.shape, part, 1.0)  # sc=1 → metres
-            X, Y, Z = _transform_mesh(grid..., pose, 1.0)
-            for tri in _each_triangle(X, Y, Z)
-                p1, p2, p3 = tri
-                q1 = (p1[1]*u[1] + p1[2]*u[2] + p1[3]*u[3],
-                      p1[1]*v[1] + p1[2]*v[2] + p1[3]*v[3])
-                q2 = (p2[1]*u[1] + p2[2]*u[2] + p2[3]*u[3],
-                      p2[1]*v[1] + p2[2]*v[2] + p2[3]*v[3])
-                q3 = (p3[1]*u[1] + p3[2]*u[2] + p3[3]*u[3],
-                      p3[1]*v[1] + p3[2]*v[2] + p3[3]*v[3])
-                push!(tris, (q1, q2, q3))
-                xmin = min(xmin, q1[1], q2[1], q3[1])
-                xmax = max(xmax, q1[1], q2[1], q3[1])
-                ymin = min(ymin, q1[2], q2[2], q3[2])
-                ymax = max(ymax, q1[2], q2[2], q3[2])
-            end
+            box = _project_triangles!(tris, box, _transform_mesh(grid..., pose, 1.0)..., u, v)
         end
     end
+    xmin, xmax, ymin, ymax = box
     isempty(tris) && return return_image ?
         SilhouetteResult(falses(resolution, resolution), (0.0, 0.0), (0.0, 0.0), 0.0u"m^2") :
         0.0u"m^2"

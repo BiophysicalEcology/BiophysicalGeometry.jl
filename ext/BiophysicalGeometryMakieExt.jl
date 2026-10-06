@@ -5,7 +5,7 @@ using Unitful
 using BiophysicalGeometry
 import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, Cone, Half
 import BiophysicalGeometry: Naked
-import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
+import BiophysicalGeometry: CompositeBody, Pose, apply_pose, apply_rotation, silhouette_rasterized
 # Mesh helpers now live in core (src/meshes.jl); reuse them here.
 import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh, _cone_tube,
     _half_cylinder_flat, _half_ellipsoid_flat_mesh,
@@ -65,36 +65,38 @@ _opaque(c) = (c = RGBAf(c); RGBf(c.r, c.g, c.b))
 
 # Subdivide a coarse grid by linear interpolation, so that no face is long enough
 # to be sorted wrongly.
-function _refine(A, n=16)
-    for dim in 1:2
-        m = size(A, dim)
-        m >= n && continue
-        ts = range(1, m; length=n)
-        lo = clamp.(floor.(Int, ts), 1, m - 1); w = ts .- lo
-        A = dim == 1 ? [(1 - w[i]) * A[lo[i], j] + w[i] * A[lo[i] + 1, j] for i in 1:n, j in axes(A, 2)] :
-                       [(1 - w[j]) * A[i, lo[j]] + w[j] * A[i, lo[j] + 1] for i in axes(A, 1), j in 1:n]
+_refine(A::AbstractMatrix, n=16) = _refine_along(_refine_along(A, 1, n), 2, n)
+
+function _refine_along(A::AbstractMatrix{T}, dim, n) where {T}
+    m = size(A, dim)
+    m >= n && return A
+    B = Matrix{T}(undef, dim == 1 ? (n, size(A, 2)) : (size(A, 1), n))
+    for k in 1:n
+        t = 1 + (k - 1) * (m - 1) / (n - 1)
+        lo = clamp(floor(Int, t), 1, m - 1); w = t - lo
+        if dim == 1
+            for j in axes(A, 2)
+                B[k, j] = (1 - w) * A[lo, j] + w * A[lo + 1, j]
+            end
+        else
+            for i in axes(A, 1)
+                B[i, k] = (1 - w) * A[i, lo] + w * A[i, lo + 1]
+            end
+        end
     end
-    return A
+    return B
 end
 
-function _shade(X, Y, Z, col, light)
+# Shading at grid point (i, j): the cosine between the surface normal and the light, NaN where the grid is
+# degenerate (a cone's tip, the centre of a cap).
+function _shade_at(X, Y, Z, i, j, light)
     n1, n2 = size(X)
-    s = fill(NaN, n1, n2)
-    for j in 1:n2, i in 1:n1
-        ip, im, jp, jm = min(i + 1, n1), max(i - 1, 1), min(j + 1, n2), max(j - 1, 1)
-        du = (X[ip, j] - X[im, j], Y[ip, j] - Y[im, j], Z[ip, j] - Z[im, j])
-        dv = (X[i, jp] - X[i, jm], Y[i, jp] - Y[i, jm], Z[i, jp] - Z[i, jm])
-        n = (du[2] * dv[3] - du[3] * dv[2], du[3] * dv[1] - du[1] * dv[3], du[1] * dv[2] - du[2] * dv[1])
-        len = sqrt(n[1]^2 + n[2]^2 + n[3]^2)
-        len > 1e-10 && (s[i, j] = abs(n[1] * light[1] + n[2] * light[2] + n[3] * light[3]) / len)
-    end
-    valid = filter(isfinite, s)
-    fallback = isempty(valid) ? 1.0 : sum(valid) / length(valid)
-    c = RGBAf(col)
-    map(s) do x
-        f = Float32(0.55 + 0.45 * (isfinite(x) ? x : fallback))
-        RGBAf(c.r * f, c.g * f, c.b * f, c.alpha)
-    end
+    ip, im, jp, jm = min(i + 1, n1), max(i - 1, 1), min(j + 1, n2), max(j - 1, 1)
+    du = (X[ip, j] - X[im, j], Y[ip, j] - Y[im, j], Z[ip, j] - Z[im, j])
+    dv = (X[i, jp] - X[i, jm], Y[i, jp] - Y[i, jm], Z[i, jp] - Z[i, jm])
+    n = (du[2] * dv[3] - du[3] * dv[2], du[3] * dv[1] - du[1] * dv[3], du[1] * dv[2] - du[2] * dv[1])
+    len = sqrt(n[1]^2 + n[2]^2 + n[3]^2)
+    return len > 1e-10 ? abs(n[1] * light[1] + n[2] * light[2] + n[3] * light[3]) / len : NaN
 end
 
 function _mesh_tiles!(target, tiles, azimuth, elevation)
@@ -102,22 +104,40 @@ function _mesh_tiles!(target, tiles, azimuth, elevation)
     light = (d[1] - 0.35 * d[2], d[2] + 0.35 * d[1], d[3] + 0.6)
     light = light ./ sqrt(sum(abs2, light))
     points = Point3f[]; colours = RGBAf[]; faces = Int[]
+    npoints = sum(((X, _, _, _),) -> max(size(X, 1), 16) * max(size(X, 2), 16), tiles; init=0)
+    sizehint!(points, npoints); sizehint!(colours, npoints); sizehint!(faces, 6 * npoints)
     for (X, Y, Z, col) in tiles
-        X, Y, Z = _refine(X), _refine(Y), _refine(Z)
-        n1, n2 = size(X)
-        offset = length(points)
-        shaded = _shade(X, Y, Z, col, light)
-        for j in 1:n2, i in 1:n1
-            push!(points, Point3f(X[i, j], Y[i, j], Z[i, j])); push!(colours, shaded[i, j])
-        end
-        index(i, j) = offset + (j - 1) * n1 + i
-        for j in 1:n2-1, i in 1:n1-1
-            append!(faces, (index(i, j), index(i + 1, j), index(i, j + 1)))
-            append!(faces, (index(i + 1, j), index(i + 1, j + 1), index(i, j + 1)))
-        end
+        _append_tile!(points, colours, faces, _refine(X), _refine(Y), _refine(Z), col, light)
     end
     mesh!(target, points, permutedims(reshape(faces, 3, :)); color=colours, shading=NoShading)
 end
+
+function _append_tile!(points, colours, faces, X::Matrix{Float64}, Y::Matrix{Float64}, Z::Matrix{Float64}, col, light)
+    n1, n2 = size(X)
+    offset = length(points)
+    # Degenerate points take the tile's mean shade.
+    total, valid = 0.0, 0
+    for j in 1:n2, i in 1:n1
+        x = _shade_at(X, Y, Z, i, j, light)
+        isfinite(x) && (total += x; valid += 1)
+    end
+    fallback = valid == 0 ? 1.0 : total / valid
+    c = RGBAf(col)
+    for j in 1:n2, i in 1:n1
+        x = _shade_at(X, Y, Z, i, j, light)
+        f = Float32(0.55 + 0.45 * (isfinite(x) ? x : fallback))
+        push!(points, Point3f(X[i, j], Y[i, j], Z[i, j]))
+        push!(colours, RGBAf(c.r * f, c.g * f, c.b * f, c.alpha))
+    end
+    for j in 1:n2-1, i in 1:n1-1
+        k = offset + (j - 1) * n1 + i
+        append!(faces, (k, k + 1, k + n1, k + 1, k + n1 + 1, k + n1))
+    end
+    return nothing
+end
+
+# A tile of a drawing: a parametric grid of points and its colour.
+const _Tile = Tuple{Matrix{Float64},Matrix{Float64},Matrix{Float64},RGBf}
 
 _grid(f, us, vs) = ([f(u, v)[1] for u in us, v in vs], [f(u, v)[2] for u in us, v in vs],
                     [f(u, v)[3] for u in us, v in vs])
@@ -141,11 +161,10 @@ function _axial_layers(body, sc)
     return (; L, pad, taper, rf=r.flesh, rs=r.skin, ri=r.ins)
 end
 
-function _cutaway_tiles(::Union{Cylinder,Cone}, body, sc, cols, θs)
-    (; L, pad, taper, rf, rs, ri) = _axial_layers(body, sc)
+# Flesh whole over the angles `full`; fat and fibres over each run of angles in `runs`, with the faces of the cut
+# filled in, except where a run ends at one of the `edges` (the flat face of a half, which shows the layers itself).
+function _axial_shells!(tiles, (; L, pad, taper, rf, rs, ri), cols, full, runs, edges)
     fl = _layer_flags((flesh=rf, skin=rs, ins=ri))
-    tiles = []
-    full = range(0, 2π; length=73)
     function shell(r, z0, z1, θ, col)
         push!(tiles, (_grid((a, z) -> (r * taper(z) * cos(a), r * taper(z) * sin(a), z), θ, range(z0, z1; length=2))..., col))
         for z in (z0, z1)
@@ -154,19 +173,36 @@ function _cutaway_tiles(::Union{Cylinder,Cone}, body, sc, cols, θs)
         end
     end
     shell(rf, 0.0, L, full, cols.flesh)
-    fl.fat && shell(rs, 0.0, L, θs, cols.fat)
-    fl.fur && shell(ri, -pad, L + pad, θs, cols.fur)
-    for a in (first(θs), last(θs))
-        face(r0, r1, z0, z1, col) = push!(tiles, (_grid((ρ, z) -> ((r0 + ρ * (r1 - r0)) * taper(z) * cos(a),
-            (r0 + ρ * (r1 - r0)) * taper(z) * sin(a), z), range(0, 1; length=2), range(z0, z1; length=2))..., col))
-        fl.fat && face(rf, rs, 0.0, L, cols.fat)
-        if fl.fur
-            face(rs, ri, 0.0, L, cols.fur)
-            face(0.0, ri, -pad, 0.0, cols.fur); face(0.0, ri, L, L + pad, cols.fur)
+    for θs in runs
+        fl.fat && shell(rs, 0.0, L, θs, cols.fat)
+        fl.fur && shell(ri, -pad, L + pad, θs, cols.fur)
+        for a in (first(θs), last(θs))
+            any(e -> abs(rem2pi(a - e, RoundNearest)) < 1e-9, edges) && continue
+            face(r0, r1, z0, z1, col) = push!(tiles, (_grid((ρ, z) -> ((r0 + ρ * (r1 - r0)) * taper(z) * cos(a),
+                (r0 + ρ * (r1 - r0)) * taper(z) * sin(a), z), range(0, 1; length=2), range(z0, z1; length=2))..., col))
+            fl.fat && face(rf, rs, 0.0, L, cols.fat)
+            if fl.fur
+                face(rs, ri, 0.0, L, cols.fur)
+                face(0.0, ri, -pad, 0.0, cols.fur); face(0.0, ri, L, L + pad, cols.fur)
+            end
         end
     end
     return tiles
 end
+
+# The parts of the range of angles `θs` (less than a turn) that lie within [lo, hi].
+function _runs_within(θs, lo, hi)
+    s, e = first(θs), last(θs)
+    runs = StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int}[]
+    for k in -2:2
+        a, b = max(s + 2π * k, lo), min(e + 2π * k, hi)
+        b - a > 1e-9 && push!(runs, range(a, b; length=max(2, ceil(Int, 36 * (b - a) / π) + 1)))
+    end
+    return runs
+end
+
+_cutaway_tiles(::Union{Cylinder,Cone}, body, sc, cols, θs) =
+    _axial_shells!(_Tile[], _axial_layers(body, sc), cols, range(0, 2π; length=73), [θs], ())
 
 _cutaway_tiles(sh::Union{Sphere,Ellipsoid}, body, sc, cols, θs) = _ellipsoidal_tiles(sh, body, sc, cols, θs, π)
 _cutaway_tiles(sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}}, body, sc, cols, θs) =
@@ -182,7 +218,7 @@ function _ellipsoidal_tiles(sh, body, sc, cols, θs, φ_max)
     φs = range(0, φ_max; length=49)
     full = range(0, 2π; length=73)
     point(a, b, θ, φ) = (a * sin(φ) * cos(θ), b * sin(φ) * sin(θ), b * cos(φ))
-    tiles = Any[(_grid((θ, φ) -> point(af, bf, θ, φ), full, φs)..., cols.flesh)]
+    tiles = _Tile[(_grid((θ, φ) -> point(af, bf, θ, φ), full, φs)..., cols.flesh)]
     fl.fat && push!(tiles, (_grid((θ, φ) -> point(as, bs, θ, φ), θs, φs)..., cols.fat))
     fl.fur && push!(tiles, (_grid((θ, φ) -> point(ai, bi, θ, φ), θs, φs)..., cols.fur))
     for θ in (first(θs), last(θs))
@@ -201,24 +237,13 @@ function _ellipsoidal_tiles(sh, body, sc, cols, θs, φ_max)
     return tiles
 end
 
-# A half cylinder shows its layers on its flat face, which is a section along it.
+# A half cylinder shows its layers on its flat face, which is a section along it, and its dome is cut away like a
+# cylinder's.
 function _cutaway_tiles(::Half{<:AbstractCylindrical}, body, sc, cols, θs)
-    (; L, pad, rf, rs, ri) = _axial_layers(body, sc)
+    layers = _axial_layers(body, sc)
+    (; L, pad, rf, rs, ri) = layers
     fl = _layer_flags((flesh=rf, skin=rs, ins=ri))
-    tiles = []
-    half = range(0, π; length=37)
-    r_out, z0, z1, outer = fl.fur ? (ri, -pad, L + pad, cols.fur) : (rs, 0.0, L, fl.fat ? cols.fat : cols.flesh)
-    push!(tiles, (_grid((a, z) -> (r_out * cos(a), r_out * sin(a), z), half, range(z0, z1; length=2))..., outer))
-    sector(r0, r1, z, col) = push!(tiles, (_grid((a, ρ) -> ((r0 + ρ * (r1 - r0)) * cos(a), (r0 + ρ * (r1 - r0)) * sin(a), z),
-        half, range(0, 1; length=2))..., col))
-    for z in (z0, z1)
-        if fl.fur
-            sector(0.0, ri, z, cols.fur)
-        else
-            sector(0.0, rf, z, cols.flesh)
-            fl.fat && sector(rf, rs, z, cols.fat)
-        end
-    end
+    tiles = _axial_shells!(_Tile[], layers, cols, range(0, π; length=37), _runs_within(θs, 0.0, π), (0.0, π))
     flat(x0, x1, za, zb, col) = push!(tiles, (_grid((x, z) -> (x, 0.0, z), range(x0, x1; length=2),
         range(za, zb; length=2))..., col))
     flat(-rf, rf, 0.0, L, cols.flesh)
@@ -243,7 +268,7 @@ function _cutaway_tiles(sh::Plate, body, sc, cols, θs)
     hh_f = hl_f / Float64(sh.axis_ratio_c)
     az = (first(θs) + last(θs)) / 2 - π          # towards the viewer
     sx, sy = cos(az) >= 0 ? 1 : -1, sin(az) >= 0 ? 1 : -1
-    tiles = []
+    tiles = _Tile[]
     function box(hl, hw, hh, col; open=false)
         push!(tiles, (_box_face_z(-hl, hl, -hw, hw, -hh)..., col))
         open || push!(tiles, (_box_face_z(-hl, hl, -hw, hw, hh)..., col))
@@ -266,7 +291,7 @@ end
 _part_color(body, cols) = body.insulation isa Naked ? cols.flesh : cols.fur
 
 function _composite_tiles(b::CompositeBody, sc, cols)
-    tiles = []
+    tiles = _Tile[]
     for name in propertynames(b.parts)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
@@ -274,6 +299,27 @@ function _composite_tiles(b::CompositeBody, sc, cols)
         for mesh in _part_outer_meshes(part.shape, part, sc)
             push!(tiles, (_transform_mesh(mesh..., pose, sc)..., col))
         end
+    end
+    return tiles
+end
+
+# Each part of a composite (those in `parts`, or all) cut open, in place: the cut faces the viewer, whose direction
+# is turned into the part's own frame.
+function _composite_cutaway_tiles(b::CompositeBody, sc, cols, azimuth, elevation, cut, parts)
+    d = _view_direction(azimuth, elevation)
+    tiles = _Tile[]
+    for name in propertynames(b.parts)
+        parts === nothing || name in parts || continue
+        _append_cutaway!(tiles, getfield(b.parts, name), getfield(b.poses, name), sc, cols, d, cut)
+    end
+    return tiles
+end
+
+function _append_cutaway!(tiles, part, pose, sc, cols, d, cut)
+    l = apply_rotation(transpose(pose.rotation), d)
+    a = atan(l[2], l[1])
+    for (X, Y, Z, col) in _cutaway_tiles(part.shape, part, sc, cols, range(a + cut / 2, a + 2π - cut / 2; length=73))
+        push!(tiles, (_transform_mesh(X, Y, Z, pose, sc)..., col))
     end
     return tiles
 end
@@ -426,6 +472,7 @@ end
         azimuth = 5π/4,      # direction of the viewer: the cut faces it, and so does the light
         elevation = π/7,
         cut = π/2,           # angle of fat and fibres cut away
+        parts = nothing,     # of a composite, the names of the parts to draw; nothing for all
     )
 end
 
@@ -434,7 +481,7 @@ function Makie.plot!(p::BodyCutaway)
     az = p[:azimuth][];  cut = p[:cut][]
     cols = map(_opaque, _colors(p))
     tiles = if body isa CompositeBody
-        _composite_tiles(body, sc, cols)
+        _composite_cutaway_tiles(body, sc, cols, az, p[:elevation][], cut, p[:parts][])
     else
         _cutaway_tiles(body.shape, body, sc, cols, range(az + cut/2, az + 2π - cut/2; length=73))
     end
@@ -479,18 +526,20 @@ _view_angles(ax::Axis3) = (ax.azimuth[], ax.elevation[])
 _view_angles(ax) = (5π/4, π/7)
 
 """
-    draw_cutaway!(ax::Axis3, body; sc=100.0, cut=π/2, flesh_col=…, fat_col=…, fur_col=…)
+    draw_cutaway!(ax::Axis3, body; sc=100.0, cut=π/2, parts=nothing, flesh_col=…, fat_col=…, fur_col=…)
 
 Draw `body` into an existing `Axis3`, with the fat and fibres facing the viewer cut away
 over the angle `cut`. `sc` converts metres to axis units (default 100 → cm labels).
+Each part of a `CompositeBody` is cut open where it faces the viewer; `parts`, a
+collection of part names, draws only those.
 """
 function BiophysicalGeometry.draw_cutaway!(ax, body;
-        sc = 100.0, cut = π/2,
+        sc = 100.0, cut = π/2, parts = nothing,
         flesh_col = RGBf(0.88, 0.48, 0.42),
         fat_col = RGBf(1.00, 0.93, 0.55),
         fur_col = RGBf(0.76, 0.62, 0.42))
     azimuth, elevation = _view_angles(ax)
-    bodycutaway!(ax, body; sc, cut, azimuth, elevation, flesh_col, fat_col, fur_col)
+    bodycutaway!(ax, body; sc, cut, azimuth, elevation, parts, flesh_col, fat_col, fur_col)
     ax.xlabel = "x (cm)"; ax.ylabel = "y (cm)"; ax.zlabel = "z (cm)"
 end
 
