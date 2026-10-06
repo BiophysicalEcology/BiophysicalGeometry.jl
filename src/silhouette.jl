@@ -238,6 +238,9 @@ function _fibonacci_sphere(n::Integer)
     return dirs
 end
 
+_check_size(name, size) = 0 <= size <= 1 ||
+    throw(ArgumentError("$name size must be a fraction of the sphere in [0, 1], got $size"))
+
 """
     Sky(size)
     Sky(size, tilt)
@@ -249,9 +252,6 @@ flat-ground hemisphere, `Sky(0.7)` a mountaintop (sky bulging past horizontal),
 vertical — a slope whose sky leans downhill. `Ground` is its complement; hand either
 to [`silhouette_factors`](@ref) to split every direction into sky and ground.
 """
-_check_size(name, size) = 0 <= size <= 1 ||
-    throw(ArgumentError("$name size must be a fraction of the sphere in [0, 1], got $size"))
-
 struct Sky{S,A}
     size::S
     axis::A
