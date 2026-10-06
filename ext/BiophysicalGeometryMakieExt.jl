@@ -12,7 +12,7 @@ import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSp
 import BiophysicalGeometry: _cylinder_tube, _cylinder_cap, _ellipsoid_mesh, _cone_tube,
     _half_cylinder_flat, _half_ellipsoid_flat_mesh,
     _box_face_x, _box_face_y, _box_face_z,
-    _part_outer_meshes, _transform_mesh, outer_dims
+    _part_outer_meshes, _transform_mesh, outer_dims, _top_ratio, HalfDomed
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GENERIC HELPERS
@@ -37,6 +37,9 @@ _axis_ratio(s::Half) = _axis_ratio(s.parent)
 
 _colors(p) = (flesh=p[:flesh_col][], fat_layer=p[:fat_layer_col][], fibrous_layer=p[:fibrous_layer_col][])
 _root_name(::CompositeBody{Root}) where {Root} = Root
+# Title name; a Half reads as its constructor (`HalfCone`, `HalfCylinder`, …).
+_shape_name(s) = string(nameof(typeof(s)))
+_shape_name(h::Half) = "Half" * _shape_name(h.parent)
 
 _limits(lx, ly, tx, ty) = (
     long_x=(-lx, lx), long_y=(-ly, ly),
@@ -146,22 +149,24 @@ end
 
 # Half shapes: draw the layers over their half domain, with a wedge removed from
 # the outer (fat/fur) layers to reveal the flesh, plus the flat cut face.
-function _draw_half_cylinder!(target, r, L, col; θ_end=π, z0=0.0)
-    _draw_surface!(target, _cylinder_tube(r, L; θ_end, z0), col)
+# A half cylinder or half cone: base radius `r`, top radius `t * r`.
+function _draw_half_frustum!(target, r, t, L, col; θ_end=π, z0=0.0)
+    _draw_surface!(target, _cone_tube(r, t * r, L; θ_end, z0), col)
     _draw_surface!(target, _cylinder_cap(r, z0; θ_end), col)
-    _draw_surface!(target, _cylinder_cap(r, z0 + L; θ_end), col)
-    _draw_surface!(target, _half_cylinder_flat(r, L; z0), col)
+    t > 0 && _draw_surface!(target, _cylinder_cap(t * r, z0 + L; θ_end), col)
+    _draw_surface!(target, _half_cylinder_flat(r, L; r_top=t * r, z0), col)
 end
 
 function _draw_cutaway_shape!(p, sh::Half{<:AbstractCylindrical}, body, sc, cols)
     r = _scaled_radii(body, sc)
     fl = _layer_flags(r)
+    t = Float64(_top_ratio(sh))
     L_s = _m(body.geometry.length.length_skin, sc)
     L_i = _m(outer_dims(sh, body).L, sc)
     z0_i = -(L_i - L_s) / 2
-    _draw_half_cylinder!(p, r.flesh, L_s, cols.flesh)
-    fl.fat_layer && _draw_half_cylinder!(p, r.skin, L_s, cols.fat_layer; θ_end=3π/4)
-    fl.fibrous_layer && _draw_half_cylinder!(p, r.ins,  L_i, cols.fibrous_layer; θ_end=3π/4, z0=z0_i)
+    _draw_half_frustum!(p, r.flesh, t, L_s, cols.flesh)
+    fl.fat_layer && _draw_half_frustum!(p, r.skin, t, L_s, cols.fat_layer; θ_end=3π/4)
+    fl.fibrous_layer && _draw_half_frustum!(p, r.ins, t, L_i, cols.fibrous_layer; θ_end=3π/4, z0=z0_i)
 end
 
 function _draw_half_ellipsoid!(target, a, b, col; θ_end=2π)
@@ -248,6 +253,17 @@ _rect_pts(hw, hh) =
     Point2f[(-_pu(hw), -_pu(hh)), (_pu(hw), -_pu(hh)),
             ( _pu(hw), _pu(hh)), (-_pu(hw), _pu(hh))]
 
+# Frustum long section: base half-width `rb` at y = -hl, top `rt` at y = +hl.
+_trap_pts(rb, rt, hl) =
+    Point2f[(-_pu(rb), -_pu(hl)), (_pu(rb), -_pu(hl)),
+            ( _pu(rt), _pu(hl)), (-_pu(rt), _pu(hl))]
+
+# Half shapes are drawn bulging toward +x from the cut plane x = 0.
+_half_trap_pts(rb, rt, hl) =
+    Point2f[(0, -_pu(hl)), (_pu(rb), -_pu(hl)), (_pu(rt), _pu(hl)), (0, _pu(hl))]
+_half_ellipse_pts(xr, yr; n=150) =
+    [Point2f(_pu(xr)*cos(t), _pu(yr)*sin(t)) for t in LinRange(-π/2, π/2, n+1)]
+
 _layer!(target, pts, col) = poly!(target, pts; color=col, strokecolor=col, strokewidth=1)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -271,6 +287,40 @@ function _section_layers(sh::Cylinder, body, mode, r, cols)
             (true, () -> _circle_pts(r_f), cols.flesh),
         ]
     end
+end
+
+# Cone and the cylindrical halves are frustums with top/base ratio t (t = 1
+# for a half cylinder); the long section runs base (bottom) to top.
+function _section_layers(sh::Union{Cone,Half{<:AbstractCylindrical}}, body, mode, r, cols)
+    t = _top_ratio(sh)
+    half = sh isa Half
+    hl_s = body.geometry.length.length_skin / 2
+    hl_i = outer_dims(sh, body).L / 2
+    long(x, hl) = half ? _half_trap_pts(x, t * x, hl) : _trap_pts(x, t * x, hl)
+    tran(x) = half ? _half_ellipse_pts(x, x) : _circle_pts(x)
+    if mode === :long
+        [
+            (r.ins > r.skin, () -> long(r.ins, hl_i), cols.fibrous_layer),
+            (r.skin > r.flesh, () -> long(r.skin, hl_s), cols.fat_layer),
+            (true, () -> long(r.flesh, hl_s), cols.flesh),
+        ]
+    else
+        [
+            (r.ins > r.skin, () -> tran(r.ins), cols.fibrous_layer),
+            (r.skin > r.flesh, () -> tran(r.skin), cols.fat_layer),
+            (true, () -> tran(r.flesh), cols.flesh),
+        ]
+    end
+end
+
+function _section_layers(sh::HalfDomed, _, mode, r, cols)
+    ratio = _axis_ratio(sh)
+    geom = mode === :long ? x -> _half_ellipse_pts(x, x * ratio) : x -> _half_ellipse_pts(x, x)
+    [
+        (r.ins > r.skin, () -> geom(r.ins), cols.fibrous_layer),
+        (r.skin > r.flesh, () -> geom(r.skin), cols.fat_layer),
+        (true, () -> geom(r.flesh), cols.flesh),
+    ]
 end
 
 function _section_layers(sh::Plate, body, mode, r, cols)
@@ -308,7 +358,7 @@ end
 # 2-D AXIS LIMIT DISPATCH
 # ══════════════════════════════════════════════════════════════════════════════
 
-function _section_limits(sh::Cylinder, body, r, pad)
+function _section_limits(sh::Union{AbstractCylindrical,Half{<:AbstractCylindrical}}, body, r, pad)
     hl_i = outer_dims(sh, body).L / 2
     ri = _pu(r.ins) * (1 + pad)
     li = _pu(hl_i) * (1 + pad)
@@ -324,7 +374,7 @@ function _section_limits(sh::Plate, body, r, pad)
             _pu(hw_i) * (1 + pad), _pu(hh_i) * (1 + pad))
 end
 
-function _section_limits(shape::Union{Sphere,Ellipsoid}, body, r, pad)
+function _section_limits(shape::Union{Sphere,Ellipsoid,HalfDomed}, body, r, pad)
     ratio = _axis_ratio(shape)
     ey = r.ins * ratio
     rx = _pu(r.ins) * (1 + pad)
@@ -418,7 +468,7 @@ function BiophysicalGeometry.plot_body(body;
         shape_name = "Composite($(length(body.parts)) parts)"
         ins_name = ""
     else
-        shape_name = string(nameof(typeof(body.shape)))
+        shape_name = _shape_name(body.shape)
         ins_name = string(nameof(typeof(body.insulation)))
     end
 
@@ -576,12 +626,12 @@ function BiophysicalGeometry.plot_cross_sections(body;
         fat_layer_col = RGBf(1.00, 0.97, 0.60),
         fibrous_layer_col = RGBf(0.76, 0.62, 0.42))
 
-    shape_name = string(nameof(typeof(body.shape)))
+    shape_name = _shape_name(body.shape)
     ins_name = string(nameof(typeof(body.insulation)))
 
     fig = Figure(backgroundcolor=:white)
     Label(fig[0, 1:2],
-          "$(shape_name) · $(ins_name)  (mass = $(body.shape.mass))";
+          "$(shape_name) · $(ins_name)  (mass = $(BiophysicalGeometry.mass(body.shape)))";
           fontsize=13, font=:bold, padding=(0, 0, 8, 0))
     ax_long = Axis(fig[1, 1];
                    title="Longitudinal section",

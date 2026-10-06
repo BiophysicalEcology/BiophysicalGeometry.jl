@@ -24,8 +24,8 @@ end
     @test h.geometry.length.b_semi_minor_skin ≈ full.geometry.length.b_semi_minor_skin
     @test h.geometry.length.a_semi_major_skin ≈ full.geometry.length.a_semi_major_skin
     @test flesh_volume(h) ≈ flesh_volume(full) / 2
-    # Half dome + flat ≈ total
-    flat = π * h.geometry.length.b_semi_minor_skin * h.geometry.length.c_semi_minor_skin
+    # Half dome + flat ≈ total; the flat face at z = 0 holds the long axis a.
+    flat = π * h.geometry.length.a_semi_major_skin * h.geometry.length.b_semi_minor_skin
     @test total_area(h) ≈ total_area(full)/2 + flat
 end
 
@@ -35,7 +35,7 @@ end
     for ins in (Naked(), fat, fur, CompositeInsulation(fur, fat))
         he = Body(HalfEllipsoid(5u"kg", ρ, 1.5, 1.0), ins)
         fe = Body(Ellipsoid(10u"kg", ρ, 1.5, 1.0), ins)
-        eflat = π * he.geometry.length.b_semi_minor_skin * he.geometry.length.c_semi_minor_skin
+        eflat = π * he.geometry.length.a_semi_major_skin * he.geometry.length.b_semi_minor_skin
         @test skin_radius(he) ≈ skin_radius(fe)              # dims inherited from full 2m
         @test total_area(he) ≈ total_area(fe)/2 + eflat
         @test flesh_radius(he) ≤ skin_radius(he)             # flesh sits inside skin (fat clamped ≥ 0)

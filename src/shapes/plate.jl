@@ -31,21 +31,28 @@ end
 
 # Surface area
 
-function surface_area(shape::Plate, body::AbstractBody)
-    length = body.geometry.length.length_skin
-    width = body.geometry.length.width_skin
-    height = body.geometry.length.height_skin
-    surface_area(shape, length, width, height)
-end
 surface_area(shape::Plate, length, width, height) =
     length * width * 2 + length * height * 2 + width * height * 2
 
 # Silhouette area
 
-function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
+# A box's shadow along a unit direction d is |d_x|·A_yz + |d_y|·A_xz + |d_z|·A_xy.
+# As for the other shapes θ runs from the long axis: the sun moves in the plane
+# of the smallest face's normal (θ = 0, `parallel`) and the largest face's
+# normal (θ = π/2, `normal`), so only those two faces cast shadow.
+function _plate_faces(ins, body)
     (length, width, height) = _plate_outer_dims(ins, body)
     sides = (length * width, length * height, height * width)
-    return (; normal=max(sides...), parallel=min(sides...))
+    (min(sides...), max(sides...))
+end
+
+function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody, θ)
+    (smallest, largest) = _plate_faces(ins, body)
+    abs(cos(θ)) * smallest + abs(sin(θ)) * largest
+end
+function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
+    (smallest, largest) = _plate_faces(ins, body)
+    return (; normal=largest, parallel=smallest)
 end
 
 _plate_outer_dims(::Union{Naked,FatLayer}, body) = _plate_skin_outer_lengths(body.geometry.length)

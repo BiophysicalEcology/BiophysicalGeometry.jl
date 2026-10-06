@@ -74,12 +74,14 @@ end
 # The dome and end caps are `_cylinder_tube` / `_cylinder_cap` at `θ_end=π`;
 # only the flat cut face at y = 0 is unique to the half.
 
-function _half_cylinder_flat(r, L; nx=12, nz=2, z0=0.0)
-    xs = LinRange(-r, r, nx)
+# Flat axial face of a half cylinder in y = 0, |x| ≤ radius. With `r_top` it is
+# the trapezoidal face of a half cone, radius linear from `r` to `r_top`.
+function _half_cylinder_flat(r, L; r_top=r, nx=12, nz=2, z0=0.0)
+    us = LinRange(-1.0, 1.0, nx)
     zs = LinRange(z0, z0 + Float64(L), nz)
-    [xi for xi in xs, _ in zs],
+    [u * (r + (r_top - r) * (zi - z0) / L) for u in us, zi in zs],
     fill(0.0, nx, nz),
-    [zi for _  in xs, zi in zs]
+    [zi for _  in us, zi in zs]
 end
 
 # ── Half-ellipsoid (long axis +x, dome z ≥ 0, flat at z = 0) ─────────────
@@ -170,7 +172,8 @@ function _mesh_dims(sh::Half{<:AbstractCylindrical}, body, sc)
     Ls = _ustrip_m(body.geometry.length.length_skin, sc)
     (r = _ustrip_m(d.r, sc),
      Lo = Lo, Ls = Ls, pad = (Lo - Ls) / 2,
-     r_skin = _ustrip_m(body.geometry.length.radius_skin, sc))
+     r_skin = _ustrip_m(body.geometry.length.radius_skin, sc),
+     t = Float64(_top_ratio(sh)))
 end
 
 function _mesh_dims(sh::Half{<:AbstractEllipsoidal}, body, sc)
@@ -233,10 +236,11 @@ end
 function _part_outer_meshes(sh::Half{<:AbstractCylindrical}, body, sc)
     d = _mesh_dims(sh, body, sc)
     z0 = -d.pad
-    [_cylinder_tube(d.r, d.Lo; θ_end=π, z0=z0),
-     _cylinder_cap(d.r, z0; θ_end=π),
-     _cylinder_cap(d.r, z0 + d.Lo; θ_end=π),
-     _half_cylinder_flat(d.r_skin, d.Ls; z0=0.0)]
+    meshes = Any[_cone_tube(d.r, d.t * d.r, d.Lo; θ_end=π, z0=z0),
+                 _cylinder_cap(d.r, z0; θ_end=π),
+                 _half_cylinder_flat(d.r_skin, d.Ls; r_top=d.t * d.r_skin, z0=0.0)]
+    d.t > 0 && push!(meshes, _cylinder_cap(d.t * d.r, z0 + d.Lo; θ_end=π))
+    meshes
 end
 
 function _part_outer_meshes(sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}}, body, sc)

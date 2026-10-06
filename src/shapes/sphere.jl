@@ -21,10 +21,6 @@ _fat_thickness(shape::Sphere, skin, flesh_volume, fat_volume) =
 
 # Surface area
 
-function surface_area(shape::Sphere, body::AbstractBody)
-    r = body.geometry.length_skin / 2
-    return surface_area(shape, r)
-end
 surface_area(shape::Sphere, r) = 4 * π * r ^ 2
 
 # Silhouette area
@@ -49,6 +45,9 @@ _fibrous_radius(::Sphere, length) = length.radius_fibrous
 # Composition
 
 attachment_surfaces(::Sphere) = (Radial,)
+
+# Outer (insulation-aware) radius, matching insulation_radius(body).
+outer_dims(::Sphere, body::AbstractBody) = (r = insulation_radius(body),)
 
 surface_area(::Sphere, body::AbstractBody, ::Radial) =
     4 * π * insulation_radius(body)^2

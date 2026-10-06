@@ -323,9 +323,9 @@ geometry(body::AbstractBody) = body.geometry
 """
     surface_area(body::AbstractBody)
 
-Return the outer surface area of `body`.
+Return the outer surface area of `body` — the same as [`total_area`](@ref).
 """
-surface_area(body::AbstractBody) = surface_area(shape(body), body)
+surface_area(body::AbstractBody) = total_area(body)
 
 # Surface areas
 

@@ -151,12 +151,6 @@ end
 
 # Surface area
 
-function surface_area(shape::Ellipsoid, body::AbstractBody)
-    _spheroid_area(body.geometry.length.a_semi_major_skin,
-                   body.geometry.length.b_semi_minor_skin,
-                   body.geometry.length.c_semi_minor_skin)
-end
-
 # Silhouette area
 
 # For an ellipsoid (a, b, c) the silhouette projected along direction d

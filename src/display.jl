@@ -49,7 +49,8 @@ function Base.show(io::IO, ::MIME"text/plain", s::Cone)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", h::Half)
-    print(io, "Half of ")
+    # The parent is the full shape of double mass; show the half's own mass first.
+    println(io, "Half (mass $(mass(h))) of")
     show(io, mime, h.parent)
 end
 

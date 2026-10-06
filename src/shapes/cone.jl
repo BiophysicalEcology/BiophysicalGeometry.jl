@@ -48,22 +48,38 @@ function surface_area(shape::Cone, R, L)
     π * R^2 + π * r^2 + π * (R + r) * s
 end
 
-# Silhouette: same shape as the cylinder pattern, but the lateral profile is a
-# triangle (r·L) rather than a rectangle (2·r·L). `outer_dims` picks skin- vs
-# fibrous-level (r, L) so one wrapper per arity covers all insulation kinds.
-function silhouette(::Cone, r, L, θ)
-    r * L * sin(θ) + π * r^2 * cos(θ)
+# Silhouette. The shadow of a frustum is the convex hull of the shadows of its
+# two end discs: homothetic ellipses (minor/major = |cos θ|) whose centres sit
+# L·|sin θ| apart along the minor axis. Stretching the minor axis by 1/|cos θ|
+# turns them into circles of radii R ≥ r a distance D = L·|tan θ| apart, whose
+# hull is two arcs joined by external tangents at angle α, sin α = (R - r)/D:
+#     (π/2 + α)·R² + (π/2 - α)·r² + (R + r)·D·cos α
+# (just π·R² once one disc's shadow lies inside the other's). Shrinking back
+# by |cos θ| gives the area below. A cylinder (r = R) reduces to
+# 2·R·L·sin θ + π·R²·cos θ. `outer_dims` picks skin- vs fibrous-level (r, L).
+function _frustum_silhouette(R1, R2, L, θ)
+    R, r = max(R1, R2), min(R1, R2)
+    c, s = abs(cos(θ)), abs(sin(θ))
+    Ls = L * s                       # projected axis length
+    Ls <= (R - r) * c && return π * R^2 * c
+    sinα = (R - r) * c / Ls
+    α = asin(sinα)
+    c * ((π / 2 + α) * R^2 + (π / 2 - α) * r^2) + (R + r) * sqrt(1 - sinα^2) * Ls
 end
+
+silhouette(sh::Cone, r, L, θ) = _frustum_silhouette(r, sh.top_ratio * r, L, θ)
 function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(sh, body)
     silhouette(sh, d.r, d.L, θ)
 end
 function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody)
     d = outer_dims(sh, body)
-    (; normal = d.r * d.L, parallel = π * d.r^2)
+    (; normal = (1 + sh.top_ratio) * d.r * d.L, parallel = π * max(1, sh.top_ratio)^2 * d.r^2)
 end
 
 # Radii come from the shared `AbstractCylindrical` dispatch in cylinder.jl.
+
+_top_ratio(sh::Cone) = sh.top_ratio
 
 # Composition
 #

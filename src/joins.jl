@@ -79,12 +79,16 @@ function flesh_centroid(::Ellipsoid, body::AbstractBody)
     z = body.geometry.length.a_semi_major_skin
     (zero(z), zero(z), zero(z))
 end
-# Cylindrical half: half-disc cross-section, bulge along +y; centroid of a
-# half-disc sits at 4R/(3π) off the flat plane, at mid-length.
-function flesh_centroid(::Half{<:AbstractCylindrical}, body::AbstractBody)
+# Cylindrical half (half-frustum, radius ρ(z) = R(1 - (1-t)z/L)): each slice is
+# a half disc with centroid 4ρ/(3π) off the flat plane and area ∝ ρ², so
+#     ȳ = (4/3π)∫ρ³/∫ρ² = (R/π)(1 + t)(1 + t²)/(1 + t + t²),
+# and z̄ is the full cone's. A cylinder (t = 1) gives (4R/3π, L/2).
+function flesh_centroid(h::Half{<:AbstractCylindrical}, body::AbstractBody)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    (zero(R), 4R / (3π), L / 2)
+    t = _top_ratio(h)
+    k = 1 + t + t^2
+    (zero(R), (R / π) * (1 + t) * (1 + t^2) / k, (L / 4) * (1 + 2t + 3t^2) / k)
 end
 # Domed half (ellipsoidal/spherical): dome along +z from the flat face; centroid
 # sits at 3c/8 off the flat plane (hemisphere centroid generalised).

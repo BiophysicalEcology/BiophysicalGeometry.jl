@@ -32,7 +32,7 @@ surface_area(shape::Cylinder, r, l) = 2 * π * r * l + 2 * π * r^2
 # Silhouette area. `outer_dims` selects skin- vs fibrous-level (r, L) by
 # insulation, so a single insulation-dispatched wrapper per arity covers
 # all four insulation kinds.
-silhouette(shape::Cylinder, r, l, θ) = 2 * r * l * sin(θ) + π * r^2 * cos(θ)
+silhouette(shape::Cylinder, r, l, θ) = 2 * r * l * abs(sin(θ)) + π * r^2 * abs(cos(θ))
 function silhouette(sh::Cylinder, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(sh, body)
     silhouette(sh, d.r, d.L, θ)
@@ -48,6 +48,11 @@ end
 
 _skin_radius(::AbstractCylindrical, length) = length.radius_skin
 _fibrous_radius(::AbstractCylindrical, length) = length.radius_fibrous
+
+# Ratio of the end-B (top) radius to the end-A (base) radius: 1 for a
+# cylinder, `top_ratio` for a cone. Lets cylindrical halves, meshes and plots
+# treat every cylindrical shape as a frustum.
+_top_ratio(::Cylinder) = 1.0
 
 # Composition
 
