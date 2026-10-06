@@ -1,19 +1,32 @@
 """
-    Plate(mass, density, axis_ratio_b, axis_ratio_c)
+    Plate(; mass, density, volume, length, width, height, axis_ratio_b, axis_ratio_c) <: AbstractShape
 
-A rectangular plate. `axis_ratio_b` is length over width and `axis_ratio_c` is length over height.
-
-Local frame: length, width and height along `x`, `y` and `z`, centred on the origin.
+A box-shaped organism shape centred on the origin: `length` along `x`, `width`
+along `y`, `height` along `z`. `axis_ratio_b` is length / width and
+`axis_ratio_c` length / height. Give any sufficient set of keywords — e.g.
+`mass`, `density` and both ratios, or all three dimensions and one of `mass` /
+`density` — and the rest is solved for. Dimensions are at skin level.
 """
-mutable struct Plate{M,D,B,C} <: AbstractSlab
+struct Plate{M,D,B,C} <: AbstractSlab
     mass::M
     density::D
     axis_ratio_b::B
     axis_ratio_c::C
+    Plate(::_Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
+        new{M,D,B,C}(mass, density, axis_ratio_b, axis_ratio_c)
+end
+
+# volume = length·width·height; axis_ratio_b = length/width, axis_ratio_c = length/height
+const _BOX_SPEC = _ShapeSpec((:length, :width, :height), (1, 1, 1), 0.0,
+                             (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
+
+function Plate(; kw...)
+    s = _resolve_shape("Plate", _BOX_SPEC, NamedTuple(kw))
+    Plate(_RESOLVED, s.mass, s.density, s.ratios...)
 end
 
 function _skin_level(shape::Plate, volume)
-    length_skin = (volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3)
+    length_skin = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c)
     width_skin = length_skin / shape.axis_ratio_b
     height_skin = length_skin / shape.axis_ratio_c
     (; dims = (; length_skin, width_skin, height_skin),
@@ -27,58 +40,53 @@ function _fibrous_level(shape::Plate, skin, thickness)
        area = surface_area(shape, length_fibrous, width_fibrous, height_fibrous))
 end
 function _fat_thickness(shape::Plate, skin, flesh_volume, fat_volume)
-    width_flesh = (flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c)^(1 / 3) / shape.axis_ratio_b
+    width_flesh = cbrt(flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
     (skin.width_skin - width_flesh) / 2
 end
 
 # Surface area
 
-function surface_area(shape::Plate, body)
-    length = body.geometry.length.length_skin
-    width = body.geometry.length.width_skin
-    height = body.geometry.length.height_skin
-    surface_area(shape, length, width, height)
-end
-surface_area(shape::Plate, length, width, height) = length * width * 2 + length * height * 2 + width * height * 2
+surface_area(shape::Plate, length, width, height) =
+    length * width * 2 + length * height * 2 + width * height * 2
 
 # Silhouette area
 
-function silhouette(shape::Plate, insulation::Union{Naked,FatLayer}, body::AbstractBody)
-    length = body.geometry.length.length_skin
-    width = body.geometry.length.width_skin
-    height = body.geometry.length.height_skin
-    normal = max(length * width, length * height, height * width)
-    parallel = min(length * width, length * height, height * width)
-    return (; normal, parallel)
-end
-function silhouette(shape::Plate, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    length = body.geometry.length.length_fibrous
-    width = body.geometry.length.width_fibrous
-    height = body.geometry.length.height_fibrous
-    normal = max(length * width, length * height, height * width)
-    parallel = min(length * width, length * height, height * width)
-    return (; normal, parallel)
+# A box's shadow along a unit direction d is |d_x|·A_yz + |d_y|·A_xz + |d_z|·A_xy.
+# As for the other shapes θ runs from the long axis: the sun moves in the plane
+# of the smallest face's normal (θ = 0, `parallel`) and the largest face's
+# normal (θ = π/2, `normal`), so only those two faces cast shadow.
+function _plate_faces(ins, body)
+    (length, width, height) = _plate_outer_dims(ins, body)
+    sides = (length * width, length * height, height * width)
+    (min(sides...), max(sides...))
 end
 
-# Radius
+function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody, θ)
+    (smallest, largest) = _plate_faces(ins, body)
+    abs(cos(θ)) * smallest + abs(sin(θ)) * largest
+end
+function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
+    (smallest, largest) = _plate_faces(ins, body)
+    return (; normal=largest, parallel=smallest)
+end
 
-skin_radius(shape::Plate, insulation::AbstractInsulationLayer, body) = body.geometry.length.width_skin / 2
+_plate_outer_dims(::Union{Naked,FatLayer}, body) = _plate_skin_outer_lengths(body.geometry.length)
+_plate_outer_dims(::Union{FibrousLayer,CompositeInsulation}, body) = _plate_fibrous_outer_lengths(body.geometry.length)
 
-# naked
-insulation_radius(shape::Plate, insulation::Naked, body) = body.geometry.length.width_skin / 2
-flesh_radius(shape::Plate, insulation::Naked, body) = body.geometry.length.width_skin / 2
+_plate_skin_outer_lengths(length) = (length.length_skin, length.width_skin, length.height_skin)
+_plate_fibrous_outer_lengths(length) = (length.length_fibrous, length.width_fibrous, length.height_fibrous)
 
-# fur
-insulation_radius(shape::Plate, insulation::FibrousLayer, body) = body.geometry.length.width_fibrous / 2
-flesh_radius(shape::Plate, insulation::FibrousLayer, body) = body.geometry.length.width_skin / 2
+# Characteristic dimension
 
-# fat
-insulation_radius(shape::Plate, insulation::FatLayer, body) = body.geometry.length.width_skin / 2
-flesh_radius(shape::Plate, insulation::FatLayer, body) = body.geometry.length.width_skin / 2 - body.geometry.length.fat
+shortest_outer_dim(::Plate, ::Union{Naked,FatLayer}, geom) =
+    min(_plate_skin_outer_lengths(geom.length)...)
+shortest_outer_dim(::Plate, ::Union{FibrousLayer,CompositeInsulation}, geom) =
+    min(_plate_fibrous_outer_lengths(geom.length)...)
 
-# fur plus fat
-insulation_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometry.length.width_fibrous / 2
-flesh_radius(shape::Plate, insulation::CompositeInsulation, body) = body.geometry.length.width_skin / 2 - body.geometry.length.fat
+# Radius accessors — Plate uses width/2 as the equivalent radius
+
+_skin_radius(::Plate, length) = length.width_skin / 2
+_fibrous_radius(::Plate, length) = length.width_fibrous / 2
 
 # Composition
 
@@ -88,13 +96,13 @@ attachment_surfaces(::Plate) = (Top, Bottom, SideA, SideB, SideC, SideD)
 outer_dims(sh::Plate, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
 outer_dims(::Plate, ::Union{Naked,FatLayer}, body::AbstractBody) =
-    (L = body.geometry.length.length_skin,
-     W = body.geometry.length.width_skin,
-     H = body.geometry.length.height_skin)
+    (length = body.geometry.length.length_skin,
+     width = body.geometry.length.width_skin,
+     height = body.geometry.length.height_skin)
 outer_dims(::Plate, ::FibrousLayer, body::AbstractBody) =
-    (L = body.geometry.length.length_fibrous,
-     W = body.geometry.length.width_fibrous,
-     H = body.geometry.length.height_fibrous)
+    (length = body.geometry.length.length_fibrous,
+     width = body.geometry.length.width_fibrous,
+     height = body.geometry.length.height_fibrous)
 
 # Skin-level dimensions — used for flesh-anchored attachment positions.
 function _plate_skin(body::AbstractBody)
@@ -103,15 +111,15 @@ function _plate_skin(body::AbstractBody)
 end
 
 function surface_area(sh::Plate, body::AbstractBody, ::Top)
-    d = outer_dims(sh, body); d.L * d.W
+    d = outer_dims(sh, body); d.length * d.width
 end
 surface_area(sh::Plate, body::AbstractBody, ::Bottom) = surface_area(sh, body, Top())
 function surface_area(sh::Plate, body::AbstractBody, ::SideA)
-    d = outer_dims(sh, body); d.W * d.H
+    d = outer_dims(sh, body); d.width * d.height
 end
 surface_area(sh::Plate, body::AbstractBody, ::SideB) = surface_area(sh, body, SideA())
 function surface_area(sh::Plate, body::AbstractBody, ::SideC)
-    d = outer_dims(sh, body); d.L * d.H
+    d = outer_dims(sh, body); d.length * d.height
 end
 surface_area(sh::Plate, body::AbstractBody, ::SideD) = surface_area(sh, body, SideC())
 

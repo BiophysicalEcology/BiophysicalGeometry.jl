@@ -31,76 +31,78 @@ form used with `FullCover`, and positional constructors that produce the
 abstract type AbstractSurface end
 
 """
-    EndA(r=nothing, φ=nothing) <: AbstractSurface
+    EndA(radius=nothing, angle=nothing) <: AbstractSurface
 
-Disc-shaped end cap on the negative-axis side of an axial shape
-(Cylinder, HalfCylinder, Cone). Located form uses polar coordinates
-`(r, φ)` in the disc's local frame.
+Disc-shaped end cap at the start (`x = 0`) of an axial shape (Cylinder, Cone
+and their halves). The located form gives polar coordinates on the disc:
+`radius` from the axis and `angle` around it, from `+y` towards `+z`.
 """
-struct EndA{R,P} <: AbstractSurface
-    r::R
-    φ::P
+struct EndA{R,A} <: AbstractSurface
+    radius::R
+    angle::A
 end
 EndA() = EndA(nothing, nothing)
 
 """
-    EndB(r=nothing, φ=nothing) <: AbstractSurface
+    EndB(radius=nothing, angle=nothing) <: AbstractSurface
 
-Disc-shaped end cap on the positive-axis side of an axial shape.
+Disc-shaped end cap at the far end (`x = length`) of an axial shape; located
+as for [`EndA`](@ref).
 """
-struct EndB{R,P} <: AbstractSurface
-    r::R
-    φ::P
+struct EndB{R,A} <: AbstractSurface
+    radius::R
+    angle::A
 end
 EndB() = EndB(nothing, nothing)
 
 """
-    Lateral(z=nothing, φ=nothing) <: AbstractSurface
+    Lateral(position=nothing, angle=nothing) <: AbstractSurface
 
-Curved side surface of an axial shape (Cylinder, HalfCylinder, Cone).
-`(z, φ)` are cylindrical coordinates along and around the axis.
+Curved side surface of an axial shape (Cylinder, Cone and their halves). The
+located form gives `position` along the axis from `EndA` and `angle` around it,
+from `+y` towards `+z`.
 """
-struct Lateral{Z,P} <: AbstractSurface
-    z::Z
-    φ::P
+struct Lateral{P,A} <: AbstractSurface
+    position::P
+    angle::A
 end
 Lateral() = Lateral(nothing, nothing)
 
 """
-    Flat(u=nothing, v=nothing) <: AbstractSurface
+    Flat(x=nothing, y=nothing) <: AbstractSurface
 
-Flat (cut-plane) face of a half-shape. Coordinate meaning is shape-dependent:
-for `HalfCylinder`, `(u, v) = (z, x)`; for `HalfEllipsoid`, `(u, v) = (x, y)`.
+Flat cut face of a half shape, lying in its `z = 0` plane; located by the
+`(x, y)` coordinates of a point on it.
 """
-struct Flat{U,V} <: AbstractSurface
-    u::U
-    v::V
+struct Flat{X,Y} <: AbstractSurface
+    x::X
+    y::Y
 end
 Flat() = Flat(nothing, nothing)
 
 """
-    Dome(α=nothing, β=nothing) <: AbstractSurface
+    Dome(polar=nothing, azimuth=nothing) <: AbstractSurface
 
-Curved (dome) surface of a `HalfEllipsoid`. `(α, β)` are spheroidal
-angles: `α` measures from the long-axis pole, `β` around the axis.
+Curved (dome) surface of a `HalfEllipsoid` or `HalfSphere`. The located form
+gives ellipsoidal angles: `polar` from the `+x` pole, `azimuth` around the
+long axis from `+y` towards `+z`.
 """
-struct Dome{A,B} <: AbstractSurface
-    α::A
-    β::B
+struct Dome{P,A} <: AbstractSurface
+    polar::P
+    azimuth::A
 end
 Dome() = Dome(nothing, nothing)
 
 """
-    PoleA(r=nothing, φ=nothing) <: AbstractSurface
+    PoleA(radius=nothing, angle=nothing) <: AbstractSurface
 
-Pole on the positive-x end of an `Ellipsoid`. For an untruncated
-ellipsoid, the located form is not used (the pole is a point). For a
-truncated pole (`pole_a_truncation > 0`), the pole becomes a disc and
-`(r, φ)` selects a point on it.
+Pole on the positive-x end of an `Ellipsoid`. For an untruncated ellipsoid the
+located form is not used (the pole is a point). For a truncated pole
+(`pole_a_truncation > 0`) the pole is a disc, located as for [`EndA`](@ref).
 """
-struct PoleA{R,P} <: AbstractSurface
-    r::R
-    φ::P
+struct PoleA{R,A} <: AbstractSurface
+    radius::R
+    angle::A
 end
 PoleA() = PoleA(nothing, nothing)
 
@@ -113,27 +115,39 @@ form is not meaningful.
 struct PoleB <: AbstractSurface end
 
 """
-    Equator(φ=nothing) <: AbstractSurface
+    Equator(angle=nothing) <: AbstractSurface
 
-Ring at the equator of an `Ellipsoid`. Located form gives the angular
-coordinate `φ` around the long axis.
+Ring at the equator of an `Ellipsoid`; the located form gives the `angle`
+around the long axis, from `+y` towards `+z`.
 """
-struct Equator{P} <: AbstractSurface
-    φ::P
+struct Equator{A} <: AbstractSurface
+    angle::A
 end
 Equator() = Equator(nothing)
 
 """
-    Radial(θ=nothing, φ=nothing) <: AbstractSurface
+    Radial(polar=nothing, azimuth=nothing) <: AbstractSurface
 
-Any point on the surface of a `Sphere`, given as spherical angles
-`(θ, φ)`.
+Any point on the surface of a `Sphere`, given as spherical angles: `polar`
+from `+z`, `azimuth` around it from `+x`.
 """
-struct Radial{T,P} <: AbstractSurface
-    θ::T
-    φ::P
+struct Radial{P,A} <: AbstractSurface
+    polar::P
+    azimuth::A
 end
 Radial() = Radial(nothing, nothing)
+
+"""
+    Diagonal(position=nothing, z=nothing) <: AbstractSurface
+
+The long diagonal face of a `TriangularPlate`, located by `position` along the
+diagonal from its `+x` end and the height `z`.
+"""
+struct Diagonal{P,Z} <: AbstractSurface
+    position::P
+    z::Z
+end
+Diagonal() = Diagonal(nothing, nothing)
 
 """
     Top(x=nothing, y=nothing) <: AbstractSurface
@@ -233,7 +247,7 @@ struct FullCover <: AbstractAttachmentShape end
 
 One side of a `Join`. `location` is an `AbstractSurface` instance (either
 the bare form like `Lateral()` used with `FullCover`, or a located form
-like `Lateral(z, φ)` used with `Disc`). `shape` is the patch shape
+like `Lateral(position, angle)` used with `Disc`). `shape` is the patch shape
 (`Disc` or `FullCover`).
 """
 struct Attachment{L<:AbstractSurface, S<:AbstractAttachmentShape}
@@ -311,6 +325,7 @@ struct Pose{T,M<:AbstractMatrix}
     rotation::M
 end
 
+# TODO: this should be a static array
 const _IDENTITY_ROTATION = [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
 
 identity_pose(::Type{T}) where {T} =
@@ -453,7 +468,7 @@ patch_area(body::AbstractBody, att::Attachment{<:AbstractSurface, FullCover}) =
 # ── Validation ────────────────────────────────────────────────────────────
 
 # A shape supports a surface type if any element of `attachment_surfaces`
-# is that surface type (compared by `isa`, so `Lateral(z, φ) isa Lateral`
+# is that surface type (compared by `isa`, so `Lateral(position, angle) isa Lateral`
 # works). Tuple iteration is unrolled by the compiler for the small tuples
 # used here, so this reduces to a compile-time boolean.
 _supports_surface(::Tuple{}, ::AbstractSurface) = false
@@ -631,7 +646,7 @@ function solve_poses(parts::NamedTuple, joins::Tuple, root::Symbol, root_pose::P
 end
 
 # Pull a length zero out of a part for the pose translation type.
-_length_unit(b::AbstractBody) = zero(b.geometry.characteristic_dimension)
+_length_unit(b::AbstractBody) = zero(cbrt(b.geometry.volume))
 
 # ── CompositeBody ─────────────────────────────────────────────────────────
 
@@ -645,7 +660,7 @@ A multi-part organism: a `NamedTuple` of `Body` parts connected by
 leg_fr=leg, ...)` — the keys are ordinary Julia identifiers, never
 `Symbol` literals with a colon. The first-listed part is the kinematic
 `root` and serves as the "primary" part for scalar accessors
-(`skin_radius`, `characteristic_dimension`, …) that aren't defined for a
+(`skin_radius`, `insulation_radius`, …) that aren't defined for a
 composite as a whole. Reorder `parts` to change the root.
 
 `joins` is a Tuple of `Join`s. Each `Join(<parent_name>=..., <child_name>=...)`

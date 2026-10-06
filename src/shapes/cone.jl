@@ -1,29 +1,38 @@
 """
-    Cone(mass, density, b, top_ratio=0.0) <: AbstractShape
+    Cone(; mass, density, volume, length, radius, axis_ratio_b, top_ratio=0.0) <: AbstractShape
 
-A right circular cone or truncated cone (frustum). `b` is the length to
-base-diameter ratio. `top_ratio` is the ratio of apex (top) radius to base
-radius — `0` makes a sharp cone, values in `(0, 1)` make a frustum.
-
-Local frame: axis along `+z`, base disc at `z = 0` with radius `radius_skin`,
-top disc at `z = length_skin` with radius `top_ratio * radius_skin`.
-Insulation expands radii and length as for `Cylinder`; attachment positions
-stay at flesh level.
+A right circular cone or truncated cone (frustum), lying along `+x` with its
+base disc (radius `radius`) at `x = 0` and its top disc at `x = length`.
+`axis_ratio_b` is length / base diameter; `top_ratio` is top / base radius —
+`0` makes a sharp cone, values in `(0, 1)` a frustum. Give any sufficient set
+of the other keywords, as for [`Cylinder`](@ref). Insulation expands radii and
+length as for `Cylinder`; attachment positions stay at flesh level.
 """
-mutable struct Cone{M,D,B,T} <: AbstractCylindrical
+struct Cone{M,D,B,T} <: AbstractCylindrical
     mass::M
     density::D
     axis_ratio_b::B
     top_ratio::T
+    Cone(::_Resolved, mass::M, density::D, axis_ratio_b::B, top_ratio::T) where {M,D,B,T} =
+        new{M,D,B,T}(mass, density, axis_ratio_b, top_ratio)
 end
-Cone(mass, density, b) = Cone(mass, density, b, 0.0)
+
+# volume = (π/3)(1 + t + t²)·radius²·length; axis_ratio_b = length / (2·radius)
+_cone_spec(t) = _ShapeSpec((:length, :radius), (1, 2), log(π / 3 * _cone_volume_factor(t)),
+                           (:axis_ratio_b => (1, 2, 2.0),))
+
+function Cone(; top_ratio = 0.0, kw...)
+    0 <= top_ratio <= 1 || throw(ArgumentError("Cone `top_ratio` must be in [0, 1], got $top_ratio"))
+    s = _resolve_shape("Cone", _cone_spec(top_ratio), NamedTuple(kw))
+    Cone(_RESOLVED, s.mass, s.density, s.ratios..., top_ratio)
+end
 
 # Volume of a frustum = (π/3) · L · (R² + R·r + r²) with r = top_ratio·R.
 # With L = 2·b·R: V = (2π/3) · b · R³ · (1 + t + t²).
 _cone_volume_factor(t) = 1 + t + t^2
 
 function _cone_radius(volume, b, t)
-    (3 * volume / (2π * b * _cone_volume_factor(t)))^(1/3)
+    cbrt(3 * volume / (2π * b * _cone_volume_factor(t)))
 end
 
 function _skin_level(shape::Cone, volume)
@@ -48,22 +57,38 @@ function surface_area(shape::Cone, R, L)
     π * R^2 + π * r^2 + π * (R + r) * s
 end
 
-# Silhouette: same shape as the cylinder pattern, but the lateral profile is a
-# triangle (r·L) rather than a rectangle (2·r·L). `outer_dims` picks skin- vs
-# fibrous-level (r, L) so one wrapper per arity covers all insulation kinds.
-function silhouette(::Cone, r, L, θ)
-    r * L * sin(θ) + π * r^2 * cos(θ)
+# Silhouette. The shadow of a frustum is the convex hull of the shadows of its
+# two end discs: homothetic ellipses (minor/major = |cos θ|) whose centres sit
+# L·|sin θ| apart along the minor axis. Stretching the minor axis by 1/|cos θ|
+# turns them into circles of radii R ≥ r a distance D = L·|tan θ| apart, whose
+# hull is two arcs joined by external tangents at angle α, sin α = (R - r)/D:
+#     (π/2 + α)·R² + (π/2 - α)·r² + (R + r)·D·cos α
+# (just π·R² once one disc's shadow lies inside the other's). Shrinking back
+# by |cos θ| gives the area below. A cylinder (r = R) reduces to
+# 2·R·L·sin θ + π·R²·cos θ. `outer_dims` picks skin- vs fibrous-level (r, L).
+function _frustum_silhouette(R1, R2, L, θ)
+    R, r = max(R1, R2), min(R1, R2)
+    c, s = abs(cos(θ)), abs(sin(θ))
+    Ls = L * s # projected axis length
+    Ls <= (R - r) * c && return π * R^2 * c
+    sinα = (R - r) * c / Ls
+    α = asin(sinα)
+    c * ((π / 2 + α) * R^2 + (π / 2 - α) * r^2) + (R + r) * sqrt(1 - sinα^2) * Ls
 end
+
+silhouette(sh::Cone, r, L, θ) = _frustum_silhouette(r, sh.top_ratio * r, L, θ)
 function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(sh, body)
-    silhouette(sh, d.r, d.L, θ)
+    silhouette(sh, d.radius, d.length, θ)
 end
 function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody)
     d = outer_dims(sh, body)
-    (; normal = d.r * d.L, parallel = π * d.r^2)
+    (; normal = (1 + sh.top_ratio) * d.radius * d.length, parallel = π * max(1, sh.top_ratio)^2 * d.radius^2)
 end
 
 # Radii come from the shared `AbstractCylindrical` dispatch in cylinder.jl.
+
+_top_ratio(sh::Cone) = sh.top_ratio
 
 # Composition
 #
@@ -76,84 +101,83 @@ attachment_surfaces(::Cone) = (EndA, EndB, Lateral)
 outer_dims(sh::Cone, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
 outer_dims(::Cone, ::Union{Naked,FatLayer}, body::AbstractBody) =
-    (r = body.geometry.length.radius_skin, L = body.geometry.length.length_skin)
+    (radius = body.geometry.length.radius_skin, length = body.geometry.length.length_skin)
 outer_dims(::Cone, ::FibrousLayer, body::AbstractBody) =
-    (r = body.geometry.length.radius_fibrous, L = body.geometry.length.length_fibrous)
+    (radius = body.geometry.length.radius_fibrous, length = body.geometry.length.length_fibrous)
 
 function surface_area(sh::Cone, body::AbstractBody, ::EndA)
-    d = outer_dims(sh, body); π * d.r^2
+    d = outer_dims(sh, body); π * d.radius^2
 end
 function surface_area(sh::Cone, body::AbstractBody, ::EndB)
-    d = outer_dims(sh, body); π * (sh.top_ratio * d.r)^2
+    d = outer_dims(sh, body); π * (sh.top_ratio * d.radius)^2
 end
 function surface_area(sh::Cone, body::AbstractBody, ::Lateral)
     d = outer_dims(sh, body)
-    r = sh.top_ratio * d.r
-    s = sqrt((d.r - r)^2 + d.L^2)
-    π * (d.r + r) * s
+    r = sh.top_ratio * d.radius
+    s = sqrt((d.radius - r)^2 + d.length^2)
+    π * (d.radius + r) * s
 end
+
+# Local frame as for `Cylinder`: axis +x, base (EndA) at x = 0, top (EndB) at
+# x = length_skin, angles around the axis from +y towards +z.
 
 function validate_range(::Cone, body::AbstractBody, loc::EndA)
     R = body.geometry.length.radius_skin
-    loc.r ≥ zero(loc.r) && loc.r ≤ R || error("EndA r out of range [0, $R]: $(loc.r)")
+    loc.radius ≥ zero(loc.radius) && loc.radius ≤ R ||
+        error("EndA radius out of range [0, $R]: $(loc.radius)")
 end
 function validate_range(shape::Cone, body::AbstractBody, loc::EndB)
     Rt = shape.top_ratio * body.geometry.length.radius_skin
     Rt > zero(Rt) || error("EndB has zero radius (top_ratio=0); use a Disc(0) only")
-    loc.r ≥ zero(loc.r) && loc.r ≤ Rt || error("EndB r out of range [0, $Rt]: $(loc.r)")
+    loc.radius ≥ zero(loc.radius) && loc.radius ≤ Rt ||
+        error("EndB radius out of range [0, $Rt]: $(loc.radius)")
 end
 function validate_range(::Cone, body::AbstractBody, loc::Lateral)
     L = body.geometry.length.length_skin
-    loc.z ≥ zero(loc.z) && loc.z ≤ L || error("Lateral z out of range [0, $L]: $(loc.z)")
+    loc.position ≥ zero(loc.position) && loc.position ≤ L ||
+        error("Lateral position out of range [0, $L]: $(loc.position)")
 end
 
 # Attachment positions at flesh (skin) level.
 surface_point(::Cone, body::AbstractBody, loc::EndA) =
-    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), zero(loc.r))
+    (zero(loc.radius), loc.radius * cos(loc.angle), loc.radius * sin(loc.angle))
 surface_point(::Cone, body::AbstractBody, loc::EndB) =
-    (loc.r * cos(loc.φ), loc.r * sin(loc.φ), body.geometry.length.length_skin)
+    (body.geometry.length.length_skin, loc.radius * cos(loc.angle), loc.radius * sin(loc.angle))
 function surface_point(shape::Cone, body::AbstractBody, loc::Lateral)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    t = shape.top_ratio
-    rz = R * (1 - (1 - t) * loc.z / L)
-    (rz * cos(loc.φ), rz * sin(loc.φ), loc.z)
+    rx = R * (1 - (1 - shape.top_ratio) * loc.position / L)
+    (loc.position, rx * cos(loc.angle), rx * sin(loc.angle))
 end
 
-surface_normal(::Cone, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
-function surface_normal(shape::Cone, body::AbstractBody, loc::Lateral)
+surface_normal(::Cone, ::AbstractBody, ::EndA) = (-1.0, 0.0, 0.0)
+surface_normal(::Cone, ::AbstractBody, ::EndB) = (1.0, 0.0, 0.0)
+# The slant narrows by Δr = R - r over the length L, so the outward normal is
+# (radial)·(L/s) + (axial)·(Δr/s) with s the slant length. Each ratio is a
+# ratio of lengths, so unitless.
+function _cone_slant_normal(shape::Cone, body, angle)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    # Slant surface tangent direction has Δr = -(R - r) over Δz = L → outward
-    # normal is (radial)·(L/s) + (axial)·((R-r)/s). All quantities are
-    # lengths; each ratio is unitless — no ustrip needed.
     Δr = R * (1 - shape.top_ratio)
     s = sqrt(Δr^2 + L^2)
-    (L/s * cos(loc.φ), L/s * sin(loc.φ), Δr/s)
+    (Δr/s, L/s * cos(angle), L/s * sin(angle))
 end
+surface_normal(shape::Cone, body::AbstractBody, loc::Lateral) =
+    _cone_slant_normal(shape, body, loc.angle)
 
 # Centroids (FullCover).
 function surface_centroid(::Cone, body::AbstractBody, ::EndA)
     R = body.geometry.length.radius_skin; (zero(R), zero(R), zero(R))
 end
 function surface_centroid(::Cone, body::AbstractBody, ::EndB)
-    R = body.geometry.length.radius_skin
-    L = body.geometry.length.length_skin
-    (zero(R), zero(R), L)
+    L = body.geometry.length.length_skin; (L, zero(L), zero(L))
 end
 function surface_centroid(shape::Cone, body::AbstractBody, ::Lateral)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    rz = R * (1 + shape.top_ratio) / 2  # midpoint radius
-    (rz, zero(R), L/2)
+    (L/2, R * (1 + shape.top_ratio) / 2, zero(R)) # midpoint radius
 end
-surface_centroid_normal(::Cone, ::AbstractBody, ::EndA) = (0.0, 0.0, -1.0)
-surface_centroid_normal(::Cone, ::AbstractBody, ::EndB) = (0.0, 0.0, 1.0)
-function surface_centroid_normal(shape::Cone, body::AbstractBody, ::Lateral)
-    R = body.geometry.length.radius_skin
-    L = body.geometry.length.length_skin
-    Δr = R * (1 - shape.top_ratio)
-    s = sqrt(Δr^2 + L^2)
-    (L/s, 0.0, Δr/s)
-end
+surface_centroid_normal(::Cone, ::AbstractBody, ::EndA) = (-1.0, 0.0, 0.0)
+surface_centroid_normal(::Cone, ::AbstractBody, ::EndB) = (1.0, 0.0, 0.0)
+surface_centroid_normal(shape::Cone, body::AbstractBody, ::Lateral) =
+    _cone_slant_normal(shape, body, 0.0)
