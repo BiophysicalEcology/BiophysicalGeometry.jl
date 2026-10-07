@@ -10,9 +10,14 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+Whisk = "5b8e3c11-c6c3-4a7d-9b5d-6f1d2c8e7a01"
+
+[sources]
+Whisk = {rev = "9fb8815593512af8329f25cb314bdef756bbaec5", url = "https://github.com/SimonDanisch/Whisk.jl"}
 
 [extensions]
 BiophysicalGeometryMakieExt = "Makie"
+BiophysicalGeometryWhiskExt = "Whisk"
 
 [compat]
 Aqua = "0.8"
@@ -25,6 +30,7 @@ SafeTestsets = "0.1"
 StaticArrays = "1"
 Test = "1"
 Unitful = "1"
+Whisk = "0.0.1"
 julia = "1"
 
 [extras]
@@ -34,6 +40,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Whisk = "5b8e3c11-c6c3-4a7d-9b5d-6f1d2c8e7a01"
 
 [targets]
-test = ["Aqua", "Roots", "SafeTestsets", "Test"]
+test = ["Aqua", "Roots", "SafeTestsets", "Test", "Whisk"]
