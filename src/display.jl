@@ -1,4 +1,4 @@
-const _W = 22  # field-label column width
+const LABEL_WIDTH = 22  # field-label column width
 
 # ── Marker types ──────────────────────────────────────────────────────────────
 
@@ -12,58 +12,69 @@ Base.show(io::IO, ::MIME"text/plain", ::ZenithAngleVarying) = print(io, "ZenithA
 
 function Base.show(io::IO, ::MIME"text/plain", s::Sphere)
     println(io, "Sphere")
-    println(io, rpad("  mass:", _W), s.mass)
-    print(io,   rpad("  density:", _W), s.density)
+    println(io, rpad("  mass:", LABEL_WIDTH), s.mass)
+    print(io,   rpad("  density:", LABEL_WIDTH), s.density)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::Cylinder)
     println(io, "Cylinder")
-    println(io, rpad("  mass:", _W), s.mass)
-    println(io, rpad("  density:", _W), s.density)
-    print(io,   rpad("  axis_ratio_b:", _W), s.axis_ratio_b)
+    println(io, rpad("  mass:", LABEL_WIDTH), s.mass)
+    println(io, rpad("  density:", LABEL_WIDTH), s.density)
+    print(io,   rpad("  axis_ratio_b:", LABEL_WIDTH), s.axis_ratio_b)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::Ellipsoid)
     println(io, "Ellipsoid")
-    println(io, rpad("  mass:", _W), s.mass)
-    println(io, rpad("  density:", _W), s.density)
-    println(io, rpad("  axis_ratio_b:", _W), s.axis_ratio_b)
-    print(io,   rpad("  axis_ratio_c:", _W), s.axis_ratio_c)
+    println(io, rpad("  mass:", LABEL_WIDTH), s.mass)
+    println(io, rpad("  density:", LABEL_WIDTH), s.density)
+    println(io, rpad("  axis_ratio_b:", LABEL_WIDTH), s.axis_ratio_b)
+    print(io,   rpad("  axis_ratio_c:", LABEL_WIDTH), s.axis_ratio_c)
+    iszero(s.pole_a_truncation) || print(io, "\n", rpad("  pole_a_truncation:", LABEL_WIDTH), s.pole_a_truncation)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::Plate)
     println(io, "Plate")
-    println(io, rpad("  mass:", _W), s.mass)
-    println(io, rpad("  density:", _W), s.density)
-    println(io, rpad("  axis_ratio_b:", _W), s.axis_ratio_b)
-    print(io,   rpad("  axis_ratio_c:", _W), s.axis_ratio_c)
+    println(io, rpad("  mass:", LABEL_WIDTH), s.mass)
+    println(io, rpad("  density:", LABEL_WIDTH), s.density)
+    println(io, rpad("  axis_ratio_b:", LABEL_WIDTH), s.axis_ratio_b)
+    print(io,   rpad("  axis_ratio_c:", LABEL_WIDTH), s.axis_ratio_c)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", s::LeopardFrog)
-    println(io, "LeopardFrog")
-    println(io, rpad("  mass:", _W), s.mass)
-    print(io,   rpad("  density:", _W), s.density)
+function Base.show(io::IO, ::MIME"text/plain", s::TriangularPlate)
+    println(io, "TriangularPlate")
+    println(io, rpad("  mass:", LABEL_WIDTH), s.mass)
+    println(io, rpad("  density:", LABEL_WIDTH), s.density)
+    println(io, rpad("  axis_ratio_b:", LABEL_WIDTH), s.axis_ratio_b)
+    print(io,   rpad("  axis_ratio_c:", LABEL_WIDTH), s.axis_ratio_c)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", s::DesertIguana)
-    println(io, "DesertIguana")
-    println(io, rpad("  mass:", _W), s.mass)
-    print(io,   rpad("  density:", _W), s.density)
+function Base.show(io::IO, ::MIME"text/plain", s::Cone)
+    println(io, "Cone")
+    println(io, rpad("  mass:", LABEL_WIDTH), s.mass)
+    println(io, rpad("  density:", LABEL_WIDTH), s.density)
+    println(io, rpad("  axis_ratio_b:", LABEL_WIDTH), s.axis_ratio_b)
+    print(io,   rpad("  top_ratio:", LABEL_WIDTH), s.top_ratio)
+end
+
+function Base.show(io::IO, mime::MIME"text/plain", h::Half)
+    # The parent is the full shape of double mass; show the half's own mass first.
+    println(io, "Half (mass $(mass(h))) of")
+    show(io, mime, h.parent)
 end
 
 # ── Insulation types ──────────────────────────────────────────────────────────
 
 function Base.show(io::IO, ::MIME"text/plain", f::FibrousLayer)
     println(io, "FibrousLayer")
-    println(io, rpad("  thickness:", _W), f.thickness)
-    println(io, rpad("  fibre_diameter:", _W), f.fibre_diameter)
-    print(io,   rpad("  fibre_density:", _W), f.fibre_density)
+    println(io, rpad("  thickness:", LABEL_WIDTH), f.thickness)
+    println(io, rpad("  fibre_diameter:", LABEL_WIDTH), f.fibre_diameter)
+    print(io,   rpad("  fibre_density:", LABEL_WIDTH), f.fibre_density)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", f::FatLayer)
     println(io, "FatLayer")
-    println(io, rpad("  fraction:", _W), f.fraction)
-    print(io,   rpad("  density:", _W), f.density)
+    println(io, rpad("  fraction:", LABEL_WIDTH), f.fraction)
+    print(io,   rpad("  density:", LABEL_WIDTH), f.density)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", c::CompositeInsulation)
@@ -92,20 +103,20 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", a::SurfaceAreas)
     println(io, "Surface Areas")
-    _show_area_lines(io, a, "  ", _W)
+    _show_area_lines(io, a, "  ", LABEL_WIDTH)
 end
 
 # ── Geometry ──────────────────────────────────────────────────────────────────
 
 function Base.show(io::IO, ::MIME"text/plain", g::Geometry)
     println(io, "Geometry")
-    println(io, rpad("  volume:", _W), g.volume)
+    println(io, rpad("  volume:", LABEL_WIDTH), g.volume)
     println(io, "  Dimensions:")
     for (k, v) in pairs(g.length)
-        println(io, rpad("    $k:", _W + 2), v)
+        println(io, rpad("    $k:", LABEL_WIDTH + 2), v)
     end
     println(io, "  Surface Areas:")
-    _show_area_lines(io, g.area, "    ", _W + 2)
+    _show_area_lines(io, g.area, "    ", LABEL_WIDTH + 2)
 end
 
 # ── Body ──────────────────────────────────────────────────────────────────────
@@ -126,11 +137,11 @@ function Base.show(io::IO, ::MIME"text/plain", b::Body)
     println(io)
 
     println(io, "Geometry:")
-    println(io, rpad("  volume:", _W), b.geometry.volume)
+    println(io, rpad("  volume:", LABEL_WIDTH), b.geometry.volume)
     println(io, "  Dimensions:")
     for (k, v) in pairs(b.geometry.length)
-        println(io, rpad("    $k:", _W + 2), v)
+        println(io, rpad("    $k:", LABEL_WIDTH + 2), v)
     end
     println(io, "  Surface Areas:")
-    _show_area_lines(io, b.geometry.area, "    ", _W + 2)
+    _show_area_lines(io, b.geometry.area, "    ", LABEL_WIDTH + 2)
 end

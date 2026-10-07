@@ -100,25 +100,11 @@ end
 
 # Ellipsoid silhouette area (shadow on plane perpendicular to view direction n̂):
 #   A = π × abc × √( (n_x/a)² + (n_y/b)² + (n_z/c)² )
-# Body's long axis (a) along x; sun zenith θ from vertical → n̂ = (sin θ, 0, cos θ).
-sil_ell_normal(a, b)       = π * a * b                        # n̂ = (0,0,1) → πab
+# Body's long axis (a) along x; θ measured from the long axis (as for the
+# cylinder, θ = 0 is end-on) → n̂ = (cos θ, 0, sin θ).
+sil_ell_normal(a, b)       = π * a * b                        # n̂ = (0,1,0) → πac = πab
 sil_ell_parallel(b, c)     = π * b * c                        # n̂ = (1,0,0) → πbc
-sil_ell_zenith(a, b, c, θ) = π * a * b * c * sqrt((sin(θ)/a)^2 + (cos(θ)/c)^2)
-
-# === Desert iguana / Leopard frog: allometric in mass (g) ===
-
-mg = ustrip(u"g", uconvert(u"g", mass))
-
-di_total    = uconvert(u"m^2", 10.4713 * mg^0.688 * u"cm^2")
-di_ventral  = uconvert(u"m^2",  0.425  * mg^0.85  * u"cm^2")
-di_normal   = uconvert(u"m^2",  3.798  * mg^0.683 * u"cm^2")
-di_parallel = uconvert(u"m^2",  0.694  * mg^0.743 * u"cm^2")
-di_intermed = (di_normal + di_parallel) / 2
-# Body radius from cylinder approx with L = 4R: V = 4π R³
-di_r = uconvert(u"m", cbrt(V / (4π)))
-
-lf_total = uconvert(u"m^2", 12.79 * mg^0.606 * u"cm^2")
-lf_r     = uconvert(u"m", cbrt(V / (4π)))
+sil_ell_zenith(a, b, c, θ) = π * a * b * c * sqrt((cos(θ)/a)^2 + (sin(θ)/c)^2)
 
 # === Comparison harness ===
 
@@ -203,19 +189,7 @@ check("Ell/Naked total_area",         S_prolate(a_e, b_e, c_e), 1.06792825659917
 check("Ell/Naked skin_radius",        b_e,                    0.14586516277963593u"m")
 check("Ell/Naked sil_normal",         sil_ell_normal(a_e, b_e),    0.3342127693207218u"m^2")
 check("Ell/Naked sil_parallel",       sil_ell_parallel(b_e, c_e),  0.06684255386414435u"m^2")
-# Ellipsoid zenith silhouette is INTENTIONALLY not checked here: the package
-# implementation uses a 2-angle Euler projection algorithm with the body-
-# orientation angle hardcoded to 90°, and the resulting convention does not
-# correspond to "horizontal prolate ellipsoid, sun zenith θ from vertical".
-# For reference:
-#   - textbook horizontal-ellipsoid projection at θ=30°  ≈ 0.2914 m² (Naked)
-#                                                        ≈ 0.3158 m² (Fibrous)
-#   - package implementation at θ=30°                    ≈ 0.0767 m² (Naked)
-#                                                        ≈ 0.0875 m² (Fibrous)
-# See the comment block on `silhouette_area(::Ellipsoid, a, b, c, θ)` in
-# src/shapes/ellipsoid.jl. Once the orientation convention is clarified
-# (e.g. against the original Fortran/NicheMapR source), reinstate one of
-# these as a real first-principles check.
+check("Ell/Naked sil_zenith30",       sil_ell_zenith(a_e, b_e, c_e, deg2rad(30)), 0.17684877452096545u"m^2")
 
 # --- Ellipsoid / FibrousLayer ---
 S_ell_skin = S_prolate(a_e, b_e, c_e)
@@ -226,18 +200,8 @@ check("Ell/Fibrous evaporation_area",     S_ell_skin - hair_area(S_ell_skin),
                                                               1.045282036532102u"m^2")
 check("Ell/Fibrous insulation_radius",    b_efibrous,                 0.15586516277963594u"m")
 check("Ell/Fibrous sil_normal",           sil_ell_normal(a_efibrous, b_efibrous), 0.3620218640142718u"m^2")
-# Ell/Fibrous zenith silhouette: same divergence — see note above.
-
-# --- DesertIguana / Naked ---
-check("DI/Naked total_area",          di_total,               2.144297264544543u"m^2")
-check("DI/Naked skin_radius",         di_r,                   0.1729422736164134u"m")
-check("DI/Naked sil_normal",          di_normal,              0.7358254132114781u"m^2")
-check("DI/Naked sil_parallel",        di_parallel,            0.26142920031318184u"m^2")
-check("DI/Naked sil_intermediate",    di_intermed,            0.49862730676232997u"m^2")
-
-# --- LeopardFrog / Naked ---
-check("LF/Naked total_area",          lf_total,               1.055591874642603u"m^2")
-check("LF/Naked skin_radius",         lf_r,                   0.1729422736164134u"m")
+check("Ell/Fibrous sil_zenith30",         sil_ell_zenith(a_efibrous, b_efibrous, c_efibrous, deg2rad(30)),
+                                                              0.19270108448901746u"m^2")
 
 # === Print results ===
 

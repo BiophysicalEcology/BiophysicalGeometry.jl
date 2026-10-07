@@ -1,81 +1,75 @@
 """
-    Plate <: AbstractShape
+    Plate(; mass, density, volume, length, width, height, axis_ratio_b, axis_ratio_c) <: AbstractShape
 
-A flat plate-shaped organism shape.
+A box-shaped organism shape centred on the origin: `length` along `x`, `width`
+along `y`, `height` along `z`. `axis_ratio_b` is length / width and
+`axis_ratio_c` length / height. Give any sufficient set of keywords — e.g.
+`mass`, `density` and both ratios, or all three dimensions and one of `mass` /
+`density` — and the rest is solved for. Dimensions are at skin level.
+`Plate(Unchecked(); ...)` does the same without checking the keywords.
 """
-struct Plate{M,D,B,C} <: AbstractShape
+struct Plate{M,D,B,C} <: AbstractSlab
     mass::M
     density::D
     axis_ratio_b::B
     axis_ratio_c::C
+    Plate(::Unchecked, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
+        new{M,D,B,C}(mass, density, axis_ratio_b, axis_ratio_c)
 end
 
-function _plate_skin_dims(shape::Plate, volume)
+# volume = length·width·height; axis_ratio_b = length/width, axis_ratio_c = length/height
+ShapeSpec(::Type{Plate}) = ShapeSpec{Plate}((; length = 1, width = 1, height = 1), 0.0,
+    (; axis_ratio_b = (1, 2, 1.0), axis_ratio_c = (1, 3, 1.0)))
+
+Plate(; kw...) = (check_shape(ShapeSpec(Plate), NamedTuple(kw)); Plate(Unchecked(); kw...))
+function Plate(::Unchecked; kw...)
+    s = _resolve_shape(ShapeSpec(Plate), NamedTuple(kw))
+    Plate(Unchecked(), s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c)
+end
+
+function _skin_level(shape::Plate, volume)
     length_skin = cbrt(volume * shape.axis_ratio_b * shape.axis_ratio_c)
     width_skin = length_skin / shape.axis_ratio_b
     height_skin = length_skin / shape.axis_ratio_c
-    return (length_skin, width_skin, height_skin)
+    (; dims = (; length_skin, width_skin, height_skin),
+       area = surface_area(shape, length_skin, width_skin, height_skin))
 end
-
-function _plate_fibrous_dims(skin_dims, thickness)
-    return ntuple(i -> skin_dims[i] + thickness * 2, 3)
+function _fibrous_level(shape::Plate, skin, thickness)
+    length_fibrous = skin.length_skin + thickness * 2
+    width_fibrous = skin.width_skin + thickness * 2
+    height_fibrous = skin.height_skin + thickness * 2
+    (; dims = (; length_fibrous, width_fibrous, height_fibrous),
+       area = surface_area(shape, length_fibrous, width_fibrous, height_fibrous))
 end
-
-function geometry(shape::Plate, ::Naked)
-    volume = body_volume(shape)
-    (length_skin, width_skin, height_skin) = _plate_skin_dims(shape, volume)
-    total = surface_area(shape, length_skin, width_skin, height_skin)
-    return Geometry(volume, (; length_skin, width_skin, height_skin), SurfaceAreas(; total))
-end
-function geometry(shape::Plate, fibrous_layer::FibrousLayer)
-    volume = body_volume(shape)
-    skin_dims = _plate_skin_dims(shape, volume)
-    (length_skin, width_skin, height_skin) = skin_dims
-    fibrous_dims = _plate_fibrous_dims(skin_dims, fibrous_layer.thickness)
-    (length_fibrous, width_fibrous, height_fibrous) = fibrous_dims
-    areas = fibrous_areas(shape, fibrous_layer, skin_dims, fibrous_dims)
-    fat = 0.0u"m"
-    return Geometry(volume, (; length_skin, width_skin, height_skin, length_fibrous, width_fibrous, height_fibrous, fat), areas)
-end
-function geometry(shape::Plate, fat_layer::FatLayer)
-    volume = body_volume(shape)
-    flesh_v = volume - fat_volume(shape, fat_layer)
-    (length_skin, width_skin, height_skin) = _plate_skin_dims(shape, volume)
-    width_flesh = cbrt(flesh_v * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
-    fat = (width_skin - width_flesh) / 2
-    total = surface_area(shape, length_skin, width_skin, height_skin)
-    return Geometry(volume, (; length_skin, width_skin, height_skin, fat), SurfaceAreas(; total))
-end
-function geometry(shape::Plate, fibrous_layer::FibrousLayer, fat_layer::FatLayer)
-    volume = body_volume(shape)
-    flesh_v = volume - fat_volume(shape, fat_layer)
-    skin_dims = _plate_skin_dims(shape, volume)
-    (length_skin, width_skin, height_skin) = skin_dims
-    width_flesh = cbrt(flesh_v * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
-    fat = (width_skin - width_flesh) / 2
-    fibrous_dims = _plate_fibrous_dims(skin_dims, fibrous_layer.thickness)
-    (length_fibrous, width_fibrous, height_fibrous) = fibrous_dims
-    areas = fibrous_areas(shape, fibrous_layer, skin_dims, fibrous_dims)
-    return Geometry(volume, (; length_skin, width_skin, height_skin, length_fibrous, width_fibrous, height_fibrous, fat), areas)
+function _fat_thickness(shape::Plate, skin, flesh_volume, fat_volume)
+    width_flesh = cbrt(flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
+    (skin.width_skin - width_flesh) / 2
 end
 
 # Surface area
 
-function surface_area(shape::Plate, body::AbstractBody)
-    length = body.geometry.length.length_skin
-    width = body.geometry.length.width_skin
-    height = body.geometry.length.height_skin
-    surface_area(shape, length, width, height)
-end
 surface_area(shape::Plate, length, width, height) =
     length * width * 2 + length * height * 2 + width * height * 2
 
 # Silhouette area
 
-function silhouette_area(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
+# A box's shadow along a unit direction d is |d_x|·A_yz + |d_y|·A_xz + |d_z|·A_xy.
+# As for the other shapes θ runs from the long axis: the sun moves in the plane
+# of the smallest face's normal (θ = 0, `parallel`) and the largest face's
+# normal (θ = π/2, `normal`), so only those two faces cast shadow.
+function _plate_faces(ins, body)
     (length, width, height) = _plate_outer_dims(ins, body)
     sides = (length * width, length * height, height * width)
-    return (; normal=max(sides...), parallel=min(sides...))
+    (min(sides...), max(sides...))
+end
+
+function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody, θ)
+    (smallest, largest) = _plate_faces(ins, body)
+    abs(cos(θ)) * smallest + abs(sin(θ)) * largest
+end
+function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
+    (smallest, largest) = _plate_faces(ins, body)
+    return (; normal=largest, parallel=smallest)
 end
 
 _plate_outer_dims(::Union{Naked,FatLayer}, body) = _plate_skin_outer_lengths(body.geometry.length)
@@ -95,3 +89,105 @@ shortest_outer_dim(::Plate, ::Union{FibrousLayer,CompositeInsulation}, geom) =
 
 _skin_radius(::Plate, length) = length.width_skin / 2
 _fibrous_radius(::Plate, length) = length.width_fibrous / 2
+
+# Composition
+
+attachment_surfaces(::Plate) = (Top, Bottom, SideA, SideB, SideC, SideD)
+
+# Outer (insulation-aware) dimensions (L, W, H). Insulation-dispatched.
+outer_dims(sh::Plate, body::AbstractBody) =
+    outer_dims(sh, outer_insulation(insulation(body)), body)
+outer_dims(::Plate, ::Union{Naked,FatLayer}, body::AbstractBody) =
+    (length = body.geometry.length.length_skin,
+     width = body.geometry.length.width_skin,
+     height = body.geometry.length.height_skin)
+outer_dims(::Plate, ::FibrousLayer, body::AbstractBody) =
+    (length = body.geometry.length.length_fibrous,
+     width = body.geometry.length.width_fibrous,
+     height = body.geometry.length.height_fibrous)
+
+# Skin-level dimensions — used for flesh-anchored attachment positions.
+function _plate_skin(body::AbstractBody)
+    gl = body.geometry.length
+    (gl.length_skin, gl.width_skin, gl.height_skin)
+end
+
+function surface_area(sh::Plate, body::AbstractBody, ::Top)
+    d = outer_dims(sh, body); d.length * d.width
+end
+surface_area(sh::Plate, body::AbstractBody, ::Bottom) = surface_area(sh, body, Top())
+function surface_area(sh::Plate, body::AbstractBody, ::SideA)
+    d = outer_dims(sh, body); d.width * d.height
+end
+surface_area(sh::Plate, body::AbstractBody, ::SideB) = surface_area(sh, body, SideA())
+function surface_area(sh::Plate, body::AbstractBody, ::SideC)
+    d = outer_dims(sh, body); d.length * d.height
+end
+surface_area(sh::Plate, body::AbstractBody, ::SideD) = surface_area(sh, body, SideC())
+
+function validate_range(::Plate, body::AbstractBody, loc::Union{Top,Bottom})
+    L, W, _ = _plate_skin(body)
+    abs(loc.x) ≤ L/2 || error("x is out of range")
+    abs(loc.y) ≤ W/2 || error("y is out of range")
+end
+function validate_range(::Plate, body::AbstractBody, loc::Union{SideA,SideB})
+    _, W, H = _plate_skin(body)
+    abs(loc.y) ≤ W/2 || error("y is out of range")
+    abs(loc.z) ≤ H/2 || error("z is out of range")
+end
+function validate_range(::Plate, body::AbstractBody, loc::Union{SideC,SideD})
+    L, _, H = _plate_skin(body)
+    abs(loc.x) ≤ L/2 || error("x is out of range")
+    abs(loc.z) ≤ H/2 || error("z is out of range")
+end
+
+function surface_point(::Plate, body::AbstractBody, loc::Top)
+    _, _, H = _plate_skin(body); (loc.x, loc.y, H/2)
+end
+function surface_point(::Plate, body::AbstractBody, loc::Bottom)
+    _, _, H = _plate_skin(body); (loc.x, loc.y, -H/2)
+end
+function surface_point(::Plate, body::AbstractBody, loc::SideA)
+    L, _, _ = _plate_skin(body); (L/2, loc.y, loc.z)
+end
+function surface_point(::Plate, body::AbstractBody, loc::SideB)
+    L, _, _ = _plate_skin(body); (-L/2, loc.y, loc.z)
+end
+function surface_point(::Plate, body::AbstractBody, loc::SideC)
+    _, W, _ = _plate_skin(body); (loc.x, W/2, loc.z)
+end
+function surface_point(::Plate, body::AbstractBody, loc::SideD)
+    _, W, _ = _plate_skin(body); (loc.x, -W/2, loc.z)
+end
+
+surface_normal(::Plate, ::AbstractBody, ::Top)    = ( 0.0, 0.0, 1.0)
+surface_normal(::Plate, ::AbstractBody, ::Bottom) = ( 0.0, 0.0, -1.0)
+surface_normal(::Plate, ::AbstractBody, ::SideA)  = ( 1.0, 0.0, 0.0)
+surface_normal(::Plate, ::AbstractBody, ::SideB)  = (-1.0, 0.0, 0.0)
+surface_normal(::Plate, ::AbstractBody, ::SideC)  = ( 0.0, 1.0, 0.0)
+surface_normal(::Plate, ::AbstractBody, ::SideD)  = ( 0.0, -1.0, 0.0)
+
+function surface_centroid(::Plate, body::AbstractBody, ::Top)
+    L, _, H = _plate_skin(body); (zero(L), zero(L), H/2)
+end
+function surface_centroid(::Plate, body::AbstractBody, ::Bottom)
+    L, _, H = _plate_skin(body); (zero(L), zero(L), -H/2)
+end
+function surface_centroid(::Plate, body::AbstractBody, ::SideA)
+    L, _, _ = _plate_skin(body); (L/2, zero(L), zero(L))
+end
+function surface_centroid(::Plate, body::AbstractBody, ::SideB)
+    L, _, _ = _plate_skin(body); (-L/2, zero(L), zero(L))
+end
+function surface_centroid(::Plate, body::AbstractBody, ::SideC)
+    _, W, _ = _plate_skin(body); (zero(W), W/2, zero(W))
+end
+function surface_centroid(::Plate, body::AbstractBody, ::SideD)
+    _, W, _ = _plate_skin(body); (zero(W), -W/2, zero(W))
+end
+surface_centroid_normal(::Plate, ::AbstractBody, ::Top)    = ( 0.0, 0.0, 1.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::Bottom) = ( 0.0, 0.0, -1.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideA)  = ( 1.0, 0.0, 0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideB)  = (-1.0, 0.0, 0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideC)  = ( 0.0, 1.0, 0.0)
+surface_centroid_normal(::Plate, ::AbstractBody, ::SideD)  = ( 0.0, -1.0, 0.0)

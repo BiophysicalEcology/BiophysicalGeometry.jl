@@ -1,0 +1,345 @@
+using BiophysicalGeometry
+using Unitful
+using Test
+
+const density = 1000.0u"kg/m^3"
+
+@testset "HalfCylinder geometry" begin
+    h = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    full = Body(Cylinder(; mass = 20u"kg", density, axis_ratio_b = 3.0), Naked())
+    # Two halves of mass m sized the same way as one full of mass 2m.
+    @test h.geometry.length.radius_skin ≈ full.geometry.length.radius_skin
+    @test h.geometry.length.length_skin ≈ full.geometry.length.length_skin
+    @test flesh_volume(h) ≈ flesh_volume(full) / 2
+
+    # Total area = π r L (lateral) + π r² (two semicircular ends) + 2 r L (flat).
+    r = h.geometry.length.radius_skin
+    L = h.geometry.length.length_skin
+    @test total_area(h) ≈ π*r*L + π*r^2 + 2*r*L
+end
+
+@testset "HalfEllipsoid geometry" begin
+    h = Body(HalfEllipsoid(; mass = 5u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 3.0), Naked())
+    full = Body(Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), Naked())
+    @test h.geometry.length.width_skin ≈ full.geometry.length.width_skin
+    @test h.geometry.length.length_skin ≈ full.geometry.length.length_skin
+    @test flesh_volume(h) ≈ flesh_volume(full) / 2
+    # Half dome + flat ≈ total; the flat face at z = 0 holds the long axis a.
+    flat = π * h.geometry.length.length_skin / 2 * h.geometry.length.width_skin / 2
+    @test total_area(h) ≈ total_area(full)/2 + flat
+end
+
+@testset "Half shapes inherit full-shape dimension math" begin
+    fur = FibrousLayer(5u"mm", 30u"μm", 5e7u"1/m^2")
+    fat = FatLayer(0.2, 900.0u"kg/m^3")
+    for ins in (Naked(), fat, fur, CompositeInsulation(fur, fat))
+        he = Body(HalfEllipsoid(; mass = 5u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 3.0), ins)
+        fe = Body(Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), ins)
+        eflat = π * he.geometry.length.length_skin / 2 * he.geometry.length.width_skin / 2
+        @test skin_radius(he) ≈ skin_radius(fe)              # dims inherited from full 2m
+        @test total_area(he) ≈ total_area(fe)/2 + eflat
+        @test flesh_radius(he) ≤ skin_radius(he)             # flesh sits inside skin (fat clamped ≥ 0)
+
+        hc = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), ins)
+        fc = Body(Cylinder(; mass = 20u"kg", density, axis_ratio_b = 3.0), ins)
+        cflat = 2 * hc.geometry.length.radius_skin * hc.geometry.length.length_skin
+        @test skin_radius(hc) ≈ skin_radius(fc)
+        @test total_area(hc) ≈ total_area(fc)/2 + cflat
+        @test flesh_radius(hc) ≤ skin_radius(hc)
+    end
+end
+
+@testset "Dorsal/ventral torso == full cylinder" begin
+    dorsal = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    ventral = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    torso = CompositeBody(;
+        parts = (; dorsal, ventral),
+        joins = (Join(dorsal = Attachment(Flat(), FullCover()),
+                      ventral = Attachment(Flat(), FullCover())),),
+    )
+    full = Body(Cylinder(; mass = 20u"kg", density, axis_ratio_b = 3.0), Naked())
+    @test total_area(torso) ≈ total_area(full)
+    @test flesh_volume(torso) ≈ flesh_volume(full)
+end
+
+@testset "HalfSphere geometry" begin
+    # A hemisphere wraps Sphere (fast spherical math); two of mass m reconstruct
+    # a sphere of mass 2m, and each shares that sphere's skin radius.
+    h    = Body(HalfSphere(; mass = 5u"kg", density), Naked())
+    full = Body(Sphere(; mass = 10u"kg", density), Naked())
+    @test h isa Body{<:Half}
+    @test h.geometry.length.radius_skin ≈ full.geometry.length.radius_skin
+    @test flesh_volume(h) ≈ flesh_volume(full) / 2
+    # Half dome + flat ≈ total; the two domes reconstruct the full sphere's area.
+    flat = π * h.geometry.length.radius_skin^2
+    @test total_area(h) - flat ≈ total_area(full) / 2
+end
+
+@testset "Dorsal/ventral head == full sphere" begin
+    dorsal  = Body(HalfSphere(; mass = 5u"kg", density), Naked())
+    ventral = Body(HalfSphere(; mass = 5u"kg", density), Naked())
+    head = CompositeBody(;
+        parts = (; dorsal, ventral),
+        joins = (Join(dorsal = Attachment(Flat(), FullCover()),
+                      ventral = Attachment(Flat(), FullCover())),),
+    )
+    full = Body(Sphere(; mass = 10u"kg", density), Naked())
+    @test total_area(head) ≈ total_area(full)
+    @test flesh_volume(head) ≈ flesh_volume(full)
+end
+
+@testset "Dorsal/ventral torso == full ellipsoid" begin
+    dorsal = Body(HalfEllipsoid(; mass = 5u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 3.0), Naked())
+    ventral = Body(HalfEllipsoid(; mass = 5u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 3.0), Naked())
+    torso = CompositeBody(;
+        parts = (; dorsal, ventral),
+        joins = (Join(dorsal = Attachment(Flat(), FullCover()),
+                      ventral = Attachment(Flat(), FullCover())),),
+    )
+    full = Body(Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), Naked())
+    @test total_area(torso) ≈ total_area(full)
+    @test flesh_volume(torso) ≈ flesh_volume(full)
+end
+
+@testset "Dorsal furred, ventral naked" begin
+    fur = FibrousLayer(0.01u"m", 30u"μm", 3000u"cm^-2")
+    dorsal = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), fur)
+    ventral = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    torso = CompositeBody(;
+        parts = (; dorsal, ventral),
+        joins = (Join(dorsal = Attachment(Flat(), FullCover()),
+                      ventral = Attachment(Flat(), FullCover())),),
+    )
+    # Sum of unjoined parts minus 2× the (matching) flat area.
+    flat = 2 * dorsal.geometry.length.radius_skin * dorsal.geometry.length.length_skin
+    @test total_area(torso) ≈ total_area(dorsal) + total_area(ventral) - 2*flat
+end
+
+@testset "Dog example" begin
+    torso = Body(Cylinder(; mass = 20u"kg", density, axis_ratio_b = 3.0), Naked())
+    leg = Body(Cylinder(; mass = 1u"kg", density, axis_ratio_b = 5.0), Naked())
+    head = Body(Ellipsoid(; mass = 2u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), Naked())
+    L_torso = torso.geometry.length.length_skin
+    r_leg = skin_radius(leg)
+    r_head_attach = 0.04u"m"
+
+    dog = CompositeBody(;
+        parts = (; torso, head, leg_fl=leg, leg_fr=leg, leg_bl=leg, leg_br=leg),
+        joins = (
+            Join(torso = Attachment(EndA(0.0u"m", 0.0), Disc(r_head_attach)),
+                 head = Attachment(PoleA(), Disc(r_head_attach))),
+            Join(torso = Attachment(Lateral(0.2*L_torso, π/2 - π/6), Disc(r_leg)),
+                 leg_fl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
+            Join(torso = Attachment(Lateral(0.2*L_torso, -π/2 + π/6), Disc(r_leg)),
+                 leg_fr = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
+            Join(torso = Attachment(Lateral(0.8*L_torso, π/2 - π/6), Disc(r_leg)),
+                 leg_bl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
+            Join(torso = Attachment(Lateral(0.8*L_torso, -π/2 + π/6), Disc(r_leg)),
+                 leg_br = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
+        ),
+    )
+
+    sum_parts = total_area(torso) + total_area(head) + 4 * total_area(leg)
+    sub = 2 * (π * r_head_attach^2 + 4 * π * r_leg^2)
+    @test total_area(dog) ≈ sum_parts - sub
+    @test flesh_volume(dog) ≈ flesh_volume(torso) + flesh_volume(head) + 4 * flesh_volume(leg)
+
+    # Pose: legs sit on the torso lateral surface at the expected (position, angle);
+    # the torso lies along x, angles running from +y towards +z.
+    R_torso = insulation_radius(torso)
+    @test dog.poses.leg_fl.translation[1] ≈ 0.2 * L_torso atol=1e-9*u"m"
+    @test dog.poses.leg_fl.translation[2] ≈ R_torso * cos(π/2 - π/6) atol=1e-9*u"m"
+    @test dog.poses.leg_fl.translation[3] ≈ R_torso * sin(π/2 - π/6) atol=1e-9*u"m"
+
+    # Scalar accessors delegate to the root part (first in `parts`).
+    @test skin_radius(dog) == skin_radius(torso)
+    @test insulation_radius(dog) == insulation_radius(torso)
+end
+
+@testset "Join accessors" begin
+    torso = Body(Cylinder(; mass = 20u"kg", density, axis_ratio_b = 3.0), Naked())
+    leg   = Body(Cylinder(; mass = 1u"kg", density, axis_ratio_b = 5.0), Naked())
+    head  = Body(Ellipsoid(; mass = 2u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), Naked())
+    L_torso = torso.geometry.length.length_skin
+    R_torso = skin_radius(torso)
+    r_leg  = skin_radius(leg)
+    r_head = 0.04u"m"
+
+    head_join = Join(torso = Attachment(EndA(0.0u"m", 0.0), Disc(r_head)),
+                     head = Attachment(PoleA(), Disc(r_head)))
+    leg_join  = Join(torso = Attachment(Lateral(0.2*L_torso, π/2), Disc(r_leg)),
+                     leg_fl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg)))
+    dog = CompositeBody(; parts = (; torso, head, leg_fl = leg),
+                          joins = (head_join, leg_join))
+
+    # join_partners — names from the type parameters.
+    @test join_partners(head_join) == (:torso, :head)
+    @test join_partners(leg_join)  == (:torso, :leg_fl)
+
+    # join_area — π r² for a Disc; parent/child agree by construction.
+    @test join_area(head_join, dog) ≈ π * r_head^2
+    @test join_area(leg_join, dog)  ≈ π * r_leg^2
+
+    # join_position — world centre of the interface (identity root pose).
+    hp = join_position(head_join, dog)             # torso EndA at r=0 → origin
+    @test hp[1] ≈ 0.0u"m" atol=1e-9u"m"
+    @test hp[2] ≈ 0.0u"m" atol=1e-9u"m"
+    @test hp[3] ≈ 0.0u"m" atol=1e-9u"m"
+    lp = join_position(leg_join, dog)              # torso Lateral at angle π/2 → (0.2L, 0, R)
+    @test lp[1] ≈ 0.2*L_torso
+    @test lp[2] ≈ 0.0u"m" atol=1e-9u"m"
+    @test lp[3] ≈ R_torso
+
+    # internal_distance — closed forms per surface.
+    hd = internal_distance(head_join, dog)
+    @test hd.parent ≈ L_torso / 2                                  # cylinder centroid → end cap
+    @test hd.child  ≈ head.geometry.length.length_skin / 2       # ellipsoid centre → pole
+    ld = internal_distance(leg_join, dog)
+    @test ld.parent ≈ R_torso                                      # cylinder centroid → lateral
+    @test ld.child  ≈ leg.geometry.length.length_skin / 2
+
+    # Half-cylinder flat face: half-disc centroid sits 4R/(3π) off the plane.
+    dorsal = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    Rd = dorsal.geometry.length.radius_skin
+    @test internal_distance(dorsal, Flat()) ≈ 4Rd / (3π)
+
+    # Sphere: centroid → any surface point is the radius.
+    sph = Body(Sphere(; mass = 2u"kg", density), Naked())
+    @test internal_distance(sph, Radial(0.0, 0.0)) ≈ skin_radius(sph)
+end
+
+@testset "Validation" begin
+    a = Body(Cylinder(; mass = 1u"kg", density, axis_ratio_b = 2.0), Naked())
+    b = Body(Cylinder(; mass = 1u"kg", density, axis_ratio_b = 2.0), Naked())
+
+    # Patch radius too large for the surface.
+    @test_throws ErrorException CompositeBody(;
+        parts = (; a, b),
+        joins = (Join(a = Attachment(EndA(0.0u"m", 0.0), Disc(10.0u"m")),
+                      b = Attachment(EndA(0.0u"m", 0.0), Disc(10.0u"m"))),),
+    )
+
+    # Mismatched FullCover areas (different sizes).
+    big = Body(HalfCylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    small = Body(HalfCylinder(; mass = 1u"kg", density, axis_ratio_b = 3.0), Naked())
+    @test_throws ErrorException CompositeBody(;
+        parts = (; big, small),
+        joins = (Join(big = Attachment(Flat(), FullCover()),
+                      small = Attachment(Flat(), FullCover())),),
+    )
+
+    # Attachment surface the shape doesn't have (a sphere has no EndA).
+    ball = Body(Sphere(; mass = 1u"kg", density), Naked())
+    @test_throws ErrorException CompositeBody(;
+        parts = (; ball, b),
+        joins = (Join(ball = Attachment(EndA(0.0u"m", 0.0), Disc(0.001u"m")),
+                      b = Attachment(EndA(0.0u"m", 0.0), Disc(0.001u"m"))),),
+    )
+end
+
+@testset "Bent joins" begin
+    torso = Body(Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    neck = Body(Cylinder(; mass = 1u"kg", density, axis_ratio_b = 2.0), Naked())
+    patch = Disc(1u"cm")
+    joint(bend) = Join(torso = Attachment(EndB(0.0u"m", 0.0), patch), neck = Attachment(EndA(0.0u"m", 0.0), patch);
+                       bend, hinge = (0.0, 1.0, 0.0))
+    straight = CompositeBody(; parts = (; torso, neck), joins = (joint(0.0),))
+    bent = CompositeBody(; parts = (; torso, neck), joins = (joint(π / 2),))
+    along(b) = BiophysicalGeometry.apply_rotation(b.poses.neck.rotation, (1.0, 0.0, 0.0))
+    @test all(along(straight) .≈ (1.0, 0.0, 0.0))
+    # A right-handed turn about +y takes the neck's axis from +x to -z.
+    @test all(isapprox.(along(bent), (0.0, 0.0, -1.0); atol = 1e-12))
+    # The joint stays put: the neck's end is still on the torso's.
+    end_of(b) = BiophysicalGeometry.apply_pose(b.poses.neck, (0.0u"m", 0.0u"m", 0.0u"m"))
+    @test all(isapprox.(end_of(bent), end_of(straight); atol = 1e-12u"m"))
+    # With the neck as the root, the torso is placed from it, and sits the same relative to the neck.
+    rooted = CompositeBody(; parts = (; neck, torso), joins = (joint(π / 2),))
+    relative(b) = transpose(b.poses.neck.rotation) * b.poses.torso.rotation
+    @test relative(rooted) ≈ relative(bent)
+    # A bend needs a hinge across the joint axis.
+    @test_throws "hinge" CompositeBody(; parts = (; torso, neck), joins = (
+        Join(torso = Attachment(EndB(0.0u"m", 0.0), patch), neck = Attachment(EndA(0.0u"m", 0.0), patch);
+             bend = 0.5, hinge = (1.0, 0.0, 0.0)),))
+end
+
+@testset "Single-part composite is identity" begin
+    sphere = Body(Sphere(; mass = 2u"kg", density), Naked())
+    cb = CompositeBody(; parts = (; sphere), joins = ())
+    @test total_area(cb) ≈ total_area(sphere)
+    @test flesh_volume(cb) ≈ flesh_volume(sphere)
+    @test skin_radius(cb) == skin_radius(sphere)
+end
+
+@testset "silhouette_rasterized" begin
+    # Sphere of radius r → silhouette is π·r² regardless of sun direction.
+    sphere = Body(Sphere(; mass = 1u"kg", density), Naked())
+    cb = CompositeBody(; parts = (; sphere), joins = ())
+    R = skin_radius(sphere)
+    expected = π * R^2
+    A1 = silhouette_rasterized(cb, (1.0, 0.0, 0.0); resolution=256)
+    A2 = silhouette_rasterized(cb, (0.0, 1.0, 0.0); resolution=256)
+    A3 = silhouette_rasterized(cb, (1.0, 1.0, 1.0); resolution=256)
+    # Rasterisation accuracy ~ 1/resolution in each dimension; allow 1.5%.
+    @test abs(A1 - expected) / expected < 0.015
+    @test abs(A2 - expected) / expected < 0.015
+    @test abs(A3 - expected) / expected < 0.015
+
+    # Two equal spheres joined at the +z pole make a snowman along z.
+    # Projected from +z (along the join axis) → discs overlap → ≈ π·R².
+    # Projected from +x (across the axis) → side-by-side discs → ≈ 2·π·R².
+    # Per-part summed silhouette is always 2·π·R² regardless of view, so
+    # along-axis it overcounts by the overlap.
+    bottom = Body(Sphere(; mass = 1u"kg", density), Naked())
+    top = Body(Sphere(; mass = 1u"kg", density), Naked())
+    snowman = CompositeBody(;
+        parts = (; bottom, top),
+        joins = (Join(bottom = Attachment(Radial(0.0, 0.0), Disc(0.001u"m")),
+                      top = Attachment(Radial(0.0, 0.0), Disc(0.001u"m"))),),
+    )
+    Aalong = silhouette_rasterized(snowman, (0.0, 0.0, 1.0); resolution=256)
+    Across = silhouette_rasterized(snowman, (1.0, 0.0, 0.0); resolution=256)
+    summed = silhouette(snowman).normal
+    @test abs(Aalong - expected) / expected < 0.02
+    @test abs(Across - 2*expected) / (2*expected) < 0.02
+    @test summed ≈ 2 * expected            # summed counts both spheres
+    @test Aalong < summed                  # overlap → rasteriser < summed
+end
+
+@testset "silhouette_area_per_part (occlusion attribution)" begin
+    sphere = Body(Sphere(; mass = 1u"kg", density), Naked())
+    R = skin_radius(sphere)
+    expected = π * R^2
+
+    bottom = Body(Sphere(; mass = 1u"kg", density), Naked())
+    top    = Body(Sphere(; mass = 1u"kg", density), Naked())
+    snowman = CompositeBody(;
+        parts = (; bottom, top),
+        joins = (Join(bottom = Attachment(Radial(0.0, 0.0), Disc(0.001u"m")),
+                      top    = Attachment(Radial(0.0, 0.0), Disc(0.001u"m"))),),
+    )
+
+    # Along +z: the top sphere is nearer the source and fully shadows the bottom.
+    along = silhouette(snowman, Beam(0.0, 0.0, 1.0); resolution=256)
+    @test abs(along.top - expected) / expected < 0.02
+    @test along.bottom / expected < 0.02                     # occluded → ~0
+    @test abs((along.top + along.bottom) -
+              silhouette_rasterized(snowman, (0.0, 0.0, 1.0))) / expected < 0.02  # sums to composite
+
+    # Across (+x): side by side, neither shadows the other.
+    across = silhouette(snowman, Beam(1.0, 0.0, 0.0); resolution=256)
+    @test abs(across.top - expected) / expected < 0.02
+    @test abs(across.bottom - expected) / expected < 0.02
+
+    # view_partition: each sphere's hemisphere splits into sky / ground / the neighbour.
+    vp = silhouette_factors(snowman, Sky(0.5); ndirections=400, resolution=96)
+    for k in (:top, :bottom)
+        e = vp[k]
+        @test e.sky + e.ground + sum(values(e.neighbours)) ≈ 1.0 atol = 1e-6   # exhausts the hemisphere
+    end
+    @test vp.top.sky > vp.top.ground            # top sphere faces the sky
+    @test vp.bottom.ground > vp.bottom.sky      # bottom sphere faces the ground
+    @test vp.top.sky ≈ 0.5 atol = 0.03          # outer hemisphere unobstructed
+    @test vp.bottom.ground ≈ 0.5 atol = 0.03
+    @test vp.top.neighbours.bottom > 0.02       # the tangent sphere blocks part of the inner hemisphere
+    @test vp.top.neighbours.bottom ≈ vp.bottom.neighbours.top atol = 0.02   # reciprocal
+end

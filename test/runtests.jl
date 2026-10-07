@@ -12,3 +12,5 @@ using Test
 end
 
 @safetestset "geometry" begin include("geometry.jl") end
+@safetestset "composition" begin include("composition.jl") end
+@safetestset "shapes" begin include("shapes.jl") end
