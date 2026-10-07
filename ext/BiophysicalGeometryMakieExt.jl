@@ -11,7 +11,7 @@ import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSp
 import BiophysicalGeometry: cylinder_tube, cylinder_cap, ellipsoid_mesh, cone_tube,
     half_cylinder_flat, half_ellipsoid_flat_mesh,
     box_face_x, box_face_y, box_face_z,
-    part_outer_meshes, transform_mesh, outer_dims, top_ratio, HalfDomed,
+    part_outer_meshes, transform_mesh, tile_matrices, Tile, outer_dims, top_ratio, HalfDomed,
     triangle_face, prism_side, inradius, ellipsoid_mesh_truncated, ellipsoid_pole_a_cap
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -46,7 +46,6 @@ function domed_layers(::Union{Ellipsoid,Half{<:AbstractEllipsoidal}}, body)
 end
 
 _colors(p) = (flesh=p[:flesh_col][], fat_layer=p[:fat_layer_col][], fibrous_layer=p[:fibrous_layer_col][])
-_root_name(::CompositeBody{Root}) where {Root} = Root
 # Title name; a Half reads as its constructor (`HalfCone`, `HalfCylinder`, …).
 _shape_name(s) = string(nameof(typeof(s)))
 _shape_name(h::Half) = "Half" * _shape_name(h.parent)
@@ -311,11 +310,11 @@ function cutaway_tiles(sh::Plate, body, sc, cols, θs)
     sx, sy = cos(az) >= 0 ? 1 : -1, sin(az) >= 0 ? 1 : -1
     tiles = _Tile[]
     function box(hl, hw, hh, col; open=false)
-        push!(tiles, (box_face_z(-hl, hl, -hw, hw, -hh)..., col))
-        open || push!(tiles, (box_face_z(-hl, hl, -hw, hw, hh)..., col))
+        push!(tiles, (tile_matrices(box_face_z(-hl, hl, -hw, hw, -hh))..., col))
+        open || push!(tiles, (tile_matrices(box_face_z(-hl, hl, -hw, hw, hh))..., col))
         for s in (-1, 1)
-            (open && s == sx) || push!(tiles, (box_face_x(s * hl, -hw, hw, -hh, hh)..., col))
-            (open && s == sy) || push!(tiles, (box_face_y(-hl, hl, s * hw, -hh, hh)..., col))
+            (open && s == sx) || push!(tiles, (tile_matrices(box_face_x(s * hl, -hw, hw, -hh, hh))..., col))
+            (open && s == sy) || push!(tiles, (tile_matrices(box_face_y(-hl, hl, s * hw, -hh, hh))..., col))
         end
     end
     box(hl_f, hw_f, hh_f, cols.flesh)
@@ -333,10 +332,10 @@ function cutaway_tiles(::TriangularPlate, body, sc, cols, θs)
     tiles = _Tile[]
     function prism(l, col; open=false)
         p1 = (l.corner, l.corner); p2 = (l.corner + l.length, l.corner); p3 = (l.corner, l.corner + l.width)
-        push!(tiles, (triangle_face(p1, p2, p3, -l.height / 2)..., col))
-        open || push!(tiles, (triangle_face(p1, p2, p3, l.height / 2)..., col))
+        push!(tiles, (tile_matrices(triangle_face(p1, p2, p3, -l.height / 2))..., col))
+        open || push!(tiles, (tile_matrices(triangle_face(p1, p2, p3, l.height / 2))..., col))
         for (p, q) in ((p1, p2), (p2, p3), (p3, p1))
-            push!(tiles, (prism_side(p, q, l.height)..., col))
+            push!(tiles, (tile_matrices(prism_side(p, q, l.height))..., col))
         end
     end
     prism(l.flesh, cols.flesh)
@@ -359,7 +358,7 @@ function _composite_tiles(b::CompositeBody, sc, cols)
         pose = getfield(b.poses, name)
         col = _part_color(part, cols)
         for mesh in part_outer_meshes(part.shape, part, sc)
-            push!(tiles, (transform_mesh(mesh..., pose, sc)..., col))
+            push!(tiles, (tile_matrices(transform_mesh(mesh, pose, sc))..., col))
         end
     end
     return tiles
@@ -380,9 +379,16 @@ end
 function _append_cutaway!(tiles, part, pose, sc, cols, d, cut)
     l = apply_rotation(transpose(pose.rotation), d)
     for (X, Y, Z, col) in cutaway_tiles(part.shape, part, sc, cols, cut_angles(part.shape, l, cut))
-        push!(tiles, (transform_mesh(X, Y, Z, pose, sc)..., col))
+        push!(tiles, (transform_grid(X, Y, Z, pose, sc)..., col))
     end
     return tiles
+end
+
+# A grid of points moved by a pose, in (m * sc) units.
+function transform_grid(X, Y, Z, pose::Pose, sc)
+    t = map(x -> _m(x, sc), pose.translation)
+    points = map((x, y, z) -> apply_rotation(pose.rotation, (x, y, z)) .+ t, X, Y, Z)
+    (map(p -> p[1], points), map(p -> p[2], points), map(p -> p[3], points))
 end
 
 # Posed world-frame bounding box of a composite (in `sc` units): (mins, maxs).
@@ -394,7 +400,7 @@ function _composite_bbox(b::CompositeBody, sc)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
         for grid in part_outer_meshes(part.shape, part, sc)
-            X, Y, Z = transform_mesh(grid..., pose, sc)
+            X, Y, Z = tile_matrices(transform_mesh(grid, pose, sc))
             xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
             ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
             zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -414,7 +420,7 @@ function _part_bbox(shape, body, pose::Pose, sc)
     ymin, ymax = Inf, -Inf
     zmin, zmax = Inf, -Inf
     for grid in part_outer_meshes(shape, body, sc)
-        X, Y, Z = transform_mesh(grid..., pose, sc)
+        X, Y, Z = tile_matrices(transform_mesh(grid, pose, sc))
         xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
         ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
         zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -708,7 +714,7 @@ Interactive Makie figure: 3-D cutaway of `body` on the left, rasterised
 silhouette projection on the right, with `zenith θ` and `azimuth φ`
 sliders below. The silhouette area updates live as you drag the sliders.
 
-The `resolution` kwarg controls the silhouette bitmap (≈ accuracy /
+The `resolution` kwarg controls the shadow image (≈ accuracy /
 performance trade-off). `sc` scales metres to plot units (default 100 → cm).
 """
 function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
@@ -751,14 +757,14 @@ function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
         silhouette_rasterized(body, d; resolution=resolution, return_image=true)
     end
 
-    # Display bitmap as a heatmap in cm-coords on ax2.
+    # Display the shadow as a heatmap in cm-coords on ax2.
     img_x = lift(result) do r
-        LinRange(r.x_range[1] * sc, r.x_range[2] * sc, size(r.bitmap, 1))
+        LinRange(r.x_range[1] * sc, r.x_range[2] * sc, size(r.shadow, 1))
     end
     img_y = lift(result) do r
-        LinRange(r.y_range[1] * sc, r.y_range[2] * sc, size(r.bitmap, 2))
+        LinRange(r.y_range[1] * sc, r.y_range[2] * sc, size(r.shadow, 2))
     end
-    img = lift(r -> Float32.(r.bitmap), result)
+    img = lift(r -> Float32.(r.shadow), result)
     heatmap!(ax2, img_x, img_y, img; colormap=[:white, RGBAf(0.2, 0.2, 0.25, 1.0)],
              colorrange=(0.0f0, 1.0f0))
     # Refit ax2 limits to the projected bbox each time the sun direction
@@ -772,9 +778,8 @@ function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
     # Sun-direction indicator: line from a sun marker to the root body's
     # centre (so the target stays at the main body, not pulled around by
     # legs/head when the bbox centre moves).
-    root = first(propertynames(body.parts))
-    root_part = body.parts[root]
-    root_pose = body.poses[root]
+    root_part = first(body.parts)
+    root_pose = first(body.poses)
     (rb_min, rb_max) = _part_bbox(root_part.shape, root_part, root_pose, sc)
     body_centre = Point3f((rb_min[1] + rb_max[1]) / 2,
                           (rb_min[2] + rb_max[2]) / 2,

@@ -8,23 +8,26 @@ thickness `height` along `z`, centred on `z = 0`. `axis_ratio_b` is length /
 width and `axis_ratio_c` length / height, as for [`Plate`](@ref). Give any
 sufficient set of keywords and the rest is solved for. Dimensions are at skin
 level; a fibrous layer offsets every face outward by its thickness.
+`TriangularPlate(Unchecked(); ...)` does the same without checking the keywords.
 """
 struct TriangularPlate{M,D,B,C} <: AbstractSlab
     mass::M
     density::D
     axis_ratio_b::B
     axis_ratio_c::C
-    TriangularPlate(::Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
+    TriangularPlate(::Unchecked, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
         new{M,D,B,C}(mass, density, axis_ratio_b, axis_ratio_c)
 end
 
-# volume = length·width·height / 2; ratios as for the box.
-const TRIANGLE_SPEC = ShapeSpec((:length, :width, :height), (1, 1, 1), log(1 / 2),
-                                  (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
+# volume = length·width·height / 2; ratios as for the plate.
+ShapeSpec(::Type{TriangularPlate}) = ShapeSpec{TriangularPlate}((; length = 1, width = 1, height = 1), log(1 / 2),
+    (; axis_ratio_b = (1, 2, 1.0), axis_ratio_c = (1, 3, 1.0)))
 
-function TriangularPlate(; kw...)
-    s = _resolve_shape("TriangularPlate", TRIANGLE_SPEC, NamedTuple(kw))
-    TriangularPlate(RESOLVED, s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c)
+TriangularPlate(; kw...) =
+    (check_shape(ShapeSpec(TriangularPlate), NamedTuple(kw)); TriangularPlate(Unchecked(); kw...))
+function TriangularPlate(::Unchecked; kw...)
+    s = _resolve_shape(ShapeSpec(TriangularPlate), NamedTuple(kw))
+    TriangularPlate(Unchecked(), s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c)
 end
 
 _diagonal(length, width) = sqrt(length^2 + width^2)
@@ -120,23 +123,23 @@ end
 function validate_range(::TriangularPlate, body::AbstractBody, loc::Union{Top,Bottom})
     L, W, _ = _triangle_skin(body)
     loc.x ≥ zero(loc.x) && loc.y ≥ zero(loc.y) && loc.x / L + loc.y / W ≤ 1 + 1e-9 ||
-        error("$(nameof(typeof(loc))) ($(loc.x), $(loc.y)) is outside the triangle")
+        error("the point is outside the triangle")
 end
 function validate_range(::TriangularPlate, body::AbstractBody, loc::SideB)
     _, W, H = _triangle_skin(body)
-    zero(W) ≤ loc.y ≤ W || error("SideB y out of range [0, $W]: $(loc.y)")
-    abs(loc.z) ≤ H / 2 || error("SideB z out of range ±$(H/2): $(loc.z)")
+    zero(W) ≤ loc.y ≤ W || error("SideB y is out of range")
+    abs(loc.z) ≤ H / 2 || error("SideB z is out of range")
 end
 function validate_range(::TriangularPlate, body::AbstractBody, loc::SideD)
     L, _, H = _triangle_skin(body)
-    zero(L) ≤ loc.x ≤ L || error("SideD x out of range [0, $L]: $(loc.x)")
-    abs(loc.z) ≤ H / 2 || error("SideD z out of range ±$(H/2): $(loc.z)")
+    zero(L) ≤ loc.x ≤ L || error("SideD x is out of range")
+    abs(loc.z) ≤ H / 2 || error("SideD z is out of range")
 end
 function validate_range(::TriangularPlate, body::AbstractBody, loc::Diagonal)
     L, W, H = _triangle_skin(body)
     D = _diagonal(L, W)
-    zero(D) ≤ loc.position ≤ D || error("Diagonal position out of range [0, $D]: $(loc.position)")
-    abs(loc.z) ≤ H / 2 || error("Diagonal z out of range ±$(H/2): $(loc.z)")
+    zero(D) ≤ loc.position ≤ D || error("Diagonal position is out of range")
+    abs(loc.z) ≤ H / 2 || error("Diagonal z is out of range")
 end
 
 function surface_point(::TriangularPlate, body::AbstractBody, loc::Top)

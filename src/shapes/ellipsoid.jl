@@ -12,6 +12,7 @@ With `pole_a_truncation > 0`, the `+x` end is sliced flat: the cut plane sits at
 `x = (1 - pole_a_truncation) * length / 2`. `pole_a_truncation = 0` is a full
 ellipsoid; `1` cuts through the centre. `length`, `width` and `height` are those of
 the ellipsoid before the cut; volume, mass and surface area are of the cut body.
+`Ellipsoid(Unchecked(); ...)` does the same without checking the keywords.
 """
 struct Ellipsoid{M,D,B,C,T} <: AbstractEllipsoidal
     mass::M
@@ -19,22 +20,28 @@ struct Ellipsoid{M,D,B,C,T} <: AbstractEllipsoidal
     axis_ratio_b::B
     axis_ratio_c::C
     pole_a_truncation::T
-    Ellipsoid(::Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C,
+    Ellipsoid(::Unchecked, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C,
               pole_a_truncation::T) where {M,D,B,C,T} =
         new{M,D,B,C,T}(mass, density, axis_ratio_b, axis_ratio_c, pole_a_truncation)
 end
 
 # volume = π·k·a·b·c = (π·k/8)·length·width·height, with k = 4/3 for a full
-# ellipsoid (see `_truncated_volume_factor`); ratios as for the box.
-_ellipsoid_spec(truncation) =
-    ShapeSpec((:length, :width, :height), (1, 1, 1), log(π * _truncated_volume_factor(truncation) / 8),
-               (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
+# ellipsoid (see `_truncated_volume_factor`); ratios as for the plate.
+ShapeSpec(::Type{Ellipsoid}, truncation) =
+    ShapeSpec{Ellipsoid}((; length = 1, width = 1, height = 1), log(π * _truncated_volume_factor(truncation) / 8),
+        (; axis_ratio_b = (1, 2, 1.0), axis_ratio_c = (1, 3, 1.0)))
+
+_check_truncation(t) =
+    0 <= t <= 1 || throw(ArgumentError("Ellipsoid `pole_a_truncation` must be in [0, 1], got $t"))
 
 function Ellipsoid(; pole_a_truncation = 0.0, kw...)
-    0 <= pole_a_truncation <= 1 || throw(ArgumentError(
-        "Ellipsoid `pole_a_truncation` must be in [0, 1], got $pole_a_truncation"))
-    s = _resolve_shape("Ellipsoid", _ellipsoid_spec(pole_a_truncation), NamedTuple(kw))
-    Ellipsoid(RESOLVED, s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c, pole_a_truncation)
+    _check_truncation(pole_a_truncation)
+    check_shape(ShapeSpec(Ellipsoid, pole_a_truncation), NamedTuple(kw))
+    Ellipsoid(Unchecked(); pole_a_truncation, kw...)
+end
+function Ellipsoid(::Unchecked; pole_a_truncation = 0.0, kw...)
+    s = _resolve_shape(ShapeSpec(Ellipsoid, pole_a_truncation), NamedTuple(kw))
+    Ellipsoid(Unchecked(), s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c, pole_a_truncation)
 end
 
 # x-position of the truncated pole_a (as a fraction of a). 1.0 = full ellipsoid.
@@ -128,17 +135,16 @@ function _ellipsoid_area(a, b, c, truncation)
     am, bm, cm = ustrip(u"m", a), ustrip(u"m", b), ustrip(u"m", c)
     x = 1 - truncation
     α0 = acos(x)
-    nβ = length(CAP_ANGLES)
     cap = 0.0
     for (t, w) in GAUSS_LEGENDRE
         α = α0 * (t + 1) / 2
         sα, cα = sincos(α)
         ring = 0.0
-        for β in CAP_ANGLES
-            sβ, cβ = sincos(β)
+        for j in 1:CAP_ANGLES
+            sβ, cβ = sincos(2π * (j - 0.5) / CAP_ANGLES)
             ring += sqrt((bm * cm * cα)^2 + (am * sα)^2 * ((cm * cβ)^2 + (bm * sβ)^2))
         end
-        cap += w * sα * ring * 2π / nβ
+        cap += w * sα * ring * 2π / CAP_ANGLES
     end
     cap *= α0 / 2
     disc = π * bm * cm * (1 - x^2)
@@ -147,8 +153,8 @@ end
 
 # Gauss–Legendre nodes and weights on [-1, 1] by Newton's method on P_n,
 # computed once at load time.
-function _gauss_legendre(n)
-    map(1:n) do i
+function _gauss_legendre(::Val{n}) where {n}
+    ntuple(Val(n)) do i
         t = cos(π * (i - 0.25) / (n + 0.5))
         dp = 0.0
         for _ in 1:20
@@ -162,8 +168,8 @@ function _gauss_legendre(n)
         (t, 2 / ((1 - t^2) * dp^2))
     end
 end
-const GAUSS_LEGENDRE = _gauss_legendre(24)
-const CAP_ANGLES = [2π * (j - 0.5) / 64 for j in 1:64]
+const GAUSS_LEGENDRE = _gauss_legendre(Val(24))
+const CAP_ANGLES = 64
 
 # ── Geometry ───────────────────────────────────────────────────────────────
 
@@ -262,63 +268,40 @@ function silhouette(sh::Ellipsoid, ins::AbstractInsulationLayer, body::AbstractB
     (; normal = silhouette(sh, ins, body, π / 2), parallel = silhouette(sh, ins, body, 0.0))
 end
 
-# A cut ellipsoid is convex, so its shadow is the convex hull of the shadows of
-# its boundary's extreme points: the rim where the sun grazes the curved surface
-# (kept only where it isn't cut away, x ≤ x_r·a) and the edge of the cut disc.
-# Through x ↦ (x/a, y/b, z/c) the rim is the great circle ⟂ (d_x/a, d_y/b, d_z/c)
-# on the unit sphere, since the surface normal at a·q is ∝ q ./ (a, b, c). Both curves
-# are sampled densely, projected onto the plane ⟂ d and hulled; the hull area
-# converges as 1/n² in the number of samples. Unitless: metres in, m² out.
+# A cut ellipsoid is convex, so its shadow is too, and the farthest point of the
+# shadow in a direction w of the shadow plane is the projection of the body's
+# farthest point in w. That is the ellipsoid's, (a²w₁, b²w₂, c²w₃)/h, when it
+# isn't cut away, and otherwise the farthest point of the cut disc. Going round w,
+# these points trace the shadow's boundary in order, so the shoelace over them
+# gives its area, converging as 1/n². Unitless: metres in, m² out.
 function _truncated_silhouette(a, b, c, x_ratio, θ)
     am, bm, cm = ustrip(u"m", a), ustrip(u"m", b), ustrip(u"m", c)
-    d = (cos(θ), 0.0, sin(θ))
-    u, v = (0.0, 1.0, 0.0), (-sin(θ), 0.0, cos(θ))      # basis of the plane ⟂ d
-    e = (d[1] / am, d[2] / bm, d[3] / cm)
-    ne = sqrt(e[1]^2 + e[2]^2 + e[3]^2)
-    e = e ./ ne
-    # Orthonormal pair ⟂ e, from whichever axis is least aligned with it.
-    ref = abs(e[1]) < 0.9 ? (1.0, 0.0, 0.0) : (0.0, 1.0, 0.0)
-    w1 = ref .- (ref[1] * e[1] + ref[2] * e[2] + ref[3] * e[3]) .* e
-    w1 = w1 ./ sqrt(w1[1]^2 + w1[2]^2 + w1[3]^2)
-    w2 = (e[2] * w1[3] - e[3] * w1[2], e[3] * w1[1] - e[1] * w1[3], e[1] * w1[2] - e[2] * w1[1])
-    onto(p) = (p[1] * u[1] + p[2] * u[2] + p[3] * u[3], p[1] * v[1] + p[2] * v[2] + p[3] * v[3])
-    n = 720
-    points = NTuple{2,Float64}[]
+    sθ, cθ = sincos(θ)
     xcut = x_ratio * am
-    for t in range(0, 2π; length = n + 1)[1:n]
-        q = cos(t) .* w1 .+ sin(t) .* w2
-        p = (am * q[1], bm * q[2], cm * q[3])
-        p[1] <= xcut && push!(points, onto(p))
-    end
     scale = sqrt(max(0.0, 1 - x_ratio^2))
-    for β in range(0, 2π; length = n + 1)[1:n]
-        push!(points, onto((xcut, scale * bm * cos(β), scale * cm * sin(β))))
-    end
-    _hull_area(points) * u"m^2"
-end
-
-# Area of the convex hull of 2D points (Andrew's monotone chain + shoelace).
-function _hull_area(points)
-    pts = sort(unique(points))
-    length(pts) < 3 && return 0.0
-    cross(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
-    hull = NTuple{2,Float64}[]
-    for pass in (pts, reverse(pts))
-        start = length(hull)
-        for p in pass
-            while length(hull) >= start + 2 && cross(hull[end - 1], hull[end], p) <= 0
-                pop!(hull)
-            end
-            push!(hull, p)
+    # The shadow plane is ⟂ d = (cos θ, 0, sin θ), with basis u = (0, 1, 0) and
+    # v = (-sin θ, 0, cos θ).
+    function farthest(φ)
+        sφ, cφ = sincos(φ)
+        w = (-sφ * sθ, cφ, sφ * cθ)
+        h = sqrt((am * w[1])^2 + (bm * w[2])^2 + (cm * w[3])^2)
+        x = (am^2 * w[1], bm^2 * w[2], cm^2 * w[3]) ./ h
+        if x[1] > xcut
+            ρ = sqrt((bm * w[2])^2 + (cm * w[3])^2)
+            k = ρ > 0 ? scale / ρ : 0.0
+            x = (xcut, k * bm^2 * w[2], k * cm^2 * w[3])
         end
-        pop!(hull)
+        (x[2], -x[1] * sθ + x[3] * cθ)
     end
+    n = 720
     area = 0.0
-    for i in eachindex(hull)
-        p, q = hull[i], hull[mod1(i + 1, length(hull))]
+    p = farthest(0.0)
+    for i in 1:n
+        q = farthest(2π * i / n)
         area += p[1] * q[2] - q[1] * p[2]
+        p = q
     end
-    abs(area) / 2
+    abs(area) / 2 * u"m^2"
 end
 function silhouette(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody, θ)
     silhouette(sh, _semiaxes(outer_dims(sh, body))..., θ)

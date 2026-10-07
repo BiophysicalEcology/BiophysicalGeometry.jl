@@ -51,12 +51,9 @@ end
     flesh_centroid(shape, body) -> NTuple{3,Length}
 
 Volumetric (flesh) centroid of a part in its local frame. Closed-form per
-shape family. Shapes with no method (the animal shapes) error here rather
-than silently using the wrong path length for a lumped-resistance solve.
+shape family.
 """
-function flesh_centroid(sh::AbstractShape, body::AbstractBody)
-    error("flesh_centroid not defined for $(typeof(sh)) — no lumped conduction path")
-end
+function flesh_centroid end
 
 # Axial shapes lie along +x from x = 0: centroid on the axis. Cylinder is
 # centred at mid-length.

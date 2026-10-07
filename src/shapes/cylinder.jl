@@ -5,21 +5,23 @@ A cylindrical organism shape, lying along `+x` from `x = 0` to `x = length`.
 `axis_ratio_b` is length / diameter. Give any sufficient set of keywords — e.g.
 `mass` and `density` with `axis_ratio_b`, or `length` and `radius` with one of
 `mass` / `density` — and the rest is solved for. Dimensions are at skin level.
+`Cylinder(Unchecked(); ...)` does the same without checking the keywords.
 """
 struct Cylinder{M,D,B} <: AbstractCylindrical
     mass::M
     density::D
     axis_ratio_b::B
-    Cylinder(::Resolved, mass::M, density::D, axis_ratio_b::B) where {M,D,B} =
+    Cylinder(::Unchecked, mass::M, density::D, axis_ratio_b::B) where {M,D,B} =
         new{M,D,B}(mass, density, axis_ratio_b)
 end
 
 # volume = π·radius²·length; axis_ratio_b = length / (2·radius)
-const CYLINDER_SPEC = ShapeSpec((:length, :radius), (1, 2), log(π), (:axis_ratio_b => (1, 2, 2.0),))
+ShapeSpec(::Type{Cylinder}) = ShapeSpec{Cylinder}((; length = 1, radius = 2), log(π), (; axis_ratio_b = (1, 2, 2.0)))
 
-function Cylinder(; kw...)
-    s = _resolve_shape("Cylinder", CYLINDER_SPEC, NamedTuple(kw))
-    Cylinder(RESOLVED, s.mass, s.density, s.axis_ratio_b)
+Cylinder(; kw...) = (check_shape(ShapeSpec(Cylinder), NamedTuple(kw)); Cylinder(Unchecked(); kw...))
+function Cylinder(::Unchecked; kw...)
+    s = _resolve_shape(ShapeSpec(Cylinder), NamedTuple(kw))
+    Cylinder(Unchecked(), s.mass, s.density, s.axis_ratio_b)
 end
 
 # Radial dimension from an enclosed volume; used for both skin and flesh radii.
@@ -110,7 +112,7 @@ end
 function validate_range(::Cylinder, body::AbstractBody, loc::EndA)
     R = skin_radius(body)
     loc.radius ≥ zero(loc.radius) && loc.radius ≤ R ||
-        error("EndA radius out of range [0, $R]: got $(loc.radius)")
+        error("EndA radius is out of range")
 end
 validate_range(sh::Cylinder, body::AbstractBody, loc::EndB) =
     validate_range(sh, body, EndA(loc.radius, loc.angle))
@@ -118,7 +120,7 @@ validate_range(sh::Cylinder, body::AbstractBody, loc::EndB) =
 function validate_range(::Cylinder, body::AbstractBody, loc::Lateral)
     L = body.geometry.length.length_skin
     loc.position ≥ zero(loc.position) && loc.position ≤ L ||
-        error("Lateral position out of range [0, $L]: got $(loc.position)")
+        error("Lateral position is out of range")
 end
 
 surface_point(::Cylinder, body::AbstractBody, loc::EndA) =

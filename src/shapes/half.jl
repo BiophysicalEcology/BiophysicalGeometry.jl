@@ -8,11 +8,9 @@
 
 # The constructors take the same keywords as the full shape, but every value
 # describes the half itself: its own mass and volume, and for a HalfEllipsoid
-# its own height (the dome, half the full ellipsoid's). They are translated to
-# the full parent shape here. The stored geometry of a `Half` is the parent's.
-
-_double(kw, key) = haskey(kw, key) ? merge(kw, NamedTuple{(key,)}((2 * kw[key],))) : kw
-_full_shape_keywords(kw) = _double(_double(NamedTuple(kw), :mass), :volume)
+# its own height (the dome, half the full ellipsoid's). The stored geometry of a
+# `Half` is the parent's. As for the full shapes, `HalfCylinder(Unchecked(); ...)`
+# and so on skip the checks.
 
 """
     HalfCylinder(; mass, density, volume, length, radius, axis_ratio_b) -> Half{<:Cylinder}
@@ -21,7 +19,12 @@ Dorsal/ventral half-cylinder, lying along `+x` with its curved surface in
 `z ≥ 0` and its flat face at `z = 0`. Keywords are those of [`Cylinder`](@ref),
 describing the half: `mass` and `volume` are the half's own.
 """
-HalfCylinder(; kw...) = Half(Cylinder(; _full_shape_keywords(kw)...))
+HalfCylinder(; kw...) =
+    (check_shape(half_spec(ShapeSpec(Cylinder)), NamedTuple(kw)); HalfCylinder(Unchecked(); kw...))
+function HalfCylinder(::Unchecked; kw...)
+    s = _resolve_shape(half_spec(ShapeSpec(Cylinder)), NamedTuple(kw))
+    Half(Cylinder(Unchecked(), 2s.mass, s.density, s.axis_ratio_b))
+end
 
 """
     HalfCone(; mass, density, volume, length, radius, axis_ratio_b, top_ratio=0.0) -> Half{<:Cone}
@@ -30,7 +33,15 @@ Dorsal/ventral half-cone (or half-frustum), lying along `+x` with its base at
 `x = 0`, its curved surface in `z ≥ 0` and its flat trapezoidal face at `z = 0`.
 Keywords are those of [`Cone`](@ref), describing the half.
 """
-HalfCone(; kw...) = Half(Cone(; _full_shape_keywords(kw)...))
+function HalfCone(; top_ratio = 0.0, kw...)
+    _check_top_ratio(top_ratio)
+    check_shape(half_spec(ShapeSpec(Cone, top_ratio)), NamedTuple(kw))
+    HalfCone(Unchecked(); top_ratio, kw...)
+end
+function HalfCone(::Unchecked; top_ratio = 0.0, kw...)
+    s = _resolve_shape(half_spec(ShapeSpec(Cone, top_ratio)), NamedTuple(kw))
+    Half(Cone(Unchecked(), 2s.mass, s.density, s.axis_ratio_b, top_ratio))
+end
 
 """
     HalfEllipsoid(; mass, density, volume, length, width, height, axis_ratio_b, axis_ratio_c) -> Half{<:Ellipsoid}
@@ -40,12 +51,21 @@ Dorsal/ventral half-ellipsoid: `length` along `x`, `width` along `y`, a dome of
 half: `height` is the dome's and `axis_ratio_c` is the half's length / height
 (each half the full ellipsoid's).
 """
-function HalfEllipsoid(; kw...)
-    full = _double(_full_shape_keywords(kw), :height)
-    if haskey(full, :axis_ratio_c)
-        full = merge(full, (; axis_ratio_c = full.axis_ratio_c / 2))
-    end
-    Half(Ellipsoid(; full...))
+function HalfEllipsoid(; pole_a_truncation = 0.0, kw...)
+    _check_truncation(pole_a_truncation)
+    check_shape(_half_ellipsoid_spec(pole_a_truncation), NamedTuple(kw))
+    HalfEllipsoid(Unchecked(); pole_a_truncation, kw...)
+end
+function HalfEllipsoid(::Unchecked; pole_a_truncation = 0.0, kw...)
+    s = _resolve_shape(_half_ellipsoid_spec(pole_a_truncation), NamedTuple(kw))
+    Half(Ellipsoid(Unchecked(), 2s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c / 2, pole_a_truncation))
+end
+
+# The height is the dome's, half the full height, so the half has the volume
+# constant of the whole.
+function _half_ellipsoid_spec(truncation)
+    spec = ShapeSpec(Ellipsoid, truncation)
+    ShapeSpec{Half{Ellipsoid}}(spec.powers, spec.log_constant, spec.ratios)
 end
 
 """
@@ -55,7 +75,11 @@ Hemisphere: a dome of `radius` in `z ≥ 0` over a flat disc at `z = 0`. Wrappin
 `Sphere` (not an equal-axis ellipsoid) means the geometry uses the fast
 spherical closed forms. Keywords describe the half.
 """
-HalfSphere(; kw...) = Half(Sphere(; _full_shape_keywords(kw)...))
+HalfSphere(; kw...) = (check_shape(half_spec(ShapeSpec(Sphere)), NamedTuple(kw)); HalfSphere(Unchecked(); kw...))
+function HalfSphere(::Unchecked; kw...)
+    s = _resolve_shape(half_spec(ShapeSpec(Sphere)), NamedTuple(kw))
+    Half(Sphere(Unchecked(), 2s.mass, s.density))
+end
 
 # Halving a box through its centre just gives a thinner box, so a half plate is
 # a `Plate` — there's no `Half{<:Plate}`.
@@ -182,13 +206,13 @@ surface_area(h::Half{<:AbstractCylindrical}, body::AbstractBody, ::Flat) =
 
 function validate_range(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::CurvedEnd)
     validate_range(h.parent, body, loc)
-    0 ≤ loc.angle ≤ π || error("$(nameof(typeof(loc))) angle out of range [0, π]: $(loc.angle)")
+    0 ≤ loc.angle ≤ π || error("the angle must be in [0, π]")
 end
 function validate_range(h::Half{<:AbstractCylindrical}, body::AbstractBody, loc::Flat)
     L = body.geometry.length.length_skin
-    loc.x ≥ zero(loc.x) && loc.x ≤ L || error("Flat x out of range [0, $L]: $(loc.x)")
+    loc.x ≥ zero(loc.x) && loc.x ≤ L || error("Flat x is out of range")
     r = _half_radius_at(h, body, loc.x)
-    abs(loc.y) ≤ r || error("Flat y out of range ±$r at x = $(loc.x): $(loc.y)")
+    abs(loc.y) ≤ r || error("Flat y is out of range")
 end
 
 # Skin radius of the axial section at position x (linear from R to tR).
@@ -247,12 +271,12 @@ surface_area(sh::HalfDomed, body::AbstractBody, ::Flat) =
     _cut_face_area(sh, body.geometry.length)
 
 function validate_range(::HalfDomed, ::AbstractBody, loc::Dome)
-    0 ≤ loc.polar ≤ π || error("Dome polar angle out of range [0, π]: $(loc.polar)")
-    0 ≤ loc.azimuth ≤ π || error("Dome azimuth out of range [0, π]: $(loc.azimuth)")
+    0 ≤ loc.polar ≤ π || error("Dome polar angle must be in [0, π]")
+    0 ≤ loc.azimuth ≤ π || error("Dome azimuth must be in [0, π]")
 end
 function validate_range(sh::HalfDomed, body::AbstractBody, loc::Flat)
     a, b, _ = domed_semiaxes(sh, body)
-    (loc.x / a)^2 + (loc.y / b)^2 ≤ 1 + 1e-9 || error("Flat (x, y) outside boundary ellipse")
+    (loc.x / a)^2 + (loc.y / b)^2 ≤ 1 + 1e-9 || error("Flat (x, y) is outside the face")
 end
 
 function surface_point(sh::HalfDomed, body::AbstractBody, loc::Dome)

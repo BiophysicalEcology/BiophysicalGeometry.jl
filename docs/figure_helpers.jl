@@ -105,7 +105,7 @@ function _part_tiles(body, colors, sc)
         part = getfield(composite.parts, name)
         pose = getfield(composite.poses, name)
         for grid in BG.part_outer_meshes(part.shape, part, sc)
-            push!(tiles, (BG.transform_mesh(grid..., pose, sc)..., col))
+            push!(tiles, (BG.tile_matrices(BG.transform_mesh(grid, pose, sc))..., col))
         end
     end
     return tiles, NamedTuple{names}(Tuple(used))
@@ -265,7 +265,7 @@ Draw `body` with each named attachment surface in its own colour, labelled, with
 """
 function surface_diagram!(ax, body::Body)
     sh = body.shape
-    surfaces = _surface_tiles(sh, body)
+    surfaces = [loc => map(BG.tile_matrices, tiles) for (loc, tiles) in _surface_tiles(sh, body)]
     lo, hi = _extent(surfaces)
     offset = 0.3 * maximum(hi .- lo)
     colour(i) = SURFACE_COLOURS[mod1(i, length(SURFACE_COLOURS))]
@@ -284,10 +284,10 @@ function surface_diagram!(ax, body::Body{<:Ellipsoid})
     grey = RGBf(0.85, 0.87, 0.89)
     x_ratio = 1 - sh.pole_a_truncation
     if sh.pole_a_truncation == 0
-        _draw_tiles!(ax, [(BG.ellipsoid_mesh(a, b, c)..., grey)])
+        _draw_tiles!(ax, [(BG.tile_matrices(BG.ellipsoid_mesh(a, b, c))..., grey)])
     else
-        _draw_tiles!(ax, [(BG.ellipsoid_mesh_truncated(a, b, c, x_ratio)..., grey),
-                          (BG.ellipsoid_pole_a_cap(a, b, c, x_ratio)..., SURFACE_COLOURS[1])])
+        _draw_tiles!(ax, [(BG.tile_matrices(BG.ellipsoid_mesh_truncated(a, b, c, x_ratio))..., grey),
+                          (BG.tile_matrices(BG.ellipsoid_pole_a_cap(a, b, c, x_ratio))..., SURFACE_COLOURS[1])])
     end
     _local_axes!(ax, [-a, -b, -c], [a, b, c])
     ts = range(0, 2π; length=100)
@@ -524,7 +524,7 @@ function silhouette_panel!(ax, body, direction; resolution=300, color=RGBf(0.2, 
     result = silhouette_rasterized(single(body), direction; resolution, return_image=true)
     xs = range(result.x_range[1] * 100, result.x_range[2] * 100; length=resolution)
     ys = range(result.y_range[1] * 100, result.y_range[2] * 100; length=resolution)
-    heatmap!(ax, xs, ys, Float32.(result.bitmap); colormap=[RGBAf(1, 1, 1, 0), color], colorrange=(0, 1))
+    heatmap!(ax, xs, ys, Float32.(result.shadow); colormap=[RGBAf(1, 1, 1, 0), color], colorrange=(0, 1))
     ax.aspect = DataAspect()
     return result.area
 end
