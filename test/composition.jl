@@ -237,6 +237,31 @@ end
     )
 end
 
+@testset "Bent joins" begin
+    torso = Body(Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
+    neck = Body(Cylinder(; mass = 1u"kg", density, axis_ratio_b = 2.0), Naked())
+    patch = Disc(1u"cm")
+    joint(bend) = Join(torso = Attachment(EndB(0.0u"m", 0.0), patch), neck = Attachment(EndA(0.0u"m", 0.0), patch);
+                       bend, hinge = (0.0, 1.0, 0.0))
+    straight = CompositeBody(; parts = (; torso, neck), joins = (joint(0.0),))
+    bent = CompositeBody(; parts = (; torso, neck), joins = (joint(π / 2),))
+    along(b) = BiophysicalGeometry.apply_rotation(b.poses.neck.rotation, (1.0, 0.0, 0.0))
+    @test all(along(straight) .≈ (1.0, 0.0, 0.0))
+    # A right-handed turn about +y takes the neck's axis from +x to -z.
+    @test all(isapprox.(along(bent), (0.0, 0.0, -1.0); atol = 1e-12))
+    # The joint stays put: the neck's end is still on the torso's.
+    end_of(b) = BiophysicalGeometry.apply_pose(b.poses.neck, (0.0u"m", 0.0u"m", 0.0u"m"))
+    @test all(isapprox.(end_of(bent), end_of(straight); atol = 1e-12u"m"))
+    # With the neck as the root, the torso is placed from it, and sits the same relative to the neck.
+    rooted = CompositeBody(; parts = (; neck, torso), joins = (joint(π / 2),))
+    relative(b) = transpose(b.poses.neck.rotation) * b.poses.torso.rotation
+    @test relative(rooted) ≈ relative(bent)
+    # A bend needs a hinge across the joint axis.
+    @test_throws "hinge" CompositeBody(; parts = (; torso, neck), joins = (
+        Join(torso = Attachment(EndB(0.0u"m", 0.0), patch), neck = Attachment(EndA(0.0u"m", 0.0), patch);
+             bend = 0.5, hinge = (1.0, 0.0, 0.0)),))
+end
+
 @testset "Single-part composite is identity" begin
     sphere = Body(Sphere(; mass = 2u"kg", density), Naked())
     cb = CompositeBody(; parts = (; sphere), joins = ())

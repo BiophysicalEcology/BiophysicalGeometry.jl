@@ -253,7 +253,7 @@ end
 # ── Join ──────────────────────────────────────────────────────────────────
 
 """
-    Join(; twist=0.0, <parent_name>=parent_attachment, <child_name>=child_attachment)
+    Join(; twist=0.0, bend=0.0, hinge, <parent_name>=parent_attachment, <child_name>=child_attachment)
 
 A connection between two parts of a `CompositeBody`. The two keyword
 argument names are the names of the parent and child parts (matching keys
@@ -261,9 +261,12 @@ of the `parts` NamedTuple passed to `CompositeBody`); their values are
 `Attachment`s. Order matters — the first-listed part is the parent, the
 second is the child.
 
-`twist` (radians) sets the rotation about the joint axis — the 6th DOF
-that two anti-aligned surface normals don't fix. `twist` is a reserved
-kwarg name; a part cannot be named `twist`.
+The child sits flush on the parent, its attachment's normal against the
+parent's. `twist` (radians) turns it about that joint axis. `bend` (radians)
+then hinges it about `hinge`, a direction in the parent's own frame taken in
+the plane of the joint, through the joint's centre: the angle of the joint,
+as when a neck rises or a wing folds. `twist`, `bend` and `hinge` are reserved
+kwarg names; parts cannot have them as names.
 
 The names are lifted into `Join`'s type parameters (`Parent`, `Child`),
 so no `Symbol` value ever appears in the composition machinery at runtime.
@@ -277,30 +280,27 @@ struct Join{Parent, Child, A1<:Attachment, A2<:Attachment, T<:Real}
     parent_attachment::A1
     child_attachment::A2
     twist::T
+    bend::T
+    hinge::NTuple{3,Float64}
 end
 
-# Kwarg constructor. `twist` is reserved; the remaining two kwargs are the
-# named parent/child attachments. Their names are lifted into the type
-# parameters `Parent` and `Child` — Symbols only ever exist in types.
-function Join(; twist::Real=0.0, kwargs...)
+# Kwarg constructor. `twist`, `bend` and `hinge` are reserved; the remaining two
+# kwargs are the named parent/child attachments. Their names are lifted into the
+# type parameters `Parent` and `Child` — Symbols only ever exist in types.
+function Join(; twist::Real = 0.0, bend::Real = 0.0, hinge = (0.0, 0.0, 0.0), kwargs...)
     nt = NamedTuple(kwargs)
-    _make_join(nt, twist)
+    _make_join(nt, promote(twist, bend)..., NTuple{3,Float64}(hinge))
 end
 
-function _make_join(nt::NamedTuple{Names, Vals}, twist) where {Names, Vals}
+function _make_join(nt::NamedTuple{Names, Vals}, twist, bend, hinge) where {Names, Vals}
     length(Names) == 2 ||
         error("Join needs exactly two named attachments, parent then child")
     Vals <: NTuple{2, Attachment} ||
         error("Join arguments must be `Attachment`s")
     P = Names[1]; C = Names[2]
     P === C && error("Join cannot connect a part to itself")
-    Join{P, C, Vals.parameters[1], Vals.parameters[2], typeof(twist)}(nt[1], nt[2], twist)
+    Join{P, C, Vals.parameters[1], Vals.parameters[2], typeof(twist)}(nt[1], nt[2], twist, bend, hinge)
 end
-
-# Reverse a join (parent/child swapped, twist negated). Names swap in the
-# type parameters; attachments and twist swap in the fields.
-_reverse_join(j::Join{P, C, A1, A2}) where {P, C, A1, A2} =
-    Join{C, P, A2, A1, typeof(-j.twist)}(j.child_attachment, j.parent_attachment, -j.twist)
 
 # Part name accessors — pull from the type parameters, so constant-folded.
 _parent(::Join{P}) where {P} = P
@@ -496,6 +496,14 @@ function validate_join(parts::NamedTuple, j::Join{P, C}) where {P, C}
     pb = getfield(parts, P); cb = getfield(parts, C)
     validate_attachment(pb, j.parent_attachment)
     validate_attachment(cb, j.child_attachment)
+    if j.bend != 0
+        n = attach_normal(shape(pb), pb, j.parent_attachment)
+        h = j.hinge
+        along = h[1]*n[1] + h[2]*n[2] + h[3]*n[3]
+        across = sqrt(max(0.0, h[1]^2 + h[2]^2 + h[3]^2 - along^2))
+        across > 1e-9 || error("Join `$P` ↔ `$C` bends by $(j.bend) about a hinge $(j.hinge) that lies " *
+                               "along the joint axis $n; give a hinge across it")
+    end
     Ap = patch_area(pb, j.parent_attachment)
     Ac = patch_area(cb, j.child_attachment)
     rel = abs(Ap - Ac) / max(Ap, Ac)
@@ -572,11 +580,36 @@ function child_pose(parent_body, parent_pose::Pose, child_body, j::Join)
 
     R0 = rotation_align(c_normal, target_normal)
     Rtwist = rotation_axis_angle(target_normal, j.twist)
-    R = Rtwist * R0
+    R = _bend(j, parent_pose, n_world) * Rtwist * R0
 
+    # Rotations about axes through the joint keep the child's joint point on the parent's.
     Rc = apply_rotation(R, c_point)
     t = (p_world[1] - Rc[1], p_world[2] - Rc[2], p_world[3] - Rc[3])
     return Pose(t, R)
+end
+
+# The bend of a join: a rotation about its hinge, turned into the world and taken
+# in the plane of the joint, whose normal is `n`. No bend needs no hinge.
+function _bend(j::Join, parent_pose, n)
+    j.bend == 0 && return IDENTITY_ROTATION
+    h = apply_rotation(parent_pose.rotation, j.hinge)
+    along = h[1]*n[1] + h[2]*n[2] + h[3]*n[3]
+    h = (h[1] - along*n[1], h[2] - along*n[2], h[3] - along*n[3])
+    rotation_axis_angle(h ./ sqrt(h[1]^2 + h[2]^2 + h[3]^2), j.bend)
+end
+
+# Where a join puts its child relative to its parent: the child's pose with the
+# parent at the origin.
+_relative_pose(parent_body, child_body, j, ::Type{T}) where {T} =
+    child_pose(parent_body, identity_pose(T), child_body, j)
+
+# The parent's pose from the child's, by undoing the join's relative pose.
+function pose_from_child(child::Pose{T}, parent_body, child_body, j::Join) where {T}
+    rel = _relative_pose(parent_body, child_body, j, T)
+    R = child.rotation * transpose(rel.rotation)
+    Rt = apply_rotation(R, rel.translation)
+    t = child.translation
+    Pose((t[1] - Rt[1], t[2] - Rt[2], t[3] - Rt[3]), R)
 end
 
 # Apply one join to the poses found so far, where a part not yet placed has pose
@@ -588,7 +621,7 @@ function _apply_join(parts, j::Join{P,C}, poses, parent::Pose, ::Nothing) where 
     merge(poses, NamedTuple{(C,)}((pose,)))
 end
 function _apply_join(parts, j::Join{P,C}, poses, ::Nothing, child::Pose) where {P,C}
-    pose = child_pose(getfield(parts, C), child, getfield(parts, P), _reverse_join(j))
+    pose = pose_from_child(child, getfield(parts, P), getfield(parts, C), j)
     merge(poses, NamedTuple{(P,)}((pose,)))
 end
 # Both placed: a cycle, whose extra join carries a constraint not checked here.
