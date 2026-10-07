@@ -28,6 +28,7 @@ HalfCylinder
 HalfCone
 HalfEllipsoid
 HalfSphere
+Unchecked
 AbstractShape
 AbstractCylindrical
 AbstractSpherical
@@ -105,9 +106,12 @@ Diagonal
 
 ```@docs
 silhouette
+silhouette!
 silhouette_rasterized
+silhouette_rasterized!
 SilhouetteResult
 silhouette_factors
+silhouette_factors!
 Beam
 Sky
 Ground
