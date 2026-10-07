@@ -243,6 +243,8 @@ watch(animal, drawShadow, { flush: 'post' })
           <input type="range" min="0.1" max="1" step="0.05" v-model.number="p.legTop" /></label>
         <label>Swung forward <output>{{ p.legAngle }}°</output>
           <input type="range" min="-60" max="60" step="1" v-model.number="p.legAngle" /></label>
+        <label>Spread wide <output>{{ p.legSpread }}°</output>
+          <input type="range" min="-30" max="60" step="1" v-model.number="p.legSpread" /></label>
         <template v-if="hindLegs">
           <label>Hind leg, fraction of mass, each <output>{{ p.hindFraction }}</output>
             <input type="range" min="0.005" max="0.2" step="0.005" v-model.number="p.hindFraction" /></label>

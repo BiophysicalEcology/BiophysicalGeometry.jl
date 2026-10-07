@@ -292,23 +292,43 @@ function add_legs(a, an, s, masses, ::UprightLegs)
     leg = axial_body(s, masses.leg, s.legRatio, s.legTop)
     r = dims(leg).r
     p = patch(r)
-    swing = _leg_swing(s)
-    a = attach(a, Val(:dorsal), Val(:leg_l), leg, Attachment(EndA(m(1.1 * r), 0.0), p), Attachment(EndA(ZERO, 0.0), p);
-               bend = swing, hinge = (0.0, 1.0, 0.0))
-    attach(a, Val(:dorsal), Val(:leg_r), leg, Attachment(EndA(m(1.1 * r), π), p), Attachment(EndA(ZERO, 0.0), p);
-           bend = swing, hinge = (0.0, 1.0, 0.0))
+    a = _hang_leg(a, an, s, Val(:dorsal), Val(:leg_l), leg, Attachment(EndA(m(1.1 * r), 0.0), p), 1)
+    _hang_leg(a, an, s, Val(:dorsal), Val(:leg_r), leg, Attachment(EndA(m(1.1 * r), π), p), -1)
 end
 _hind_leg(s, masses, leg, ::Nothing) = leg
 _hind_leg(s, masses, leg, ::OwnHind) = axial_body(s, masses.hind, s.hindRatio, s.legTop)
 function _add_leg(a, an, s, name, leg, along, side_)
     p = patch(dims(leg).r)
     on = side(torso_kind(an), dims(a.parts.ventral), along, side_)
-    attach(a, Val(:ventral), name, leg, Attachment(on, p), Attachment(EndA(ZERO, 0.0), p);
-           bend = -_leg_swing(s), hinge = (0.0, 1.0, 0.0))
+    _hang_leg(a, an, s, Val(:ventral), name, leg, Attachment(on, p), side_)
 end
-# Legs swing forward by `legAngle`, about the torso's y axis: the ventral half is the dorsal half turned over, so its
-# y axis, and the sign of the swing, are the other way.
-_leg_swing(s) = -deg2rad(s.legAngle)
+# A leg swings forward by `legAngle` and out to its side by `legSpread`: one bend, about the hinge that takes its
+# straight direction to the swung one.
+function _hang_leg(a, an, s, parent::Val{P}, name, leg, on, side_) where {P}
+    pose = getfield(a.poses, P)
+    straight = unit3(rotate3(pose.rotation, normal_of(getfield(a.parts, P), on)))
+    root = a.poses.dorsal.rotation
+    bend, hinge = _swing(straight, pose.rotation, forward(stance(an), root), side_ .* rotate3(root, (0.0, 1.0, 0.0)),
+                         deg2rad(s.legAngle), deg2rad(s.legSpread))
+    attach(a, parent, name, leg, on, Attachment(EndA(ZERO, 0.0), on.shape); bend, hinge)
+end
+
+# Which way an animal faces, in the world: along its torso, or for one standing, away from its back.
+forward(::Level, root) = rotate3(root, (1.0, 0.0, 0.0))
+forward(::Upright, root) = rotate3(root, (0.0, 0.0, -1.0))
+
+# The bend, and its hinge in the parent's frame `R`, that turn a part from the world direction `straight` by `θf`
+# towards `ahead` and by `θs` towards `outward`.
+function _swing(straight, R, ahead, outward, θf, θs)
+    f = unit3(ahead .- dot3(ahead, straight) .* straight)
+    o = outward .- dot3(outward, straight) .* straight
+    o = unit3(o .- dot3(o, f) .* f)
+    swung = unit3(straight .+ tan(θf) .* f .+ tan(θs) .* o)
+    axis = cross3(straight, swung)
+    s = sqrt(dot3(axis, axis))
+    hinge = s > 1e-12 ? rotate3(transpose(R), axis ./ s) : (0.0, 1.0, 0.0)
+    (atan(s, dot3(straight, swung)), hinge)
+end
 
 # Arms hang from the shoulders by their sides, turned to point down.
 add_arms(a, an, s, masses, ::Nothing) = a
