@@ -6,3 +6,6 @@ examples/shapes_3d.png
 .claude/settings.json
 .claude/settings.local.json
 docs/build/
+docs/node_modules/
+docs/package-lock.json
+docs/Manifest.toml

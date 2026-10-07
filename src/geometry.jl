@@ -97,7 +97,7 @@ abstract type AbstractPorousLayer <: AbstractInsulationLayer end
 
     Naked()
 
-Insulation trait for an organism without any insulation layer.
+No insulation.
 """
 struct Naked <: AbstractInsulationLayer end
 
@@ -106,7 +106,11 @@ struct Naked <: AbstractInsulationLayer end
 
     FibrousLayer(thickness, fibre_diameter, fibre_density)
 
-A porous insulation layer characterised by fibre geometry (fur, feathers, hair, wool).
+A layer of fibres outside the skin (fur, feathers, hair, clothing).
+
+- `thickness`: depth of the layer (length)
+- `fibre_diameter`: diameter of a fibre (length)
+- `fibre_density`: fibres per area of skin (1/area)
 """
 struct FibrousLayer{T,D,R} <: AbstractPorousLayer
     thickness::T
@@ -119,7 +123,10 @@ end
 
     FatLayer(fraction, density)
 
-A solid insulation layer of subcutaneous fat.
+A layer of subcutaneous fat inside the skin.
+
+- `fraction`: fat mass as a fraction of body mass
+- `density`: density of fat
 """
 struct FatLayer{F,D} <: AbstractSolidLayer
     fraction::F
@@ -129,9 +136,9 @@ end
 """
     CompositeInsulation <: AbstractInsulationLayer
 
-    CompositeInsulation(layers)
+    CompositeInsulation(fibrous, fat)
 
-A composite of insulation layers (e.g., fibrous layer over fat layer) for an organism.
+A [`FibrousLayer`](@ref) and a [`FatLayer`](@ref) together, in either order.
 """
 struct CompositeInsulation{T<:Tuple} <: AbstractInsulationLayer
     layers::T
@@ -211,7 +218,11 @@ struct ZenithAngleVarying <: SolarOrientation end
 
     Geometry(volume, length, area)
 
-The geometry of an organism.
+The computed geometry of a [`Body`](@ref).
+
+- `volume`: mass over density
+- `length`: `NamedTuple` of dimensions, with names that depend on the shape and layers
+- `area`: [`SurfaceAreas`](@ref)
 """
 struct Geometry{V,L,A<:SurfaceAreas} <: AbstractGeometryPars
     volume::V

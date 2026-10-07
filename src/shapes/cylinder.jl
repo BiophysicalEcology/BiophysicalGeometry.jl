@@ -76,6 +76,13 @@ attachment_surfaces(::Cylinder) = (EndA, EndB, Lateral)
 # Outer (insulation-aware) dimensions. Insulation-dispatched; no runtime
 # field-lookup. `radius` matches insulation_radius(body); `length` is the axial extent
 # of the outer surface (skin + fur padding at each end).
+"""
+    outer_dims(shape, body)
+
+Outer dimensions of a body, over any fibrous layer: `(radius, length)` for
+cylinders and cones, `(length, width, height)` for ellipsoids and plates, and
+`(radius,)` for spheres.
+"""
 outer_dims(sh::Cylinder, body::AbstractBody) =
     outer_dims(sh, outer_insulation(insulation(body)), body)
 outer_dims(::Cylinder, ::Union{Naked,FatLayer}, body::AbstractBody) =

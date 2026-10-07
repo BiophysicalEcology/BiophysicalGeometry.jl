@@ -5,7 +5,7 @@ using Unitful
 using BiophysicalGeometry
 import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Plate, TriangularPlate, Cone, Half
 import BiophysicalGeometry: Naked
-import BiophysicalGeometry: CompositeBody, Pose, apply_pose, silhouette_rasterized
+import BiophysicalGeometry: CompositeBody, Pose, apply_pose, apply_rotation, silhouette_rasterized
 import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
 # Mesh helpers live in core (src/meshes.jl).
 import BiophysicalGeometry: cylinder_tube, cylinder_cap, ellipsoid_mesh, cone_tube,
@@ -34,9 +34,9 @@ _layer_flags(r) = (fat_layer=r.skin > r.flesh + 1e-9, fibrous_layer=r.ins > r.sk
 # Semi-axes (a, b, c) along x, y, z of each layer of an ellipsoidal or spherical
 # body: the skin, the flesh inside it (one fat thickness in on every axis) and
 # the outer insulation (the fibrous shell, or the skin when there is none).
-_domed_layers(::Union{Sphere,Half{<:AbstractSpherical}}, body) =
+domed_layers(::Union{Sphere,Half{<:AbstractSpherical}}, body) =
     map(r -> (r, r, r), _radii(body))
-function _domed_layers(::Union{Ellipsoid,Half{<:AbstractEllipsoidal}}, body)
+function domed_layers(::Union{Ellipsoid,Half{<:AbstractEllipsoidal}}, body)
     gl = body.geometry.length
     skin = (gl.length_skin, gl.width_skin, gl.height_skin) ./ 2
     fat = haskey(gl, :fat) ? gl.fat : zero(skin[1])
@@ -61,99 +61,8 @@ function _draw_layers!(target, layers)
     end
 end
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 3-D DRAW PRIMITIVES
-# ══════════════════════════════════════════════════════════════════════════════
-
-_draw_surface!(target, tile::Tile, color) = _draw_surface!(target, tile_matrices(tile), color)
-function _draw_surface!(target, (X, Y, Z), color)
-    surface!(target, X, Y, Z; color=fill(color, size(X)...), shading=true, backlight=0.4f0)
-end
-
-function _draw_cylinder!(target, r, L, col; θ_end=2π, x0=0.0)
-    _draw_surface!(target, cylinder_tube(r, L; θ_end, x0), col)
-    _draw_surface!(target, cylinder_cap(r, x0; θ_end), col)
-    _draw_surface!(target, cylinder_cap(r, x0 + L; θ_end), col)
-end
-
-# Cutaway removes the front face (y = -hw) and the right face (x = +hl).
-function _draw_box_faces!(target, hl, hw, hh, color; full=false)
-    faces = [
-        box_face_z(-hl, hl, -hw, hw, -hh),
-        box_face_z(-hl, hl, -hw, hw, hh),
-        box_face_y(-hl, hl, hw, -hh, hh),
-        box_face_x(-hl, -hw, hw, -hh, hh),
-    ]
-    full && append!(faces, [
-        box_face_y(-hl, hl, -hw, -hh, hh),
-        box_face_x( hl, -hw, hw, -hh, hh),
-    ])
-    for f in faces; _draw_surface!(target, f, color); end
-end
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 3-D SHAPE DISPATCH
-# ══════════════════════════════════════════════════════════════════════════════
-
-function _draw_cutaway_shape!(p, sh::Cylinder, body, sc, cols)
-    r = _scaled_radii(body, sc)
-    fl = _layer_flags(r)
-
-    L_s = _m(body.geometry.length.length_skin, sc)
-    L_i = _m(outer_dims(sh, body).length, sc)
-    x0_fibrous = -(L_i - L_s) / 2
-
-    _draw_cylinder!(p, r.flesh, L_s, cols.flesh)
-    fl.fat_layer && _draw_cylinder!(p, r.skin, L_s, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_cylinder!(p, r.ins, L_i, cols.fibrous_layer; θ_end=3π/2, x0=x0_fibrous)
-end
-
-_x_ratio(s::Ellipsoid) = 1 - s.pole_a_truncation
-_x_ratio(::Any) = 1.0
-
-# A cut ellipsoid layer: the surface up to the cut plane and the flat disc.
-function _draw_cut_ellipsoid!(target, (a, b, c), x_ratio, col)
-    _draw_surface!(target, ellipsoid_mesh_truncated(a, b, c, x_ratio), col)
-    _draw_surface!(target, ellipsoid_pole_a_cap(a, b, c, x_ratio), col)
-end
-
-function _draw_cutaway_shape!(p, shape::Union{Sphere,Ellipsoid}, body, sc, cols)
-    fl = _layer_flags(_scaled_radii(body, sc))
-    ax = map(l -> map(x -> _m(x, sc), l), _domed_layers(shape, body))
-    x_ratio = _x_ratio(shape)
-    if x_ratio < 1
-        # The cut surface has no wedge to open, so the outer layers are drawn
-        # whole (they are translucent).
-        _draw_cut_ellipsoid!(p, ax.flesh, x_ratio, cols.flesh)
-        fl.fat_layer && _draw_cut_ellipsoid!(p, ax.skin, x_ratio, cols.fat_layer)
-        fl.fibrous_layer && _draw_cut_ellipsoid!(p, ax.ins, x_ratio, cols.fibrous_layer)
-    else
-        _draw_surface!(p, ellipsoid_mesh(ax.flesh...), cols.flesh)
-        fl.fat_layer && _draw_surface!(p, ellipsoid_mesh(ax.skin...; θ_end=3π/2), cols.fat_layer)
-        fl.fibrous_layer && _draw_surface!(p, ellipsoid_mesh(ax.ins...; θ_end=3π/2), cols.fibrous_layer)
-    end
-end
-
-function _draw_cutaway_shape!(p, sh::Plate, body, sc, cols)
-    r = _scaled_radii(body, sc)
-    fl = _layer_flags(r)
-
-    gl = body.geometry.length
-    di = outer_dims(sh, body)
-    hw_s = _m(gl.width_skin, sc) / 2
-    hl_s = _m(gl.length_skin, sc) / 2
-    hh_s = _m(gl.height_skin, sc) / 2
-    hw_i = _m(di.width, sc) / 2
-    hl_i = _m(di.length, sc) / 2
-    hh_i = _m(di.height, sc) / 2
-    hw_f = r.flesh
-    hl_f = hw_f * Float64(sh.axis_ratio_b)
-    hh_f = hl_f / Float64(sh.axis_ratio_c)
-
-    _draw_box_faces!(p, hl_f, hw_f, hh_f, cols.flesh; full=true)
-    fl.fat_layer && _draw_box_faces!(p, hl_s, hw_s, hh_s, cols.fat_layer)
-    fl.fibrous_layer && _draw_box_faces!(p, hl_i, hw_i, hh_i, cols.fibrous_layer)
-end
+cut_position(s::Ellipsoid) = 1 - s.pole_a_truncation
+cut_position(::Any) = 1.0
 
 # Each layer of a triangular plate is the skin triangle scaled about its
 # incentre to that layer's inradius: the fur grows every face by its thickness,
@@ -169,75 +78,270 @@ function _triangle_layers(body, f)
     end
 end
 
-function _draw_prism!(target, l, col; top=true)
-    p1 = (l.corner, l.corner); p2 = (l.corner + l.length, l.corner); p3 = (l.corner, l.corner + l.width)
-    faces = Any[triangle_face(p1, p2, p3, -l.height / 2),
-                prism_side(p1, p2, l.height), prism_side(p2, p3, l.height), prism_side(p3, p1, l.height)]
-    top && push!(faces, triangle_face(p1, p2, p3, l.height / 2))
-    for f in faces; _draw_surface!(target, f, col); end
+# ══════════════════════════════════════════════════════════════════════════════
+# 3-D DRAWING
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Everything drawn for one body goes into a single mesh. A backend without a depth
+# buffer (CairoMakie) sorts the faces of one mesh by depth but not separate plots,
+# so separate surfaces for flesh, fat and fibres would hide one another. Colours
+# are shaded here from the surface normals, for a light beside the viewer.
+#
+# A tile is `(X, Y, Z, colour)`: a parametric grid of vertices, as in `src/meshes.jl`.
+
+view_direction(azimuth, elevation) =
+    (cos(elevation) * cos(azimuth), cos(elevation) * sin(azimuth), sin(elevation))
+
+_opaque(c) = (c = RGBAf(c); RGBf(c.r, c.g, c.b))
+
+# Subdivide a coarse grid by linear interpolation, so that no face is long enough
+# to be sorted wrongly.
+_refine(A::AbstractMatrix, n=16) = _refine_along(_refine_along(A, 1, n), 2, n)
+
+function _refine_along(A::AbstractMatrix{T}, dim, n) where {T}
+    m = size(A, dim)
+    m >= n && return A
+    B = Matrix{T}(undef, dim == 1 ? (n, size(A, 2)) : (size(A, 1), n))
+    for k in 1:n
+        t = 1 + (k - 1) * (m - 1) / (n - 1)
+        lo = clamp(floor(Int, t), 1, m - 1); w = t - lo
+        if dim == 1
+            for j in axes(A, 2)
+                B[k, j] = (1 - w) * A[lo, j] + w * A[lo + 1, j]
+            end
+        else
+            for i in axes(A, 1)
+                B[i, k] = (1 - w) * A[i, lo] + w * A[i, lo + 1]
+            end
+        end
+    end
+    return B
 end
 
-# Cutaway lifts the top face off the fat and fur prisms to show the flesh.
-function _draw_cutaway_shape!(p, sh::TriangularPlate, body, sc, cols)
+# Shading at grid point (i, j): the cosine between the surface normal and the light, NaN where the grid is
+# degenerate (a cone's tip, the centre of a cap).
+function _shade_at(X, Y, Z, i, j, light)
+    n1, n2 = size(X)
+    ip, im, jp, jm = min(i + 1, n1), max(i - 1, 1), min(j + 1, n2), max(j - 1, 1)
+    du = (X[ip, j] - X[im, j], Y[ip, j] - Y[im, j], Z[ip, j] - Z[im, j])
+    dv = (X[i, jp] - X[i, jm], Y[i, jp] - Y[i, jm], Z[i, jp] - Z[i, jm])
+    n = (du[2] * dv[3] - du[3] * dv[2], du[3] * dv[1] - du[1] * dv[3], du[1] * dv[2] - du[2] * dv[1])
+    len = sqrt(n[1]^2 + n[2]^2 + n[3]^2)
+    return len > 1e-10 ? abs(n[1] * light[1] + n[2] * light[2] + n[3] * light[3]) / len : NaN
+end
+
+function mesh_tiles!(target, tiles, azimuth, elevation)
+    d = view_direction(azimuth, elevation)
+    light = (d[1] - 0.35 * d[2], d[2] + 0.35 * d[1], d[3] + 0.6)
+    light = light ./ sqrt(sum(abs2, light))
+    points = Point3f[]; colours = RGBAf[]; faces = Int[]
+    npoints = sum(((X, _, _, _),) -> max(size(X, 1), 16) * max(size(X, 2), 16), tiles; init=0)
+    sizehint!(points, npoints); sizehint!(colours, npoints); sizehint!(faces, 6 * npoints)
+    for (X, Y, Z, col) in tiles
+        _append_tile!(points, colours, faces, _refine(X), _refine(Y), _refine(Z), col, light)
+    end
+    mesh!(target, points, permutedims(reshape(faces, 3, :)); color=colours, shading=NoShading)
+end
+
+function _append_tile!(points, colours, faces, X::Matrix{Float64}, Y::Matrix{Float64}, Z::Matrix{Float64}, col, light)
+    n1, n2 = size(X)
+    offset = length(points)
+    # Degenerate points take the tile's mean shade.
+    total, valid = 0.0, 0
+    for j in 1:n2, i in 1:n1
+        x = _shade_at(X, Y, Z, i, j, light)
+        isfinite(x) && (total += x; valid += 1)
+    end
+    fallback = valid == 0 ? 1.0 : total / valid
+    c = RGBAf(col)
+    for j in 1:n2, i in 1:n1
+        x = _shade_at(X, Y, Z, i, j, light)
+        f = Float32(0.55 + 0.45 * (isfinite(x) ? x : fallback))
+        push!(points, Point3f(X[i, j], Y[i, j], Z[i, j]))
+        push!(colours, RGBAf(c.r * f, c.g * f, c.b * f, c.alpha))
+    end
+    for j in 1:n2-1, i in 1:n1-1
+        k = offset + (j - 1) * n1 + i
+        append!(faces, (k, k + 1, k + n1, k + 1, k + n1 + 1, k + n1))
+    end
+    return nothing
+end
+
+# A tile of a drawing: a parametric grid of points and its colour.
+const _Tile = Tuple{Matrix{Float64},Matrix{Float64},Matrix{Float64},RGBf}
+
+_grid(f, us, vs) = ([f(u, v)[1] for u in us, v in vs], [f(u, v)[2] for u in us, v in vs],
+                    [f(u, v)[3] for u in us, v in vs])
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CUTAWAYS
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Flesh is drawn whole. Fat and fibres are drawn over the angles `θs` around the
+# long axis, which leave out the part facing the viewer, and the faces of the cut
+# are filled in. Every shape lies along x: an axial shape's angles run around x
+# from +y towards +z, the others' around z, in the x–y plane.
+
+# The angle around a shape's axis that a view direction `d` (in its frame) comes from.
+_view_angle(::Union{AbstractCylindrical,Half{<:AbstractCylindrical}}, d) = atan(d[3], d[2])
+_view_angle(::Any, d) = atan(d[2], d[1])
+cut_angles(shape, d, cut) =
+    (a = _view_angle(shape, d); range(a + cut/2, a + 2π - cut/2; length=73))
+
+# Radii and lengths of an axial shape; radius `r * taper(x)` at position x along it.
+function axial_layers(body, sc)
+    t = Float64(top_ratio(body.shape))
+    L = _m(body.geometry.length.length_skin, sc)
+    pad = _m(outer_dims(body.shape, body).length, sc) / 2 - L / 2
+    taper(x) = 1 - (1 - t) * clamp(x, 0, L) / L
+    r = _scaled_radii(body, sc)
+    return (; L, pad, taper, rf=r.flesh, rs=r.skin, ri=r.ins)
+end
+
+# A point at radius `r` from the x axis, at position `x` and angle `a`.
+_ring(r, x, a) = (x, r * cos(a), r * sin(a))
+
+# Flesh whole over the angles `full`; fat and fibres over each run of angles in `runs`, with the faces of the cut
+# filled in, except where a run ends at one of the `edges` (the flat face of a half, which shows the layers itself).
+function _axial_shells!(tiles, (; L, pad, taper, rf, rs, ri), cols, full, runs, edges)
+    fl = _layer_flags((flesh=rf, skin=rs, ins=ri))
+    function shell(r, x0, x1, θ, col)
+        push!(tiles, (_grid((a, x) -> _ring(r * taper(x), x, a), θ, range(x0, x1; length=2))..., col))
+        for x in (x0, x1)
+            taper(x) > 0 && push!(tiles, (_grid((a, ρ) -> _ring(ρ * r * taper(x), x, a),
+                θ, range(0, 1; length=2))..., col))
+        end
+    end
+    shell(rf, 0.0, L, full, cols.flesh)
+    for θs in runs
+        fl.fat_layer && shell(rs, 0.0, L, θs, cols.fat_layer)
+        fl.fibrous_layer && shell(ri, -pad, L + pad, θs, cols.fibrous_layer)
+        for a in (first(θs), last(θs))
+            any(e -> abs(rem2pi(a - e, RoundNearest)) < 1e-9, edges) && continue
+            face(r0, r1, x0, x1, col) = push!(tiles, (_grid((ρ, x) -> _ring((r0 + ρ * (r1 - r0)) * taper(x), x, a),
+                range(0, 1; length=2), range(x0, x1; length=2))..., col))
+            fl.fat_layer && face(rf, rs, 0.0, L, cols.fat_layer)
+            if fl.fibrous_layer
+                face(rs, ri, 0.0, L, cols.fibrous_layer)
+                face(0.0, ri, -pad, 0.0, cols.fibrous_layer); face(0.0, ri, L, L + pad, cols.fibrous_layer)
+            end
+        end
+    end
+    return tiles
+end
+
+# The parts of the range of angles `θs` (less than a turn) that lie within [lo, hi].
+function _runs_within(θs, lo, hi)
+    s, e = first(θs), last(θs)
+    runs = StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int}[]
+    for k in -2:2
+        a, b = max(s + 2π * k, lo), min(e + 2π * k, hi)
+        b - a > 1e-9 && push!(runs, range(a, b; length=max(2, ceil(Int, 36 * (b - a) / π) + 1)))
+    end
+    return runs
+end
+
+cutaway_tiles(::Union{Cylinder,Cone}, body, sc, cols, θs) =
+    _axial_shells!(_Tile[], axial_layers(body, sc), cols, range(0, 2π; length=73), [θs], ())
+
+cutaway_tiles(sh::Union{Sphere,Ellipsoid}, body, sc, cols, θs) = _ellipsoidal_tiles(sh, body, sc, cols, θs, π)
+cutaway_tiles(sh::HalfDomed, body, sc, cols, θs) = _ellipsoidal_tiles(sh.parent, body, sc, cols, θs, π / 2)
+
+# `φ_max = π` is the whole shape; `π / 2` the upper half, closed by its flat face.
+# Each layer has its own semi-axes (a, b, c). On a cut ellipsoid, points beyond the
+# cut plane are pressed onto it, which draws the flat face where the cap was.
+function _ellipsoidal_tiles(sh, body, sc, cols, θs, φ_max)
+    fl = _layer_flags(_scaled_radii(body, sc))
+    l = map(axes -> map(x -> _m(x, sc), axes), domed_layers(body.shape, body))
+    x_ratio = cut_position(sh)
+    φs = range(0, φ_max; length=49)
+    full = range(0, 2π; length=73)
+    point((a, b, c), θ, φ) = (min(a * sin(φ) * cos(θ), x_ratio * a), b * sin(φ) * sin(θ), c * cos(φ))
+    between(l0, l1, ρ) = l0 .+ ρ .* (l1 .- l0)
+    tiles = _Tile[(_grid((θ, φ) -> point(l.flesh, θ, φ), full, φs)..., cols.flesh)]
+    fl.fat_layer && push!(tiles, (_grid((θ, φ) -> point(l.skin, θ, φ), θs, φs)..., cols.fat_layer))
+    fl.fibrous_layer && push!(tiles, (_grid((θ, φ) -> point(l.ins, θ, φ), θs, φs)..., cols.fibrous_layer))
+    for θ in (first(θs), last(θs))
+        face(l0, l1, col) = push!(tiles, (_grid((ρ, φ) -> point(between(l0, l1, ρ), θ, φ),
+            range(0, 1; length=2), φs)..., col))
+        fl.fat_layer && face(l.flesh, l.skin, cols.fat_layer)
+        fl.fibrous_layer && face(l.skin, l.ins, cols.fibrous_layer)
+    end
+    if φ_max < π
+        ring(l0, l1, θ, col) = push!(tiles, (_grid((ρ, t) -> point(between(l0, l1, ρ), t, π / 2),
+            range(0, 1; length=2), θ)..., col))
+        ring(map(zero, l.flesh), l.flesh, full, cols.flesh)
+        fl.fat_layer && ring(l.flesh, l.skin, θs, cols.fat_layer)
+        fl.fibrous_layer && ring(l.skin, l.ins, θs, cols.fibrous_layer)
+    end
+    return tiles
+end
+
+# A half cylinder or half cone shows its layers on its flat face (z = 0), which is a
+# section along it, and its dome is cut away like a cylinder's.
+function cutaway_tiles(::Half{<:AbstractCylindrical}, body, sc, cols, θs)
+    layers = axial_layers(body, sc)
+    (; L, pad, taper, rf, rs, ri) = layers
+    fl = _layer_flags((flesh=rf, skin=rs, ins=ri))
+    tiles = _axial_shells!(_Tile[], layers, cols, range(0, π; length=37), _runs_within(θs, 0.0, π), (0.0, π))
+    flat(y0, y1, xa, xb, col) = push!(tiles, (_grid((y, x) -> (x, y * taper(x), 0.0), range(y0, y1; length=2),
+        range(xa, xb; length=2))..., col))
+    flat(-rf, rf, 0.0, L, cols.flesh)
+    if fl.fat_layer
+        flat(rf, rs, 0.0, L, cols.fat_layer); flat(-rs, -rf, 0.0, L, cols.fat_layer)
+    end
+    if fl.fibrous_layer
+        flat(rs, ri, -pad, L + pad, cols.fibrous_layer); flat(-ri, -rs, -pad, L + pad, cols.fibrous_layer)
+        flat(-rs, rs, -pad, 0.0, cols.fibrous_layer); flat(-rs, rs, L, L + pad, cols.fibrous_layer)
+    end
+    return tiles
+end
+
+# A plate: nested boxes, the outer two without their top and the two sides nearest the viewer.
+function cutaway_tiles(sh::Plate, body, sc, cols, θs)
+    r = _scaled_radii(body, sc)
+    fl = _layer_flags(r)
+    gl = body.geometry.length
+    di = outer_dims(sh, body)
+    hw_f = r.flesh
+    hl_f = hw_f * Float64(sh.axis_ratio_b)
+    hh_f = hl_f / Float64(sh.axis_ratio_c)
+    az = (first(θs) + last(θs)) / 2 - π          # towards the viewer
+    sx, sy = cos(az) >= 0 ? 1 : -1, sin(az) >= 0 ? 1 : -1
+    tiles = _Tile[]
+    function box(hl, hw, hh, col; open=false)
+        push!(tiles, (tile_matrices(box_face_z(-hl, hl, -hw, hw, -hh))..., col))
+        open || push!(tiles, (tile_matrices(box_face_z(-hl, hl, -hw, hw, hh))..., col))
+        for s in (-1, 1)
+            (open && s == sx) || push!(tiles, (tile_matrices(box_face_x(s * hl, -hw, hw, -hh, hh))..., col))
+            (open && s == sy) || push!(tiles, (tile_matrices(box_face_y(-hl, hl, s * hw, -hh, hh))..., col))
+        end
+    end
+    box(hl_f, hw_f, hh_f, cols.flesh)
+    fl.fat_layer && box(_m(gl.length_skin, sc) / 2, _m(gl.width_skin, sc) / 2, _m(gl.height_skin, sc) / 2,
+                        cols.fat_layer; open=true)
+    fl.fibrous_layer && box(_m(di.length, sc) / 2, _m(di.width, sc) / 2, _m(di.height, sc) / 2,
+                            cols.fibrous_layer; open=true)
+    return tiles
+end
+
+# A triangular plate: nested prisms, the outer two without their top.
+function cutaway_tiles(::TriangularPlate, body, sc, cols, θs)
     fl = _layer_flags(_scaled_radii(body, sc))
     l = _triangle_layers(body, x -> _m(x, sc))
-    _draw_prism!(p, l.flesh, cols.flesh)
-    fl.fat_layer && _draw_prism!(p, l.skin, cols.fat_layer; top=false)
-    fl.fibrous_layer && _draw_prism!(p, l.ins, cols.fibrous_layer; top=false)
-end
-
-function _draw_cone!(target, r_base, r_top, L, col; θ_end=2π, x0=0.0)
-    _draw_surface!(target, cone_tube(r_base, r_top, L; θ_end, x0), col)
-    _draw_surface!(target, cylinder_cap(r_base, x0; θ_end), col)
-    r_top > 0 && _draw_surface!(target, cylinder_cap(r_top, x0 + L; θ_end), col)
-end
-
-function _draw_cutaway_shape!(p, sh::Cone, body, sc, cols)
-    r = _scaled_radii(body, sc)
-    fl = _layer_flags(r)
-    t = Float64(sh.top_ratio)
-    L_s = _m(body.geometry.length.length_skin, sc)
-    L_i = _m(outer_dims(sh, body).length, sc)
-    x0_i = -(L_i - L_s) / 2
-    _draw_cone!(p, r.flesh, t * r.flesh, L_s, cols.flesh)
-    fl.fat_layer && _draw_cone!(p, r.skin, t * r.skin, L_s, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_cone!(p, r.ins,  t * r.ins,  L_i, cols.fibrous_layer; θ_end=3π/2, x0=x0_i)
-end
-
-# Half shapes: draw the layers over their half domain, with a wedge removed from
-# the outer (fat/fur) layers to reveal the flesh, plus the flat cut face.
-# A half cylinder or half cone: base radius `r`, top radius `t * r`.
-function _draw_half_frustum!(target, r, t, L, col; θ_end=π, x0=0.0)
-    _draw_surface!(target, cone_tube(r, t * r, L; θ_end, x0), col)
-    _draw_surface!(target, cylinder_cap(r, x0; θ_end), col)
-    t > 0 && _draw_surface!(target, cylinder_cap(t * r, x0 + L; θ_end), col)
-    _draw_surface!(target, half_cylinder_flat(r, L; r_top=t * r, x0), col)
-end
-
-function _draw_cutaway_shape!(p, sh::Half{<:AbstractCylindrical}, body, sc, cols)
-    r = _scaled_radii(body, sc)
-    fl = _layer_flags(r)
-    t = Float64(top_ratio(sh))
-    L_s = _m(body.geometry.length.length_skin, sc)
-    L_i = _m(outer_dims(sh, body).length, sc)
-    x0_i = -(L_i - L_s) / 2
-    _draw_half_frustum!(p, r.flesh, t, L_s, cols.flesh)
-    fl.fat_layer && _draw_half_frustum!(p, r.skin, t, L_s, cols.fat_layer; θ_end=3π/4)
-    fl.fibrous_layer && _draw_half_frustum!(p, r.ins, t, L_i, cols.fibrous_layer; θ_end=3π/4, x0=x0_i)
-end
-
-function _draw_half_ellipsoid!(target, (a, b, c), col; θ_end=2π)
-    _draw_surface!(target, ellipsoid_mesh(a, b, c; θ_end, φ_end=π/2), col)
-    _draw_surface!(target, half_ellipsoid_flat_mesh(a, b), col)
-end
-
-function _draw_cutaway_shape!(p, sh::Union{Half{<:AbstractEllipsoidal},Half{<:AbstractSpherical}},
-                              body, sc, cols)
-    fl = _layer_flags(_scaled_radii(body, sc))
-    ax = map(l -> map(x -> _m(x, sc), l), _domed_layers(sh, body))
-    _draw_half_ellipsoid!(p, ax.flesh, cols.flesh)
-    fl.fat_layer && _draw_half_ellipsoid!(p, ax.skin, cols.fat_layer; θ_end=3π/2)
-    fl.fibrous_layer && _draw_half_ellipsoid!(p, ax.ins, cols.fibrous_layer; θ_end=3π/2)
+    tiles = _Tile[]
+    function prism(l, col; open=false)
+        p1 = (l.corner, l.corner); p2 = (l.corner + l.length, l.corner); p3 = (l.corner, l.corner + l.width)
+        push!(tiles, (tile_matrices(triangle_face(p1, p2, p3, -l.height / 2))..., col))
+        open || push!(tiles, (tile_matrices(triangle_face(p1, p2, p3, l.height / 2))..., col))
+        for (p, q) in ((p1, p2), (p2, p3), (p3, p1))
+            push!(tiles, (tile_matrices(prism_side(p, q, l.height))..., col))
+        end
+    end
+    prism(l.flesh, cols.flesh)
+    fl.fat_layer && prism(l.skin, cols.fat_layer; open=true)
+    fl.fibrous_layer && prism(l.ins, cols.fibrous_layer; open=true)
+    return tiles
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -247,15 +351,44 @@ end
 # Pick a fill colour per part — outer insulation if any, else flesh.
 _part_color(body, cols) = body.insulation isa Naked ? cols.flesh : cols.fibrous_layer
 
-function _draw_composite!(p, b::CompositeBody, sc, cols)
+function _composite_tiles(b::CompositeBody, sc, cols)
+    tiles = _Tile[]
     for name in propertynames(b.parts)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
         col = _part_color(part, cols)
         for mesh in part_outer_meshes(part.shape, part, sc)
-            _draw_surface!(p, transform_mesh(mesh, pose, sc), col)
+            push!(tiles, (tile_matrices(transform_mesh(mesh, pose, sc))..., col))
         end
     end
+    return tiles
+end
+
+# Each part of a composite (those in `parts`, or all) cut open, in place: the cut faces the viewer, whose direction
+# is turned into the part's own frame.
+function _composite_cutaway_tiles(b::CompositeBody, sc, cols, azimuth, elevation, cut, parts)
+    d = view_direction(azimuth, elevation)
+    tiles = _Tile[]
+    for name in propertynames(b.parts)
+        parts === nothing || name in parts || continue
+        _append_cutaway!(tiles, getfield(b.parts, name), getfield(b.poses, name), sc, cols, d, cut)
+    end
+    return tiles
+end
+
+function _append_cutaway!(tiles, part, pose, sc, cols, d, cut)
+    l = apply_rotation(transpose(pose.rotation), d)
+    for (X, Y, Z, col) in cutaway_tiles(part.shape, part, sc, cols, cut_angles(part.shape, l, cut))
+        push!(tiles, (transform_grid(X, Y, Z, pose, sc)..., col))
+    end
+    return tiles
+end
+
+# A grid of points moved by a pose, in (m * sc) units.
+function transform_grid(X, Y, Z, pose::Pose, sc)
+    t = map(x -> _m(x, sc), pose.translation)
+    points = map((x, y, z) -> apply_rotation(pose.rotation, (x, y, z)) .+ t, X, Y, Z)
+    (map(p -> p[1], points), map(p -> p[2], points), map(p -> p[3], points))
 end
 
 # Posed world-frame bounding box of a composite (in `sc` units): (mins, maxs).
@@ -378,9 +511,9 @@ end
 function _section_layers(sh::Union{Sphere,Ellipsoid,HalfDomed}, body, mode, r, cols)
     pts = sh isa Half ? _half_ellipse_pts : _ellipse_pts
     # A cut ellipsoid's long section stops at the cut plane, up the plot.
-    cut(points, a) = filter(q -> q[2] <= _pu(a) * _x_ratio(sh), points)
+    cut(points, a) = cut_position(sh) < 1 ? filter(q -> q[2] <= _pu(a) * cut_position(sh), points) : points
     geom((a, b, c)) = mode === :long ? cut(pts(c, a), a) : pts(c, b)
-    l = _domed_layers(sh, body)
+    l = domed_layers(sh, body)
     [
         (r.ins > r.skin, () -> geom(l.ins), cols.fibrous_layer),
         (r.skin > r.flesh, () -> geom(l.skin), cols.fat_layer),
@@ -450,7 +583,7 @@ function _section_limits(sh::Plate, body, r, pad)
 end
 
 function _section_limits(shape::Union{Sphere,Ellipsoid,HalfDomed}, body, r, pad)
-    (a, b, c) = map(x -> _pu(x) * (1 + pad), _domed_layers(shape, body).ins)
+    (a, b, c) = map(x -> _pu(x) * (1 + pad), domed_layers(shape, body).ins)
     _limits(c, a, c, b)
 end
 
@@ -460,20 +593,27 @@ end
 
 @recipe(BodyCutaway, body) do scene
     Theme(
-        flesh_col = RGBAf(0.88, 0.48, 0.42, 1.00),
-        fat_layer_col = RGBAf(1.00, 0.97, 0.60, 0.75),
-        fibrous_layer_col = RGBAf(0.76, 0.62, 0.42, 0.45),
+        flesh_col = RGBf(0.88, 0.48, 0.42),
+        fat_layer_col = RGBf(1.00, 0.93, 0.55),
+        fibrous_layer_col = RGBf(0.76, 0.62, 0.42),
         sc = 100.0,
+        azimuth = 5π/4,      # direction of the viewer: the cut faces it, and so does the light
+        elevation = π/7,
+        cut = π/2,           # angle of fat and fibres cut away
+        parts = nothing,     # of a composite, the names of the parts to draw; nothing for all
     )
 end
 
 function Makie.plot!(p::BodyCutaway)
     body = p[:body][];  sc = p[:sc][]
-    if body isa CompositeBody
-        _draw_composite!(p, body, sc, _colors(p))
+    az = p[:azimuth][];  cut = p[:cut][]
+    cols = map(_opaque, _colors(p))
+    tiles = if body isa CompositeBody
+        _composite_cutaway_tiles(body, sc, cols, az, p[:elevation][], cut, p[:parts][])
     else
-        _draw_cutaway_shape!(p, body.shape, body, sc, _colors(p))
+        cutaway_tiles(body.shape, body, sc, cols, cut_angles(body.shape, view_direction(az, p[:elevation][]), cut))
     end
+    mesh_tiles!(p, tiles, az, p[:elevation][])
     p
 end
 
@@ -509,18 +649,25 @@ end
 # PUBLIC API — extends the stubs declared in BiophysicalGeometry
 # ══════════════════════════════════════════════════════════════════════════════
 
-"""
-    draw_cutaway!(ax::Axis3, body; sc=100.0, flesh_col=…, fat_layer_col=…, fibrous_layer_col=…)
+# The direction an `Axis3` is viewed from, so that the cut faces the viewer.
+_view_angles(ax::Axis3) = (ax.azimuth[], ax.elevation[])
+_view_angles(ax) = (5π/4, π/7)
 
-Draw a quarter-cutaway 3-D surface mesh of `body` into an existing `Axis3`.
-`sc` converts metres to axis units (default 100 → cm labels).
+"""
+    draw_cutaway!(ax::Axis3, body; sc=100.0, cut=π/2, parts=nothing, flesh_col=…, fat_layer_col=…, fibrous_layer_col=…)
+
+Draw `body` into an existing `Axis3`, with the fat and fibres facing the viewer cut away
+over the angle `cut`. `sc` converts metres to axis units (default 100 → cm labels).
+Each part of a `CompositeBody` is cut open where it faces the viewer; `parts`, a
+collection of part names, draws only those.
 """
 function BiophysicalGeometry.draw_cutaway!(ax, body;
-        sc = 100.0,
-        flesh_col = RGBAf(0.88, 0.48, 0.42, 1.00),
-        fat_layer_col = RGBAf(1.00, 0.97, 0.60, 0.75),
-        fibrous_layer_col = RGBAf(0.76, 0.62, 0.42, 0.45))
-    bodycutaway!(ax, body; sc, flesh_col, fat_layer_col, fibrous_layer_col)
+        sc = 100.0, cut = π/2, parts = nothing,
+        flesh_col = RGBf(0.88, 0.48, 0.42),
+        fat_layer_col = RGBf(1.00, 0.93, 0.55),
+        fibrous_layer_col = RGBf(0.76, 0.62, 0.42))
+    azimuth, elevation = _view_angles(ax)
+    bodycutaway!(ax, body; sc, cut, azimuth, elevation, parts, flesh_col, fat_layer_col, fibrous_layer_col)
     ax.xlabel = "x (cm)"; ax.ylabel = "y (cm)"; ax.zlabel = "z (cm)"
 end
 
@@ -532,9 +679,9 @@ and attach a legend. Returns the `Figure`.
 """
 function BiophysicalGeometry.plot_body(body;
         sc = 100.0,
-        flesh_col = RGBAf(0.88, 0.48, 0.42, 1.00),
-        fat_layer_col = RGBAf(1.00, 0.97, 0.60, 0.75),
-        fibrous_layer_col = RGBAf(0.76, 0.62, 0.42, 0.45))
+        flesh_col = RGBf(0.88, 0.48, 0.42),
+        fat_layer_col = RGBf(1.00, 0.93, 0.55),
+        fibrous_layer_col = RGBf(0.76, 0.62, 0.42))
 
     if body isa CompositeBody
         shape_name = "Composite($(length(body.parts)) parts)"
@@ -544,19 +691,18 @@ function BiophysicalGeometry.plot_body(body;
         ins_name = string(nameof(typeof(body.insulation)))
     end
 
-    fig = Figure(size=(600, 560), backgroundcolor=:white)
-    Label(fig[0, 1],
-          "BiophysicalGeometry.jl — $(shape_name) · $(ins_name)  (cutaway)";
+    fig = Figure(size=(600, 480), backgroundcolor=:white)
+    Label(fig[0, 1], isempty(ins_name) ? shape_name : "$(shape_name) · $(ins_name)";
           fontsize=13, font=:bold, padding=(0, 0, 10, 0))
     ax = Axis3(fig[1, 1];
-               perspectiveness=0.5, viewmode=:fit, aspect=:data,
+               perspectiveness=0.3, viewmode=:fitzoom, aspect=:data,
                elevation=π/7, azimuth=5π/4)
     draw_cutaway!(ax, body; sc, flesh_col, fat_layer_col, fibrous_layer_col)
     Legend(fig[2, 1],
         [PolyElement(polycolor=flesh_col, strokecolor=:saddlebrown, strokewidth=1),
          PolyElement(polycolor=fat_layer_col, strokecolor=:saddlebrown, strokewidth=1),
          PolyElement(polycolor=fibrous_layer_col, strokecolor=:black, strokewidth=1)],
-        ["Flesh / muscle", "Subcutaneous fat layer", "Fibrous insulation layer"];
+        ["Flesh", "Fat", "Fibres"];
         orientation=:horizontal, framevisible=false)
     return fig
 end
@@ -584,15 +730,15 @@ function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
           fontsize=13, font=:bold, padding=(0, 0, 8, 0))
 
     ax3 = Axis3(fig[1, 1];
-                perspectiveness=0.5, viewmode=:fit, aspect=:data,
+                perspectiveness=0.3, viewmode=:fitzoom, aspect=:data,
                 elevation=π/7, azimuth=5π/4,
                 xlabel="x (cm)", ylabel="y (cm)", zlabel="z (cm)",
                 title="Body + sun direction")
     ax2 = Axis(fig[1, 2]; aspect=DataAspect(), title="Silhouette projection",
                xlabel="u (cm)", ylabel="v (cm)")
 
-    cols = (flesh=flesh_col, fat_layer=fat_layer_col, fibrous_layer=fibrous_layer_col)
-    _draw_composite!(ax3, body, sc, cols)
+    cols = map(_opaque, (flesh=flesh_col, fat_layer=fat_layer_col, fibrous_layer=fibrous_layer_col))
+    mesh_tiles!(ax3, _composite_tiles(body, sc, cols), _view_angles(ax3)...)
 
     sg = SliderGrid(fig[2, 1:2],
         (label="zenith θ (0=overhead, π/2=horizon)", range=range(0.0, π/2, length=91),
@@ -632,7 +778,7 @@ function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
     # Sun-direction indicator: line from a sun marker to the root body's
     # centre (so the target stays at the main body, not pulled around by
     # legs/head when the bbox centre moves).
-    root_part = BiophysicalGeometry._root_part(body)
+    root_part = first(body.parts)
     root_pose = first(body.poses)
     (rb_min, rb_max) = _part_bbox(root_part.shape, root_part, root_pose, sc)
     body_centre = Point3f((rb_min[1] + rb_max[1]) / 2,
@@ -716,7 +862,7 @@ function BiophysicalGeometry.plot_cross_sections(body;
         [PolyElement(polycolor=flesh_col, strokecolor=flesh_col, strokewidth=1),
          PolyElement(polycolor=fat_layer_col, strokecolor=fat_layer_col, strokewidth=1),
          PolyElement(polycolor=fibrous_layer_col, strokecolor=fibrous_layer_col, strokewidth=1)],
-        ["Flesh / muscle", "Subcutaneous fat layer", "Fibrous insulation layer"];
+        ["Flesh", "Fat", "Fibres"];
         orientation=:horizontal, framevisible=false)
     rowgap!(fig.layout, 8)
     colgap!(fig.layout, 30)
@@ -751,7 +897,7 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::Fibro
           color=RGBf(0.88, 0.48, 0.42),
           strokecolor=:black, strokewidth=0.5)
     text!(ax, W / 2, -skin_h / 2;
-          text="Skin surface", fontsize=9, align=(:center, :center))
+          text="Skin", fontsize=12, align=(:center, :center))
 
     for i in 0:(n_show - 1)
         xc = (i + 0.5) * spacing_mm
@@ -773,8 +919,8 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::Fibro
     scatter!(ax, [x_ann, x_ann], [0.0, thick_mm];
              color=:black, markersize=6, marker=:rect)
     text!(ax, x_ann + 0.04*W, thick_mm / 2;
-          text="fibrous layer depth\n$(round(Int, thick_mm)) mm",
-          fontsize=9, align=(:left, :center))
+          text="thickness\n$(round(Int, thick_mm)) mm",
+          fontsize=12, align=(:left, :center))
 
     if dx > 1e-6
         i_ann = n_show ÷ 2
@@ -787,7 +933,7 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::Fibro
                  color=:purple, markersize=5, marker=:vline)
         text!(ax, (xfl0 + xfl1)/2, thick_mm * 1.02;
               text="L = $(round(fibre_len_mm, digits=1)) mm  ($(tilt_deg)° from vertical)",
-              fontsize=8, align=(:center, :bottom), color=:purple)
+              fontsize=11, align=(:center, :bottom), color=:purple)
     end
 
     y_d = -skin_h * 2.4
@@ -795,24 +941,24 @@ function BiophysicalGeometry.draw_insulation_schematic!(ax, fibrous_layer::Fibro
     x1 = 0.5 * spacing_mm + d_display / 2
     lines!(ax, [x0, x1], [y_d, y_d]; color=:darkblue, linewidth=1.2)
     scatter!(ax, [x0, x1], [y_d, y_d]; color=:darkblue, markersize=5, marker=:vline)
-    text!(ax, (x0 + x1)/2, y_d - 0.3;
-          text="d = $(round(Int, d_μm)) μm\n(displayed $(round(Int, d_display*1e3)) μm for clarity)",
-          fontsize=8, align=(:center, :top), color=:darkblue)
+    text!(ax, x0, y_d - 0.3;
+          text="diameter $(round(Int, d_μm)) μm (drawn wider)",
+          fontsize=11, align=(:left, :top), color=:darkblue)
 
     x_sp0 = dx + 0.5 * spacing_mm
     x_sp1 = dx + 1.5 * spacing_mm
     y_sp = thick_mm * 1.22
     lines!(ax, [x_sp0, x_sp1], [y_sp, y_sp]; color=:darkgreen, linewidth=1.2)
     scatter!(ax, [x_sp0, x_sp1], [y_sp, y_sp]; color=:darkgreen, markersize=5, marker=:vline)
-    text!(ax, (x_sp0 + x_sp1)/2, y_sp + 0.2;
-          text="spacing ≈ $(round(spacing_mm, digits=2)) mm  (N = $n_cm2 cm⁻²)",
-          fontsize=8, align=(:center, :bottom), color=:darkgreen)
+    text!(ax, x_sp0, y_sp + 0.2;
+          text="spacing $(round(spacing_mm, digits=2)) mm ($(round(Int, n_cm2)) cm⁻²)",
+          fontsize=11, align=(:left, :bottom), color=:darkgreen)
 
-    ax.title = "FibrousLayer schematic  (fibre width exaggerated for clarity)"
+    ax.title = "Fibres"
     ax.xlabel = "position (mm)"
     ax.ylabel = "height above skin (mm)"
-    ylims!(ax, -skin_h * 5, thick_mm * 1.55)
-    xlims!(ax, -0.1 * W, x_ann + 0.45 * W)
+    ylims!(ax, -skin_h * 6, thick_mm * 1.55)
+    xlims!(ax, -0.1 * W, x_ann + 0.75 * W)
     hidespines!(ax, :t, :r)
 end
 
@@ -840,7 +986,7 @@ function BiophysicalGeometry.draw_insulation_coverage!(ax, fibrous_layer::Fibrou
         N_label_cm2 = level / (π * ((d_range[end] * 1e-6) / 2)^2 * 1e4) * 1e-4
         if 200 < N_label_cm2 < 9000
             text!(ax, d_range[end] - 3, N_label_cm2;
-                  text="f=$(level)", fontsize=8, align=(:right, :bottom), color=clr)
+                  text="f=$(level)", fontsize=11, align=(:right, :bottom), color=clr)
         end
     end
 
@@ -851,9 +997,9 @@ function BiophysicalGeometry.draw_insulation_coverage!(ax, fibrous_layer::Fibrou
              strokecolor=:black, strokewidth=1)
     text!(ax, d_ref + 2, N_ref + 150;
           text="$(d_ref) μm, $(N_ref) cm⁻²\nf ≈ $(round(cov_ref, digits=3))",
-          fontsize=8, color=:lime)
+          fontsize=11, color=:lime)
 
-    ax.title = "Fibre coverage fraction  f = π(d/2)² × N"
+    ax.title = "Fraction of skin covered, f = π(d/2)² N"
     ax.xlabel = "Fibre diameter d (μm)"
     ax.ylabel = "Fibre density N (cm⁻²)"
     return hm
@@ -871,15 +1017,12 @@ function BiophysicalGeometry.plot_insulation_properties(fibrous_layer::FibrousLa
         d_range = LinRange(10.0, 120.0, 200),
         N_range = LinRange(200.0, 9000.0, 200))
 
-    fig = Figure(size=(900, 420), backgroundcolor=:white)
-    Label(fig[0, 1:3],
-          "BiophysicalGeometry.jl — FibrousLayer Properties";
-          fontsize=14, font=:bold, padding=(0, 0, 8, 0))
+    fig = Figure(size=(1000, 460), backgroundcolor=:white)
     ax1 = Axis(fig[1, 1])
     ax2 = Axis(fig[1, 2])
     draw_insulation_schematic!(ax1, fibrous_layer; fibre_length)
     hm = draw_insulation_coverage!(ax2, fibrous_layer; d_range, N_range)
-    Colorbar(fig[1, 3], hm; label="Coverage fraction f", width=14, labelsize=10)
+    Colorbar(fig[1, 3], hm; label="Fraction covered, f", width=14, labelsize=13)
     colgap!(fig.layout, 12)
     colsize!(fig.layout, 3, Auto(0.05))
     return fig
