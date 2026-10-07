@@ -59,19 +59,4 @@ include("joins.jl")
 include("display.jl")
 include("animal_builder.jl")
 
-"""
-    app(; port = 8080, open = true, host = "127.0.0.1", proxy_url = nothing)
-
-Start the "Build an animal" app: sliders in the browser that build an animal from simple shapes with this package,
-and show its areas, its silhouette to the sun, and the Julia code that builds it. Returns the server; `close` it to
-stop.
-
-Needs Bonito.jl and WGLMakie.jl: `using BiophysicalGeometry, Bonito, WGLMakie; BiophysicalGeometry.app()`. Legs
-sized by elastic or geometric similarity also need BiologicalScaling.jl installed.
-
-To serve it from a container, listen on all interfaces and give the public address:
-`app(; host = "0.0.0.0", port = 8080, open = false, proxy_url = "https://example.org/builder/")`.
-"""
-function app end
-
 end

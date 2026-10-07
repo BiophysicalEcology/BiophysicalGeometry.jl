@@ -77,32 +77,10 @@ stance(::Animal) = Level()
 stance(::Human) = Upright()
 
 """
-    SETTING_NAMES
+    animal(name) -> Animal
 
-The builder's numeric settings, in the order the page passes them. Masses are fractions of the animal's, in kg;
-lengths are in m; angles in degrees.
+The animal called `name`, one of `ANIMAL_NAMES`.
 """
-const SETTING_NAMES = (:mass, :density, :fatDensity, :pitch, :torsoRatio, :fat, :backFur, :bellyFur, :limbFur,
-    :headRatio, :headFraction, :neckFraction, :neckRatio, :neckAngle, :noseFraction, :earFraction, :earRatio,
-    :earFlatness, :earAngle, :legFraction, :legRatio, :legTop, :hindFraction, :hindRatio, :armFraction, :armRatio,
-    :wingFraction, :wingFold, :tailFraction, :tailRatio)
-
-const ANIMAL_NAMES = ("Dog", "Mouse", "Elephant", "Human", "Kangaroo", "Tyrannosaur", "Giraffe", "Cow", "Bird", "Seal")
-
-# The new joint angles: a giraffe's neck rises, a bird's wings are folded.
-const ANGLES = (; Giraffe = (; neckAngle = 70.0), Bird = (; wingFold = 80.0))
-
-"""
-    settings(name) -> NamedTuple
-
-The settings of the animal called `name`, one of `ANIMAL_NAMES`, from its preset.
-"""
-function settings(name::AbstractString)
-    preset = merge(DEFAULTS, last(PRESETS[findfirst(p -> first(p) == name, PRESETS)]),
-                   (; neckAngle = 0.0, earAngle = 0.0, wingFold = 0.0), get(ANGLES, Symbol(name), (;)))
-    NamedTuple{SETTING_NAMES}(map(k -> Float64(getfield(preset, k)), SETTING_NAMES))
-end
-
 animal(name::AbstractString) = ANIMALS[findfirst(==(name), ANIMAL_NAMES)]
 
 # ── Building ───────────────────────────────────────────────────────────────────────────────────────────────────────
