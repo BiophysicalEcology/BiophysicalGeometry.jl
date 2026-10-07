@@ -22,11 +22,11 @@ The `import` is needed because Makie exports `Sphere`, `Top` and `Bottom` too.
 ```@example plotting
 fur = FibrousLayer(20.0u"mm", 30.0u"μm", 3000u"cm^-2")
 fat = FatLayer(0.2, 901.0u"kg/m^3")
-body = Body(Ellipsoid(2.0u"kg", 1000.0u"kg/m^3", 2.0, 1.0), CompositeInsulation(fur, fat))
+body = Body(Ellipsoid(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0, axis_ratio_c = 2.0), CompositeInsulation(fur, fat))
 plot_body(body)
 ```
 
-[`plot_cross_sections`](@ref) cuts it along and across, for cylinders, spheres, ellipsoids and plates:
+[`plot_cross_sections`](@ref) cuts it along and across, for every shape:
 
 ```@example plotting
 plot_cross_sections(body)
@@ -37,8 +37,8 @@ plot_cross_sections(body)
 A [`CompositeBody`](@ref) is drawn with each part in its place. Parts are not cut away.
 
 ```@example plotting
-dorsal = Body(HalfEllipsoid(1.0u"kg", 1000.0u"kg/m^3", 3.0, 1.0), fur)
-ventral = Body(HalfEllipsoid(1.0u"kg", 1000.0u"kg/m^3", 3.0, 1.0), Naked())
+dorsal = Body(HalfEllipsoid(; mass = 1.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 3.0, axis_ratio_c = 6.0), fur)
+ventral = Body(HalfEllipsoid(; mass = 1.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 3.0, axis_ratio_c = 6.0), Naked())
 animal = CompositeBody(; parts = (; dorsal, ventral), joins = (
     Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover())),))
 plot_body(animal)
@@ -54,7 +54,7 @@ in one figure. `sc` is the scale from metres to the units of the axes, 100 for c
 
 ```@example plotting
 fig = Figure(size = (700, 320))
-for (i, shape) in enumerate((Cylinder(2.0u"kg", 1000.0u"kg/m^3", 2.0), Sphere(2.0u"kg", 1000.0u"kg/m^3")))
+for (i, shape) in enumerate((Cylinder(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 2.0), Sphere(; mass = 2.0u"kg", density = 1000.0u"kg/m^3")))
     ax = Axis3(fig[1, i]; aspect = :data, title = string(nameof(typeof(shape))))
     draw_cutaway!(ax, Body(shape, CompositeInsulation(fur, fat)))
 end

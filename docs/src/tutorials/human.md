@@ -34,10 +34,10 @@ density = 1050.0u"kg/m^3"
 fat = (head = 0.035, trunk = 0.252, arm = 0.07, leg = 0.161)
 layers(part, depth) = CompositeInsulation(FibrousLayer(depth, 1.0u"μm", 3.0e8u"m^-2"), FatLayer(fat[part], density))
 
-head = Body(Ellipsoid(part_mass.head, density, ratio.head, 1.0), layers(:head, 5.0u"mm"))
-trunk = Body(Cylinder(part_mass.trunk, density, ratio.trunk), layers(:trunk, 6.0u"mm"))
-arm = Body(Cylinder(part_mass.arm, density, ratio.arm), layers(:arm, 6.0u"mm"))
-leg = Body(Cylinder(part_mass.leg, density, ratio.leg), layers(:leg, 6.0u"mm"))
+head = Body(Ellipsoid(; mass = part_mass.head, density, axis_ratio_b = ratio.head, axis_ratio_c = ratio.head), layers(:head, 5.0u"mm"))
+trunk = Body(Cylinder(; mass = part_mass.trunk, density, axis_ratio_b = ratio.trunk), layers(:trunk, 6.0u"mm"))
+arm = Body(Cylinder(; mass = part_mass.arm, density, axis_ratio_b = ratio.arm), layers(:arm, 6.0u"mm"))
+leg = Body(Cylinder(; mass = part_mass.leg, density, axis_ratio_b = ratio.leg), layers(:leg, 6.0u"mm"))
 parts = (; head, trunk, arm, leg)
 nothing # hide
 ```
@@ -76,7 +76,9 @@ This is expected, as the calculations for a single shape came from NicheMapR, se
 NicheMapR joins the parts too: each gives up a fixed fraction of its area to its joins, the `PJOINs` argument,
 heat is conducted across them, and the area of the body is the sum of what is left. What its parts do not have is
 a place in space. Here they are given one: the head on top of the trunk, the legs under it, and the arms hung from
-its sides by a join between two curved surfaces, turned with a `twist` to point down.
+its sides by a join between two curved surfaces, turned with a `twist` to point down. Shapes lie along ``x``, so
+the trunk is stood up with a `root_pose` whose columns send its axis up, along ``z``, and its ``y`` along ``x``,
+so that the angle 0 around it points to the side.
 
 ```@example human
 trunk_length = trunk.geometry.length.length_skin
@@ -85,15 +87,18 @@ shoulder(side) = Attachment(Lateral(trunk_length - r_arm, side), Disc(r_arm))
 hip(side) = Attachment(EndA(1.1r_leg, side), Disc(r_leg))
 leg_top = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))
 
+standing = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 1.0 0.0; 0.0 0.0 1.0; 1.0 0.0 0.0])
+
 human = CompositeBody(;
     parts = (; trunk, head, arm_left = arm, arm_right = arm, leg_left = leg, leg_right = leg),
     joins = (
         Join(trunk = Attachment(EndB(0.0u"m", 0.0), Disc(r_arm)), head = Attachment(PoleB(), Disc(r_arm))),
-        Join(trunk = shoulder(0.0), arm_left = Attachment(Lateral(r_arm, π), Disc(r_arm)); twist = π),
-        Join(trunk = shoulder(π), arm_right = Attachment(Lateral(r_arm, 0.0), Disc(r_arm)); twist = π),
+        Join(trunk = shoulder(0.0), arm_left = Attachment(Lateral(r_arm, π), Disc(r_arm)); twist = -π / 2),
+        Join(trunk = shoulder(π), arm_right = Attachment(Lateral(r_arm, 0.0), Disc(r_arm)); twist = π / 2),
         Join(trunk = hip(0.0), leg_left = leg_top),
         Join(trunk = hip(π), leg_right = leg_top),
     ),
+    root_pose = standing,
 )
 composite_views(human; views = (:oblique, :side, :front), titles = ["", "front", "side"], size = (700, 340)) # hide
 ```
@@ -102,8 +107,7 @@ composite_views(human; views = (:oblique, :side, :front), titles = ["", "front",
 body_graph!(Axis(Figure(size = (520, 300))[1, 1]), human); current_figure() # hide
 ```
 
-A trunk is upright by default, so no `root_pose` is needed. The patch under the head has the radius of an arm, a
-neck of sorts.
+The patch under the head has the radius of an arm, a neck of sorts.
 
 ## The whole body
 
@@ -111,7 +115,7 @@ neck of sorts.
 totals, _ = data("homotherm_totals.csv")
 reference = Dict(totals[i, 1] => Float64(totals[i, 2]) for i in axes(totals, 1))
 
-height = leg.geometry.length.length_skin + trunk_length + 2 * head.geometry.length.a_semi_major_skin
+height = leg.geometry.length.length_skin + trunk_length + head.geometry.length.length_skin
 joined = sum(2 * join_area(join, human) for join in human.joins)
 markdown_table(["Quantity", "BiophysicalGeometry.jl", "NicheMapR"], [
     ("Height", height, reference["height_m"] * u"m"),

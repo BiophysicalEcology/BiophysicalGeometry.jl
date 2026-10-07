@@ -22,10 +22,13 @@ Cylinder
 Cone
 Ellipsoid
 Plate
+TriangularPlate
 Half
 HalfCylinder
+HalfCone
 HalfEllipsoid
 HalfSphere
+Unchecked
 AbstractShape
 AbstractCylindrical
 AbstractSpherical
@@ -40,6 +43,7 @@ Naked
 FibrousLayer
 FatLayer
 CompositeInsulation
+outer_insulation
 AbstractInsulationLayer
 AbstractPorousLayer
 AbstractSolidLayer
@@ -95,15 +99,19 @@ SideA
 SideB
 SideC
 SideD
+Diagonal
 ```
 
 ## Silhouettes
 
 ```@docs
 silhouette
+silhouette!
 silhouette_rasterized
+silhouette_rasterized!
 SilhouetteResult
 silhouette_factors
+silhouette_factors!
 Beam
 Sky
 Ground

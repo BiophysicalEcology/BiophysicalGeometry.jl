@@ -51,24 +51,22 @@ end
     flesh_centroid(shape, body) -> NTuple{3,Length}
 
 Volumetric (flesh) centroid of a part in its local frame. Closed-form per
-shape family. Shapes with no method (the animal shapes) error here rather
-than silently using the wrong path length for a lumped-resistance solve.
+shape family.
 """
-function flesh_centroid(sh::AbstractShape, body::AbstractBody)
-    error("flesh_centroid not defined for $(typeof(sh)) — no lumped conduction path")
-end
+function flesh_centroid end
 
-# Axial shapes: centroid on the axis. Cylinder is centred at mid-length.
+# Axial shapes lie along +x from x = 0: centroid on the axis. Cylinder is
+# centred at mid-length.
 function flesh_centroid(::Cylinder, body::AbstractBody)
-    z = body.geometry.length.length_skin
-    (zero(z), zero(z), z / 2)
+    L = body.geometry.length.length_skin
+    (L / 2, zero(L), zero(L))
 end
-# Cone (frustum): axial centroid z̄ = (L/4)(1 + 2t + 3t²)/(1 + t + t²),
-# with t the top/base radius ratio (base at z=0).
+# Cone (frustum): axial centroid x̄ = (L/4)(1 + 2t + 3t²)/(1 + t + t²),
+# with t the top/base radius ratio (base at x = 0).
 function flesh_centroid(sh::Cone, body::AbstractBody)
     L = body.geometry.length.length_skin
     t = sh.top_ratio
-    (zero(L), zero(L), (L / 4) * (1 + 2t + 3t^2) / (1 + t + t^2))
+    ((L / 4) * (1 + 2t + 3t^2) / (1 + t + t^2), zero(L), zero(L))
 end
 # Sphere / Ellipsoid: centred at the origin.
 function flesh_centroid(::Sphere, body::AbstractBody)
@@ -76,21 +74,30 @@ function flesh_centroid(::Sphere, body::AbstractBody)
     (zero(z), zero(z), zero(z))
 end
 function flesh_centroid(::Ellipsoid, body::AbstractBody)
-    z = body.geometry.length.a_semi_major_skin
+    z = body.geometry.length.length_skin
     (zero(z), zero(z), zero(z))
 end
-# Cylindrical half: half-disc cross-section, bulge along +y; centroid of a
-# half-disc sits at 4R/(3π) off the flat plane, at mid-length.
-function flesh_centroid(::Half{<:AbstractCylindrical}, body::AbstractBody)
+# Cylindrical half (half-frustum, radius ρ(x) = R(1 - (1-t)x/L)): each slice is
+# a half disc with centroid 4ρ/(3π) above the flat plane and area ∝ ρ², so
+#     z̄ = (4/3π)∫ρ³/∫ρ² = (R/π)(1 + t)(1 + t²)/(1 + t + t²),
+# and x̄ is the full cone's. A cylinder (t = 1) gives (L/2, 0, 4R/3π).
+function flesh_centroid(h::Half{<:AbstractCylindrical}, body::AbstractBody)
     R = body.geometry.length.radius_skin
     L = body.geometry.length.length_skin
-    (zero(R), 4R / (3π), L / 2)
+    t = top_ratio(h)
+    k = 1 + t + t^2
+    ((L / 4) * (1 + 2t + 3t^2) / k, zero(R), (R / π) * (1 + t) * (1 + t^2) / k)
 end
 # Domed half (ellipsoidal/spherical): dome along +z from the flat face; centroid
 # sits at 3c/8 off the flat plane (hemisphere centroid generalised).
 function flesh_centroid(sh::HalfDomed, body::AbstractBody)
-    _, _, c = _domed_semiaxes(sh, body)
+    _, _, c = domed_semiaxes(sh, body)
     (zero(c), zero(c), 3c / 8)
+end
+# Triangular plate: the triangle's centroid, a third of the way along each leg.
+function flesh_centroid(::TriangularPlate, body::AbstractBody)
+    l = body.geometry.length
+    (l.length_skin / 3, l.width_skin / 3, zero(l.length_skin))
 end
 # Plate: centred at the origin.
 function flesh_centroid(::Plate, body::AbstractBody)

@@ -17,7 +17,7 @@ using BiophysicalGeometry, Unitful
 density = 1000.0u"kg/m^3"
 fur = FibrousLayer(10.0u"mm", 30.0u"μm", 3000u"cm^-2")
 fat = FatLayer(0.1, 901.0u"kg/m^3")
-torso = Body(Cylinder(20.0u"kg", density, 3.0), CompositeInsulation(fur, fat))
+torso = Body(Cylinder(; mass = 20.0u"kg", density, axis_ratio_b = 3.0), CompositeInsulation(fur, fat))
 (; total = total_area(torso), skin = skin_area(torso), evaporation = evaporation_area(torso),
    flesh_volume = flesh_volume(torso), volume = torso.geometry.volume)
 ```
@@ -36,7 +36,7 @@ torso = Body(Cylinder(20.0u"kg", density, 3.0), CompositeInsulation(fur, fat))
 Each join hides a patch on both of its parts:
 
 ```@example areas
-head = Body(Ellipsoid(2.0u"kg", density, 1.5, 1.0), fur)
+head = Body(Ellipsoid(; mass = 2.0u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), fur)
 patch = Disc(4.0u"cm")
 join = Join(torso = Attachment(EndB(0.0u"m", 0.0), patch), head = Attachment(PoleB(), patch))
 body = CompositeBody(; parts = (; torso, head), joins = (join,))
@@ -57,11 +57,11 @@ The patch is taken at its full size from the total area, the skin area and the e
 Two halves joined over the whole of their flat faces have the area and volume of the shape they were cut from:
 
 ```@example areas
-dorsal = Body(HalfCylinder(10.0u"kg", density, 3.0), Naked())
-ventral = Body(HalfCylinder(10.0u"kg", density, 3.0), Naked())
+dorsal = Body(HalfCylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0), Naked())
+ventral = Body(HalfCylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0), Naked())
 halves = CompositeBody(; parts = (; dorsal, ventral), joins = (
     Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover())),))
-whole = Body(Cylinder(20.0u"kg", density, 3.0), Naked())
+whole = Body(Cylinder(; mass = 20.0u"kg", density, axis_ratio_b = 3.0), Naked())
 
 total_area(halves), total_area(whole)
 ```
@@ -69,8 +69,8 @@ total_area(halves), total_area(whole)
 The halves need not match. Thick fur above and thin fur below:
 
 ```@example areas
-furry_back = Body(HalfCylinder(10.0u"kg", density, 3.0), FibrousLayer(30.0u"mm", 30.0u"μm", 3000u"cm^-2"))
-thin_belly = Body(HalfCylinder(10.0u"kg", density, 3.0), FibrousLayer(5.0u"mm", 30.0u"μm", 3000u"cm^-2"))
+furry_back = Body(HalfCylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0), FibrousLayer(30.0u"mm", 30.0u"μm", 3000u"cm^-2"))
+thin_belly = Body(HalfCylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0), FibrousLayer(5.0u"mm", 30.0u"μm", 3000u"cm^-2"))
 two_coats = CompositeBody(; parts = (; furry_back, thin_belly), joins = (
     Join(furry_back = Attachment(Flat(), FullCover()), thin_belly = Attachment(Flat(), FullCover())),))
 fig = Figure(size = (520, 260)) # hide

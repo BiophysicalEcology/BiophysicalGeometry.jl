@@ -33,11 +33,11 @@ import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid
 # ── Parameters ────────────────────────────────────────────────────────────────
 mass    = 1.0u"kg"
 density = 1000.0u"kg/m^3"
-b_ratio = 4.0   # length-to-diameter ratio (used by Cylinder and Ellipsoid)
+axis_ratio_b = 4.0   # length-to-diameter ratio (used by Cylinder and Ellipsoid)
 
-shape = Cylinder(mass, density, b_ratio)
-# shape = Sphere(mass, density)
-# shape = Ellipsoid(mass, density, b_ratio, 1.0)
+shape = Cylinder(; mass, density, axis_ratio_b)
+# shape = Sphere(; mass, density)
+# shape = Ellipsoid(; mass, density, axis_ratio_b, axis_ratio_c = axis_ratio_b)
 
 insulation = CompositeInsulation(FibrousLayer(10.0u"mm", 30.0u"μm", 3000u"cm^-2"),
                                   FatLayer(0.1, 901.0u"kg/m^3"))

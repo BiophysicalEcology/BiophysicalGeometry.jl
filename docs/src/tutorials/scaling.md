@@ -23,7 +23,7 @@ const BS = BiologicalScaling
 
 mass = 20.0u"kg"
 density = 1000.0u"kg/m^3"
-BS.surface_area(BS.EutherianMammal(), mass), total_area(Body(Cylinder(mass, density, 3.0), Naked()))
+BS.surface_area(BS.EutherianMammal(), mass), total_area(Body(Cylinder(; mass, density, axis_ratio_b = 3.0), Naked()))
 ```
 
 ## Simple shapes
@@ -34,9 +34,9 @@ logarithmic axes every such shape is a straight line with the same slope, and sh
 ```@example scaling
 masses = exp10.(range(-2, 3; length = 40)) .* u"kg"
 area(shape_of, masses) = [ustrip(u"m^2", total_area(Body(shape_of(m), Naked()))) for m in masses]
-shapes = ("Sphere" => m -> Sphere(m, density),
-          "Ellipsoid, 3 : 1" => m -> Ellipsoid(m, density, 3.0, 1.0),
-          "Cylinder, 3 : 1" => m -> Cylinder(m, density, 3.0))
+shapes = ("Sphere" => m -> Sphere(; mass = m, density),
+          "Ellipsoid, 3 : 1" => m -> Ellipsoid(; mass = m, density, axis_ratio_b = 3.0, axis_ratio_c = 3.0),
+          "Cylinder, 3 : 1" => m -> Cylinder(; mass = m, density, axis_ratio_b = 3.0))
 
 fig, ax = figure_axis("Body mass (kg)", "Surface area (m²)"; xscale = log10, yscale = log10)
 for (label, shape_of) in shapes
@@ -69,9 +69,9 @@ A quadruped of any mass, with fixed proportions: a torso with 80% of the mass, a
 
 ```@example scaling
 function quadruped(mass; leg_mass = 0.03mass, leg_ratio = 4.0)
-    torso = Body(Cylinder(0.92mass - 4leg_mass, density, 2.5), Naked())
-    head = Body(Ellipsoid(0.08mass, density, 1.5, 1.0), Naked())
-    leg = Body(Cylinder(leg_mass, density, leg_ratio), Naked())
+    torso = Body(Cylinder(; mass = 0.92mass - 4leg_mass, density, axis_ratio_b = 2.5), Naked())
+    head = Body(Ellipsoid(; mass = 0.08mass, density, axis_ratio_b = 1.5, axis_ratio_c = 1.5), Naked())
+    leg = Body(Cylinder(; mass = leg_mass, density, axis_ratio_b = leg_ratio), Naked())
     L = torso.geometry.length.length_skin
     r_leg = skin_radius(leg)
     r_neck = 0.5 * skin_radius(head)
@@ -82,7 +82,6 @@ function quadruped(mass; leg_mass = 0.03mass, leg_ratio = 4.0)
         joins = (Join(torso = Attachment(EndB(0.0u"m", 0.0), Disc(r_neck)), head = Attachment(PoleB(), Disc(r_neck))),
                  Join(torso = hip(0.85, 0.4), leg_fl = leg_top), Join(torso = hip(0.85, -0.4), leg_fr = leg_top),
                  Join(torso = hip(0.15, 0.4), leg_bl = leg_top), Join(torso = hip(0.15, -0.4), leg_br = leg_top)),
-        root_pose = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 0.0 1.0; 1.0 0.0 0.0; 0.0 1.0 0.0]),
     )
 end
 composite_views(quadruped(20.0u"kg"); views = (:oblique, :side, :front), legend = false) # hide
@@ -164,11 +163,11 @@ feathers smooth over all of them into one rounded outline. So the skin is a body
 ```@example scaling
 function bird_skin(mass)
     mass = uconvert(u"kg", mass)
-    body = Body(Ellipsoid(0.70mass, density, 1.6, 1.0), Naked())
-    head = Body(Sphere(0.08mass, density), Naked())
-    neck = Body(Cylinder(0.04mass, density, 2.0), Naked())
-    wing = Body(Plate(0.06mass, density, 2.5, 12.0), Naked())    # folded against the body
-    leg = Body(Cylinder(0.03mass, density, 8.0), Naked())
+    body = Body(Ellipsoid(; mass = 0.70mass, density, axis_ratio_b = 1.6, axis_ratio_c = 1.6), Naked())
+    head = Body(Sphere(; mass = 0.08mass, density), Naked())
+    neck = Body(Cylinder(; mass = 0.04mass, density, axis_ratio_b = 2.0), Naked())
+    wing = Body(Plate(; mass = 0.06mass, density, axis_ratio_b = 2.5, axis_ratio_c = 12.0), Naked())    # folded against the body
+    leg = Body(Cylinder(; mass = 0.03mass, density, axis_ratio_b = 8.0), Naked())
     r_neck, r_leg = skin_radius(neck), skin_radius(leg)
     shoulder = Disc(0.3 * wing.geometry.length.width_skin)
     under_wing = Attachment(Bottom(0.0u"m", 0.0u"m"), shoulder)
@@ -194,7 +193,7 @@ on others:
 ```@example scaling
 function bird_plumage(mass)
     depth = 4.0u"mm" * (mass / 20.0u"g")^(1 / 3)
-    Body(Ellipsoid(uconvert(u"kg", mass), density, 1.6, 1.0), FibrousLayer(depth, 30.0u"μm", 3000u"cm^-2"))
+    Body(Ellipsoid(; mass = uconvert(u"kg", mass), density, axis_ratio_b = 1.6, axis_ratio_c = 1.6), FibrousLayer(depth, 30.0u"μm", 3000u"cm^-2"))
 end
 fig = Figure(size = (640, 260)) # hide
 draw_parts!(body_axis(fig[1, 1]; decorations = false, azimuth = -0.3π, title = "Skin", titlesize = 12), # hide

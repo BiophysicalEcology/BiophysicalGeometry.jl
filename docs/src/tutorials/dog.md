@@ -23,15 +23,15 @@ back_fur = FibrousLayer(15.0u"mm", 30.0u"μm", 3000u"cm^-2")
 belly_fur = FibrousLayer(5.0u"mm", 30.0u"μm", 3000u"cm^-2")
 limb_fur = FibrousLayer(8.0u"mm", 30.0u"μm", 3000u"cm^-2")
 
-dorsal = Body(HalfCylinder(10.0u"kg", density, 3.0), back_fur)
-ventral = Body(HalfCylinder(10.0u"kg", density, 3.0), belly_fur)
+dorsal = Body(HalfCylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0), back_fur)
+ventral = Body(HalfCylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0), belly_fur)
 nothing # hide
 ```
 
 Each leg is a frustum, narrowing to 0.4 of its width at the foot:
 
 ```@example dog
-leg = Body(Cone(0.5u"kg", density, 5.0, 0.4), limb_fur)
+leg = Body(Cone(; mass = 0.5u"kg", density, axis_ratio_b = 5.0, top_ratio = 0.4), limb_fur)
 map(x -> uconvert(u"cm", x), leg.geometry.length)
 ```
 
@@ -39,7 +39,7 @@ The head is an ellipsoid, truncated to leave a flat disc where it meets the tors
 radius of the head:
 
 ```@example dog
-head = Body(Ellipsoid(2.0u"kg", density, 1.5, 1.0, 1 - sqrt(1 - 0.7^2)), limb_fur)
+head = Body(Ellipsoid(; mass = 2.0u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 1.5, pole_a_truncation = 1 - sqrt(1 - 0.7^2)), limb_fur)
 shape_gallery("dorsal" => dorsal, "leg" => leg, "head" => head; decorations = false) # hide
 ```
 
@@ -54,7 +54,7 @@ neck_radius = 0.7 * min(skin_radius(dorsal), skin_radius(head))
 nothing # hide
 ```
 
-The two halves are joined over their flat faces, with a twist to line them up. The head goes on the end of the
+The two halves are joined over their flat faces. The head goes on the end of the
 dorsal half. The legs hang from the curved side of the ventral half, at 0.2 and 0.8 of its length, and 0.35
 radians either side of its midline:
 
@@ -63,7 +63,7 @@ hip(along, around) = Attachment(Lateral(along * torso_length, π / 2 + around), 
 leg_top = Attachment(EndA(0.0u"m", 0.0), Disc(leg_radius))
 
 joins = (
-    Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover()); twist = -π / 2),
+    Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover())),
     Join(dorsal = Attachment(EndB(0.0u"m", 0.0), Disc(neck_radius)), head = Attachment(PoleA(), Disc(neck_radius))),
     Join(ventral = hip(0.8, 0.35), leg_fl = leg_top),
     Join(ventral = hip(0.8, -0.35), leg_fr = leg_top),
@@ -77,13 +77,12 @@ nothing # hide
 
 ## The dog
 
-The torso is laid along ``x`` with the back upwards, and the parts are put together:
+The torso lies along ``x`` with its back up, as every half does, so the parts are just put together:
 
 ```@example dog
-lying = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 0.0 1.0; 1.0 0.0 0.0; 0.0 1.0 0.0])
 dog = CompositeBody(;
     parts = (; dorsal, ventral, head, leg_fl = leg, leg_fr = leg, leg_bl = leg, leg_br = leg),
-    joins, root_pose = lying,
+    joins,
 )
 composite_views(dog) # hide
 ```

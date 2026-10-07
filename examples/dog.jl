@@ -37,45 +37,35 @@ ventral_fibrous = FibrousLayer( 5.0u"mm", 30.0u"μm", 3000u"cm^-2")  # thinner b
 limb_fibrous    = FibrousLayer( 8.0u"mm", 30.0u"μm", 3000u"cm^-2")  # legs + head
 
 # ── Parts ─────────────────────────────────────────────────────────────────────
-dorsal_body  = Body(HalfCylinder(m_total_body / 2, density, b_body), dorsal_fibrous)
-ventral_body = Body(HalfCylinder(m_total_body / 2, density, b_body), ventral_fibrous)
-leg_body     = Body(Cone(m_leg, density, b_leg, leg_top_ratio), limb_fibrous)
+dorsal_body  = Body(HalfCylinder(; mass = m_total_body / 2, density, axis_ratio_b = b_body), dorsal_fibrous)
+ventral_body = Body(HalfCylinder(; mass = m_total_body / 2, density, axis_ratio_b = b_body), ventral_fibrous)
+leg_body     = Body(Cone(; mass = m_leg, density, axis_ratio_b = b_leg, top_ratio = leg_top_ratio), limb_fibrous)
 
 # Truncate the head's pole_a end so it joins the body flush rather than
 # touching at a single point. We pick the truncation so the cut-disc radius
 # equals the join Disc radius (head_disc = 0.7 · b_minor → cut disc has
 # y/z extents 0.7 · b_minor; that means pole_a_truncation = 1 - sqrt(1 - 0.49)).
 head_truncate = 1 - sqrt(1 - 0.7^2)
-head_body = Body(Ellipsoid(m_head, density, b_head, 1.0, head_truncate), limb_fibrous)
+head_body = Body(Ellipsoid(; mass = m_head, density, axis_ratio_b = b_head, axis_ratio_c = b_head, pole_a_truncation = head_truncate), limb_fibrous)
 
 L_body = dorsal_body.geometry.length.length_skin
 r_body = dorsal_body.geometry.length.radius_skin
 r_leg  = skin_radius(leg_body)
 
-# Lay the body horizontal. The HalfCylinder local frame has axis along +z and
-# bulge along +y, so we want:
-# - dorsal local +z (length axis)  → world +x  (head/tail direction)
-# - dorsal local +y (dorsal bulge) → world +z  (dorsal side up)
-# Columns of the rotation matrix are the world-frame images of the local axes.
-R_horizontal = [0.0  0.0  1.0;
-                1.0  0.0  0.0;
-                0.0  1.0  0.0]
-root_pose = Pose((0.0u"m", 0.0u"m", 0.0u"m"), R_horizontal)
-
 # ── Composite ─────────────────────────────────────────────────────────────────
-# Place legs on the ventral half (they hang from the underside).
-# Ventral's Lateral surface has φ ∈ [0, π]; φ = π/2 is the centre of its bulge,
-# which after the dorsal/ventral join points *down* in world space.
-# Splay the legs slightly: φ = π/2 ± 0.4 rad.
-leg_z_front = 0.20 * L_body
-leg_z_back  = 0.80 * L_body
-leg_φ_left  = π/2 + 0.35
-leg_φ_right = π/2 - 0.35
+# The dorsal half lies along +x with its bulge up, so the body is already
+# horizontal. Legs go on the ventral half (they hang from the underside):
+# its Lateral angle runs over [0, π] with π/2 at the centre of its bulge,
+# which after the dorsal/ventral join points down. Splay the legs slightly.
+leg_front = 0.20 * L_body
+leg_back = 0.80 * L_body
+leg_left = π/2 + 0.35
+leg_right = π/2 - 0.35
 
-# The head sits on the dorsal EndB (the +x world end after rotation).
+# The head sits on the dorsal EndB, the +x end.
 # The disc must fit on the dorsal half-disc (radius r_body) AND on the head's
 # pole, where the notional surface area is π·b² (head minor radius).
-head_disc = 0.7 * min(r_body, head_body.geometry.length.b_semi_minor_skin)
+head_disc = 0.7 * min(r_body, head_body.geometry.length.width_skin / 2)
 
 dog = CompositeBody(;
     parts = (;
@@ -88,25 +78,22 @@ dog = CompositeBody(;
         leg_br = leg_body,
     ),
     joins = (
-        # Dorsal/ventral split. The twist around the joint axis is the 6th DOF
-        # left free by the surface-normal alignment; -π/2 keeps ventral's
-        # length-axis parallel to dorsal's instead of rotated by 90°.
+        # Dorsal/ventral split, flat face to flat face.
         Join(dorsal = Attachment(Flat(), FullCover()),
-             ventral = Attachment(Flat(), FullCover()); twist=-π/2),
+             ventral = Attachment(Flat(), FullCover())),
         # Head onto dorsal's far end-cap, centred.
         Join(dorsal = Attachment(EndB(0.0u"m", 0.0), Disc(head_disc)),
              head = Attachment(PoleA(), Disc(head_disc))),
         # Four legs onto ventral's lateral. On the Cone, EndA is the base.
-        Join(ventral = Attachment(Lateral(leg_z_front, leg_φ_left), Disc(r_leg)),
+        Join(ventral = Attachment(Lateral(leg_front, leg_left), Disc(r_leg)),
              leg_fl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
-        Join(ventral = Attachment(Lateral(leg_z_front, leg_φ_right), Disc(r_leg)),
+        Join(ventral = Attachment(Lateral(leg_front, leg_right), Disc(r_leg)),
              leg_fr = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
-        Join(ventral = Attachment(Lateral(leg_z_back, leg_φ_left), Disc(r_leg)),
+        Join(ventral = Attachment(Lateral(leg_back, leg_left), Disc(r_leg)),
              leg_bl = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
-        Join(ventral = Attachment(Lateral(leg_z_back, leg_φ_right), Disc(r_leg)),
+        Join(ventral = Attachment(Lateral(leg_back, leg_right), Disc(r_leg)),
              leg_br = Attachment(EndA(0.0u"m", 0.0), Disc(r_leg))),
     ),
-    root_pose = root_pose,
 )
 
 # ── Report ────────────────────────────────────────────────────────────────────

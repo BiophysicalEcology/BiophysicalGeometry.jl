@@ -36,7 +36,7 @@ measured(mass)
 ## A spherical cow
 
 ```@example cow
-sphere = Body(Sphere(mass, density), coat)
+sphere = Body(Sphere(; mass, density), coat)
 uconvert(u"cm", 2 * insulation_radius(sphere)), total_area(sphere)
 ```
 
@@ -48,8 +48,8 @@ shape, so it must fall short.
 A torso 2.4 times as long as it is wide is nearer the mark:
 
 ```@example cow
-cylinder = Body(Cylinder(mass, density, 2.4), coat)
-ellipsoid = Body(Ellipsoid(mass, density, 2.4, 1.0), coat)
+cylinder = Body(Cylinder(; mass, density, axis_ratio_b = 2.4), coat)
+ellipsoid = Body(Ellipsoid(; mass, density, axis_ratio_b = 2.4, axis_ratio_c = 2.4), coat)
 shape_gallery("Sphere" => sphere, "Cylinder" => cylinder, "Ellipsoid" => ellipsoid; decorations = false) # hide
 ```
 
@@ -69,11 +69,11 @@ length to width of the legs is set so that the cow stands 147.3 cm at the should
 fractions = (torso = 0.83, neck = 0.05, head = 0.04, leg = 0.02)
 
 function cow(mass; leg_ratio = 4.33)
-    dorsal = Body(HalfCylinder(fractions.torso * mass / 2, density, 2.4), coat)
-    ventral = Body(HalfCylinder(fractions.torso * mass / 2, density, 2.4), coat)
-    neck = Body(Cone(fractions.neck * mass, density, 1.0, 0.7), coat)
-    head = Body(Ellipsoid(fractions.head * mass, density, 1.8, 1.0, 1 - sqrt(1 - 0.7^2)), coat)
-    leg = Body(Cone(fractions.leg * mass, density, leg_ratio, 0.5), coat)
+    dorsal = Body(HalfCylinder(; mass = fractions.torso * mass / 2, density, axis_ratio_b = 2.4), coat)
+    ventral = Body(HalfCylinder(; mass = fractions.torso * mass / 2, density, axis_ratio_b = 2.4), coat)
+    neck = Body(Cone(; mass = fractions.neck * mass, density, axis_ratio_b = 1.0, top_ratio = 0.7), coat)
+    head = Body(Ellipsoid(; mass = fractions.head * mass, density, axis_ratio_b = 1.8, axis_ratio_c = 1.8, pole_a_truncation = 1 - sqrt(1 - 0.7^2)), coat)
+    leg = Body(Cone(; mass = fractions.leg * mass, density, axis_ratio_b = leg_ratio, top_ratio = 0.5), coat)
 
     torso_length = dorsal.geometry.length.length_skin
     torso_radius = skin_radius(dorsal)
@@ -84,14 +84,13 @@ function cow(mass; leg_ratio = 4.33)
     CompositeBody(;
         parts = (; dorsal, ventral, neck, head, leg_fl = leg, leg_fr = leg, leg_bl = leg, leg_br = leg),
         joins = (
-            Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover()); twist = -π / 2),
+            Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover())),
             Join(dorsal = Attachment(EndB(0.5 * torso_radius, π / 2), Disc(r_neck)),
                  neck = Attachment(EndA(0.0u"m", 0.0), Disc(r_neck))),
             Join(neck = Attachment(EndB(0.0u"m", 0.0), Disc(r_head)), head = Attachment(PoleA(), Disc(r_head))),
             Join(ventral = hip(0.88, 0.2), leg_fl = leg_top), Join(ventral = hip(0.88, -0.2), leg_fr = leg_top),
             Join(ventral = hip(0.12, 0.2), leg_bl = leg_top), Join(ventral = hip(0.12, -0.2), leg_br = leg_top),
         ),
-        root_pose = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 0.0 1.0; 1.0 0.0 0.0; 0.0 1.0 0.0]),
     )
 end
 

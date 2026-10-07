@@ -156,8 +156,9 @@ function body_mesh(animal)
     vertices, faces, colours = Point3f[], Int[], RGBf[]
     for (name, part) in pairs(animal.parts)
         pose = getfield(animal.poses, name)
-        for grid in BiophysicalGeometry._part_outer_meshes(part.shape, part, 100.0)
-            add_grid!(vertices, faces, colours, BiophysicalGeometry._transform_mesh(grid..., pose, 100.0)..., part_colour(name))
+        for grid in BiophysicalGeometry.part_outer_meshes(part.shape, part, 100.0)
+            tile = BiophysicalGeometry.transform_mesh(grid, pose, 100.0)
+            add_grid!(vertices, faces, colours, BiophysicalGeometry.tile_matrices(tile)..., part_colour(name))
         end
     end
     return vertices, permutedims(reshape(faces, 3, :)), colours
@@ -208,9 +209,9 @@ end
 function draw_shadow!(ax, image, animal, direction)
     r = silhouette_rasterized(animal, direction; resolution = SHADOW_RESOLUTION, return_image = true)
     # The image keeps its size, so each of its three parts can be updated on its own.
-    image.x[] = LinRange(100 .* r.x_range..., size(r.bitmap, 1))
-    image.y[] = LinRange(100 .* r.y_range..., size(r.bitmap, 2))
-    image.z[] = Float32.(r.bitmap)
+    image.x[] = LinRange(100 .* r.x_range..., size(r.shadow, 1))
+    image.y[] = LinRange(100 .* r.y_range..., size(r.shadow, 2))
+    image.z[] = Float32.(r.shadow)
     ax.title = "Silhouette to the sun: $(area(r.area))"
     limits!(ax, 100 .* r.x_range..., 100 .* r.y_range...)
 end

@@ -1,11 +1,23 @@
 """
-    Sphere(mass, density)
+    Sphere(; mass, density, volume, radius) <: AbstractShape
 
-A sphere, centred on the origin.
+A spherical organism shape centred on the origin. Give any two of `mass`,
+`density`, `volume` / `radius` and the rest is solved for. `radius` is at skin level.
+`Sphere(Unchecked(); ...)` does the same without checking the keywords.
 """
-mutable struct Sphere{M,D} <: AbstractSpherical
+struct Sphere{M,D} <: AbstractSpherical
     mass::M
     density::D
+    Sphere(::Unchecked, mass::M, density::D) where {M,D} = new{M,D}(mass, density)
+end
+
+# volume = (4π/3)·radius³
+ShapeSpec(::Type{Sphere}) = ShapeSpec{Sphere}((; radius = 3), log(4π / 3), (;))
+
+Sphere(; kw...) = (check_shape(ShapeSpec(Sphere), NamedTuple(kw)); Sphere(Unchecked(); kw...))
+function Sphere(::Unchecked; kw...)
+    s = _resolve_shape(ShapeSpec(Sphere), NamedTuple(kw))
+    Sphere(Unchecked(), s.mass, s.density)
 end
 
 function _skin_level(shape::Sphere, volume)
@@ -21,63 +33,33 @@ _fat_thickness(shape::Sphere, skin, flesh_volume, fat_volume) =
 
 # Surface area
 
-function surface_area(shape::Sphere, body::AbstractBody)
-    r = body.geometry.length_skin / 2
-    return surface_area(shape, r)
-end
-function surface_area(shape::Sphere, r)
-    4 * π * r ^ 2
-end
+surface_area(shape::Sphere, r) = 4 * π * r ^ 2
 
 # Silhouette area
 
 silhouette(shape::Sphere, r) = π * r ^ 2
-function silhouette(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody, θ)
-    r = body.geometry.length.radius_skin
-    return silhouette(shape, r)
-end
-function silhouette(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody, θ)
-    r = body.geometry.length.radius_fibrous
-    return silhouette(shape, r)
-end
-function silhouette(shape::Sphere, insulation::Union{Naked,FatLayer}, body::AbstractBody)
-    r = body.geometry.length.radius_skin
-    area = silhouette(shape, r)
-    normal = area
-    parallel = area
-    return (; normal, parallel)
-end
-function silhouette(shape::Sphere, insulation::Union{FibrousLayer,CompositeInsulation}, body::AbstractBody)
-    r = body.geometry.length.radius_fibrous
-    area = silhouette(shape, r)
-    normal = area
-    parallel = area
-    return (; normal, parallel)
+
+silhouette(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
+    silhouette(shape, _sphere_outer_radius(ins, body))
+function silhouette(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody)
+    area = silhouette(shape, _sphere_outer_radius(ins, body))
+    return (; normal=area, parallel=area)
 end
 
-# Radius
+_sphere_outer_radius(::Union{Naked,FatLayer}, body) = body.geometry.length.radius_skin
+_sphere_outer_radius(::Union{FibrousLayer,CompositeInsulation}, body) = body.geometry.length.radius_fibrous
 
-skin_radius(shape::Sphere, insulation::AbstractInsulationLayer, body) = body.geometry.length.radius_skin
+# Radius accessors
 
-# naked
-insulation_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Sphere, insulation::Naked, body) = body.geometry.length.radius_skin
-
-# fur
-insulation_radius(shape::Sphere, insulation::FibrousLayer, body) = body.geometry.length.radius_fibrous
-flesh_radius(shape::Sphere, insulation::FibrousLayer, body) = body.geometry.length.radius_skin
-
-# fat
-insulation_radius(shape::Sphere, insulation::FatLayer, body) = body.geometry.length.radius_skin
-flesh_radius(shape::Sphere, insulation::FatLayer, body) = body.geometry.length.radius_skin - body.geometry.length.fat
-
-# fur and fat
-insulation_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_fibrous
-flesh_radius(shape::Sphere, insulation::CompositeInsulation, body) = body.geometry.length.radius_skin - body.geometry.length.fat
+_skin_radius(::Sphere, length) = length.radius_skin
+_fibrous_radius(::Sphere, length) = length.radius_fibrous
 
 # Composition
 
 attachment_surfaces(::Sphere) = (Radial,)
+
+# Outer (insulation-aware) radius, matching insulation_radius(body).
+outer_dims(::Sphere, body::AbstractBody) = (radius = insulation_radius(body),)
 
 surface_area(::Sphere, body::AbstractBody, ::Radial) =
     4 * π * insulation_radius(body)^2
@@ -86,10 +68,10 @@ validate_range(::Sphere, ::AbstractBody, ::Radial) = nothing
 
 function surface_point(::Sphere, body::AbstractBody, loc::Radial)
     R = skin_radius(body)
-    (R * sin(loc.θ) * cos(loc.φ), R * sin(loc.θ) * sin(loc.φ), R * cos(loc.θ))
+    (R * sin(loc.polar) * cos(loc.azimuth), R * sin(loc.polar) * sin(loc.azimuth), R * cos(loc.polar))
 end
 surface_normal(::Sphere, ::AbstractBody, loc::Radial) =
-    (sin(loc.θ) * cos(loc.φ), sin(loc.θ) * sin(loc.φ), cos(loc.θ))
+    (sin(loc.polar) * cos(loc.azimuth), sin(loc.polar) * sin(loc.azimuth), cos(loc.polar))
 
 function surface_centroid(::Sphere, body::AbstractBody, ::Radial)
     R = skin_radius(body); (R, zero(R), zero(R))  # arbitrary point

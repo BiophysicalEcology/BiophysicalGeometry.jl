@@ -17,7 +17,7 @@ the long axis at right angles to the sun, and `parallel`, with the long axis poi
 ```@example silhouettes
 using BiophysicalGeometry, Unitful
 
-body = Body(Cylinder(2.0u"kg", 1000.0u"kg/m^3", 3.0), Naked())
+body = Body(Cylinder(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 3.0), Naked())
 silhouette(body)
 ```
 
@@ -27,14 +27,15 @@ An orientation picks one of them, or their mean:
 silhouette(body, NormalToSun()), silhouette(body, ParallelToSun()), silhouette(body, Intermediate())
 ```
 
-An angle gives the silhouette with the sun at that angle from the long axis of the shape, for cylinders, cones and
-ellipsoids:
+An angle gives the silhouette with the sun at that angle from the long axis of the shape, moving up from the long
+axis (``x``) towards the vertical (``z``): 0 looks along the shape, and 90° down on it. This is exact for every
+shape; for a half, the sun is on the side of its dome.
 
 ```@example silhouettes
 angles = (0.0:1.0:90.0) .* u"°"
 fig, ax = figure_axis("Angle between the long axis and the sun (°)", "Silhouette area (cm²)")
-for (label, shape) in ("Cylinder" => Cylinder(2.0u"kg", 1000.0u"kg/m^3", 3.0),
-                       "Ellipsoid" => Ellipsoid(2.0u"kg", 1000.0u"kg/m^3", 3.0, 1.0))
+for (label, shape) in ("Cylinder" => Cylinder(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 3.0),
+                       "Ellipsoid" => Ellipsoid(; mass = 2.0u"kg", density = 1000.0u"kg/m^3", axis_ratio_b = 3.0, axis_ratio_c = 3.0))
     areas = [silhouette(Body(shape, Naked()), angle) for angle in angles]
     lines!(ax, ustrip.(angles), ustrip.(u"cm^2", areas); linewidth = 2, label)
 end
@@ -53,11 +54,13 @@ gets only the area that is lit:
 
 ```@example silhouettes
 density = 1000.0u"kg/m^3"
-torso = Body(Cylinder(20.0u"kg", density, 3.0), Naked())
-head = Body(Sphere(2.0u"kg", density), Naked())
+torso = Body(Cylinder(; mass = 20.0u"kg", density, axis_ratio_b = 3.0), Naked())
+head = Body(Sphere(; mass = 2.0u"kg", density), Naked())
 patch = Disc(5.0u"cm")
+standing = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 0.0 -1.0; 0.0 1.0 0.0; 1.0 0.0 0.0])  # the axis up, along z
 body = CompositeBody(; parts = (; torso, head), joins = (
-    Join(torso = Attachment(EndB(0.0u"m", 0.0), patch), head = Attachment(Radial(π, 0.0), patch)),))
+    Join(torso = Attachment(EndB(0.0u"m", 0.0), patch), head = Attachment(Radial(π, 0.0), patch)),),
+    root_pose = standing)
 
 overhead = silhouette(body, Beam(0.0, 0.0, 1.0))
 ```

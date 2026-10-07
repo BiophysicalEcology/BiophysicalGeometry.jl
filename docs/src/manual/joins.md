@@ -20,8 +20,8 @@ the child.
 using BiophysicalGeometry, Unitful
 
 density = 1000.0u"kg/m^3"
-torso = Body(Cylinder(20.0u"kg", density, 3.0), Naked())
-leg = Body(Cylinder(1.0u"kg", density, 5.0), Naked())
+torso = Body(Cylinder(; mass = 20.0u"kg", density, axis_ratio_b = 3.0), Naked())
+leg = Body(Cylinder(; mass = 1.0u"kg", density, axis_ratio_b = 5.0), Naked())
 r = skin_radius(leg)
 half_length = torso.geometry.length.length_skin / 2
 
@@ -55,24 +55,25 @@ join_area(join, body), π * r^2
 Changing the point on the parent moves the child over its surface. Along the torso:
 
 ```@example joins
-place(z, φ) = CompositeBody(; parts = (; torso, leg), joins = (
-    Join(torso = Attachment(Lateral(z * 2half_length, φ), Disc(r)), leg = Attachment(EndA(0.0u"m", 0.0), Disc(r))),))
+place(position, angle) = CompositeBody(; parts = (; torso, leg), joins = (
+    Join(torso = Attachment(Lateral(position * 2half_length, angle), Disc(r)),
+         leg = Attachment(EndA(0.0u"m", 0.0), Disc(r))),))
 fig = Figure(size = (780, 250)) # hide
-for (i, z) in enumerate((0.1, 0.5, 0.9)) # hide
-    ax = body_axis(fig[1, i]; decorations = false, title = "Lateral($z * length, 0)", titlesize = 12) # hide
-    draw_parts!(ax, place(z, 0.0)) # hide
+for (i, position) in enumerate((0.1, 0.5, 0.9)) # hide
+    ax = body_axis(fig[1, i]; decorations = false, title = "Lateral($position * length, 0)", titlesize = 12) # hide
+    draw_parts!(ax, place(position, 0.0)) # hide
 end # hide
 fig # hide
 ```
 
-and around it, seen from the end:
+and around it, from ``+y`` towards ``+z``, seen from the end:
 
 ```@example joins
 fig = Figure(size = (780, 250)) # hide
-for (i, (φ, label)) in enumerate(((0.0, "0"), (π / 4, "π / 4"), (π / 2, "π / 2"))) # hide
-    ax = body_axis(fig[1, i]; decorations = false, azimuth = -π / 2, elevation = π / 2, # hide
+for (i, (angle, label)) in enumerate(((0.0, "0"), (π / 4, "π / 4"), (π / 2, "π / 2"))) # hide
+    ax = body_axis(fig[1, i]; decorations = false, azimuth = 0.0, elevation = 0.0, # hide
         title = "Lateral(length / 2, $label)", titlesize = 12) # hide
-    draw_parts!(ax, place(0.5, φ)) # hide
+    draw_parts!(ax, place(0.5, angle)) # hide
 end # hide
 fig # hide
 ```
@@ -93,7 +94,7 @@ twisted(twist) = CompositeBody(; parts = (; torso, leg), joins = (
          leg = Attachment(Lateral(0.1arm_length, 0.0), Disc(r / 2)); twist),))
 fig = Figure(size = (780, 250)) # hide
 for (i, (twist, label)) in enumerate(((0.0, "0"), (π / 4, "π / 4"), (π / 2, "π / 2"))) # hide
-    ax = body_axis(fig[1, i]; decorations = false, azimuth = 0.0, elevation = 0.0, title = "twist = $label", # hide
+    ax = body_axis(fig[1, i]; decorations = false, azimuth = -π / 2, elevation = π / 2, title = "twist = $label", # hide
         titlesize = 12) # hide
     draw_parts!(ax, twisted(twist)) # hide
 end # hide
@@ -102,27 +103,27 @@ fig # hide
 
 ## The pose of the root
 
-The first part listed is the root, and by default it sits as its shape is defined: a cylinder stands upright along
-``z``. `root_pose` gives it another position and orientation, as a [`Pose`](@ref) of a translation and a rotation
-matrix, and every other part follows. The columns of the matrix are where the ``x``, ``y`` and ``z`` axes of the
-root end up. To lay a cylinder along ``x``:
+The first part listed is the root, and by default it sits as its shape is defined: every shape lies along ``x``
+with its height along ``z``. `root_pose` gives it another position and orientation, as a [`Pose`](@ref) of a
+translation and a rotation matrix, and every other part follows. The columns of the matrix are where the ``x``,
+``y`` and ``z`` axes of the root end up. To stand a cylinder up:
 
 ```@example joins
-rotation = [0.0 0.0 1.0;    # x of the cylinder points along y
-            1.0 0.0 0.0;    # y of the cylinder points up, along z
-            0.0 1.0 0.0]    # z of the cylinder, its axis, points along x
-lying = CompositeBody(; parts = (; torso, leg), joins = (join,),
-                      root_pose = Pose((0.0u"m", 0.0u"m", 0.0u"m"), rotation))
+rotation = [0.0 0.0 -1.0;   # columns: x of the cylinder, its axis, points up along z;
+            0.0 1.0 0.0;    # y stays along y;
+            1.0 0.0 0.0]    # and z points along -x
+standing = CompositeBody(; parts = (; torso, leg), joins = (join,),
+                         root_pose = Pose((0.0u"m", 0.0u"m", 0.0u"m"), rotation))
 fig = Figure(size = (560, 250)) # hide
 draw_parts!(body_axis(fig[1, 1]; title = "default", titlesize = 12), body) # hide
-draw_parts!(body_axis(fig[1, 2]; title = "root_pose", titlesize = 12), lying) # hide
+draw_parts!(body_axis(fig[1, 2]; title = "root_pose", titlesize = 12), standing) # hide
 fig # hide
 ```
 
 The solved pose of every part is kept in the body:
 
 ```@example joins
-lying.poses.leg.translation
+standing.poses.leg.translation
 ```
 
 ## Joins and heat

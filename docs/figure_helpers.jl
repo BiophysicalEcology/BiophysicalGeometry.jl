@@ -4,7 +4,7 @@ using CairoMakie
 using Markdown
 using Unitful
 using BiophysicalGeometry
-import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Cone, Plate, Half, Top, Bottom
+import BiophysicalGeometry: Sphere, Cylinder, Ellipsoid, Cone, Plate, TriangularPlate, Half, Top, Bottom
 import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSpherical
 
 const BG = BiophysicalGeometry
@@ -49,7 +49,7 @@ _format(x) = string(x)
 
 # ── Colours ──────────────────────────────────────────────────────────────────
 
-const LAYER_COLOURS = (flesh = RGBf(0.88, 0.48, 0.42), fat = RGBf(1.00, 0.93, 0.55), fur = RGBf(0.76, 0.62, 0.42))
+const LAYER_COLOURS = (flesh = RGBf(0.88, 0.48, 0.42), fat_layer = RGBf(1.00, 0.93, 0.55), fibrous_layer = RGBf(0.76, 0.62, 0.42))
 const PART_COLOURS = [RGBf(0.30, 0.55, 0.75), RGBf(0.90, 0.62, 0.20), RGBf(0.35, 0.68, 0.45), RGBf(0.80, 0.40, 0.45),
                       RGBf(0.58, 0.45, 0.72), RGBf(0.55, 0.42, 0.35), RGBf(0.85, 0.55, 0.75), RGBf(0.50, 0.50, 0.50)]
 const SURFACE_COLOURS = [RGBf(0.30, 0.55, 0.75), RGBf(0.90, 0.62, 0.20), RGBf(0.35, 0.68, 0.45), RGBf(0.80, 0.40, 0.45),
@@ -91,8 +91,8 @@ single(body::CompositeBody) = body
 
 const EXT = Base.get_extension(BiophysicalGeometry, :BiophysicalGeometryMakieExt)
 
-_view_direction(ax) = EXT._view_direction(ax.azimuth[], ax.elevation[])
-_draw_tiles!(ax, tiles) = EXT._mesh_tiles!(ax, tiles, ax.azimuth[], ax.elevation[])
+view_direction(ax) = EXT.view_direction(ax.azimuth[], ax.elevation[])
+_draw_tiles!(ax, tiles) = EXT.mesh_tiles!(ax, tiles, ax.azimuth[], ax.elevation[])
 
 function _part_tiles(body, colors, sc)
     composite = single(body)
@@ -104,8 +104,8 @@ function _part_tiles(body, colors, sc)
     for (name, col) in zip(names, used)
         part = getfield(composite.parts, name)
         pose = getfield(composite.poses, name)
-        for grid in BG._part_outer_meshes(part.shape, part, sc)
-            push!(tiles, (BG._transform_mesh(grid..., pose, sc)..., col))
+        for grid in BG.part_outer_meshes(part.shape, part, sc)
+            push!(tiles, (BG.tile_matrices(BG.transform_mesh(grid, pose, sc))..., col))
         end
     end
     return tiles, NamedTuple{names}(Tuple(used))
@@ -125,7 +125,7 @@ end
 
 # ── Cutaways ─────────────────────────────────────────────────────────────────
 
-_layer_colour(body::Body) = BG.outer_insulation(body.insulation) isa FibrousLayer ? LAYER_COLOURS.fur :
+_layer_colour(body::Body) = BG.outer_insulation(body.insulation) isa FibrousLayer ? LAYER_COLOURS.fibrous_layer :
                             LAYER_COLOURS.flesh
 
 """
@@ -138,8 +138,8 @@ function draw_layers!(ax, body::Body; cut=π / 2, sc=100.0)
     if insulation_radius(body) - flesh_radius(body) < 0.03 * insulation_radius(body)
         _draw_tiles!(ax, first(_part_tiles(body, [_layer_colour(body)], sc)))
     else
-        tiles = EXT._cutaway_tiles(body.shape, body, sc, LAYER_COLOURS,
-            range(ax.azimuth[] + cut / 2, ax.azimuth[] + 2π - cut / 2; length=73))
+        tiles = EXT.cutaway_tiles(body.shape, body, sc, LAYER_COLOURS,
+            EXT.cut_angles(body.shape, view_direction(ax), cut))
         _draw_tiles!(ax, tiles)
     end
     return ax
@@ -190,33 +190,41 @@ end
 
 function _surface_tiles(::Cylinder, body)
     r = _cm(skin_radius(body)); L = _cm(body.geometry.length.length_skin)
-    [EndA() => [BG._cylinder_cap(r, 0.0)], EndB() => [BG._cylinder_cap(r, L)], Lateral() => [BG._cylinder_tube(r, L)]]
+    [EndA() => [BG.cylinder_cap(r, 0.0)], EndB() => [BG.cylinder_cap(r, L)], Lateral() => [BG.cylinder_tube(r, L)]]
 end
 function _surface_tiles(sh::Cone, body)
     r = _cm(skin_radius(body)); L = _cm(body.geometry.length.length_skin); t = sh.top_ratio
-    tiles = Pair[EndA() => [BG._cylinder_cap(r, 0.0)], Lateral() => [BG._cone_tube(r, t * r, L)]]
-    t > 0 && push!(tiles, EndB() => [BG._cylinder_cap(t * r, L)])
+    tiles = Pair[EndA() => [BG.cylinder_cap(r, 0.0)], Lateral() => [BG.cone_tube(r, t * r, L)]]
+    t > 0 && push!(tiles, EndB() => [BG.cylinder_cap(t * r, L)])
     tiles
 end
 function _surface_tiles(::Sphere, body)
     r = _cm(skin_radius(body))
-    [Radial() => [BG._ellipsoid_mesh(r, r)]]
+    [Radial() => [BG.ellipsoid_mesh(r, r)]]
 end
 function _surface_tiles(sh::Plate, body)
     l = body.geometry.length
     hl, hw, hh = _cm(l.length_skin) / 2, _cm(l.width_skin) / 2, _cm(l.height_skin) / 2
-    [Top() => [BG._box_face_z(-hl, hl, -hw, hw, hh)], Bottom() => [BG._box_face_z(-hl, hl, -hw, hw, -hh)],
-     SideA() => [BG._box_face_x(hl, -hw, hw, -hh, hh)], SideB() => [BG._box_face_x(-hl, -hw, hw, -hh, hh)],
-     SideC() => [BG._box_face_y(-hl, hl, hw, -hh, hh)], SideD() => [BG._box_face_y(-hl, hl, -hw, -hh, hh)]]
+    [Top() => [BG.box_face_z(-hl, hl, -hw, hw, hh)], Bottom() => [BG.box_face_z(-hl, hl, -hw, hw, -hh)],
+     SideA() => [BG.box_face_x(hl, -hw, hw, -hh, hh)], SideB() => [BG.box_face_x(-hl, -hw, hw, -hh, hh)],
+     SideC() => [BG.box_face_y(-hl, hl, hw, -hh, hh)], SideD() => [BG.box_face_y(-hl, hl, -hw, -hh, hh)]]
 end
 function _surface_tiles(::Half{<:AbstractCylindrical}, body)
     r = _cm(skin_radius(body)); L = _cm(body.geometry.length.length_skin)
-    [EndA() => [BG._cylinder_cap(r, 0.0; θ_end=π)], EndB() => [BG._cylinder_cap(r, L; θ_end=π)],
-     Lateral() => [BG._cylinder_tube(r, L; θ_end=π)], Flat() => [BG._half_cylinder_flat(r, L)]]
+    [EndA() => [BG.cylinder_cap(r, 0.0; θ_end=π)], EndB() => [BG.cylinder_cap(r, L; θ_end=π)],
+     Lateral() => [BG.cylinder_tube(r, L; θ_end=π)], Flat() => [BG.half_cylinder_flat(r, L)]]
 end
 function _surface_tiles(sh::Half{<:Union{AbstractEllipsoidal,AbstractSpherical}}, body)
-    a, b, _ = _cm.(BG._domed_semiaxes(sh, body))
-    [Dome() => [BG._ellipsoid_mesh(a, b; φ_end=π / 2)], Flat() => [BG._half_ellipsoid_flat_mesh(a, b)]]
+    a, b, c = _cm.(BG.domed_semiaxes(sh, body))
+    [Dome() => [BG.ellipsoid_mesh(a, b, c; φ_end=π / 2)], Flat() => [BG.half_ellipsoid_flat_mesh(a, b)]]
+end
+function _surface_tiles(::TriangularPlate, body)
+    l = body.geometry.length
+    L, W, H = _cm(l.length_skin), _cm(l.width_skin), _cm(l.height_skin)
+    p1, p2, p3 = (0.0, 0.0), (L, 0.0), (0.0, W)
+    [Top() => [BG.triangle_face(p1, p2, p3, H / 2)], Bottom() => [BG.triangle_face(p1, p2, p3, -H / 2)],
+     SideB() => [BG.prism_side(p3, p1, H)], SideD() => [BG.prism_side(p1, p2, H)],
+     Diagonal() => [BG.prism_side(p2, p3, H)]]
 end
 
 _label(loc) = string(nameof(typeof(loc)))
@@ -244,7 +252,7 @@ function _surface_label!(ax, sh, body, loc, col, offset)
     p = Point3f((c .+ offset .* n)...)
     lines!(ax, [Point3f(c...), p]; color=:black, linewidth=1, overdraw=true)
     scatter!(ax, [Point3f(c...)]; color=:black, markersize=5, overdraw=true)
-    d = _view_direction(ax)
+    d = view_direction(ax)
     right = n[1] * -d[2] + n[2] * d[1]      # is the label to the right of the shape as seen?
     align = abs(right) < 0.3 ? (:center, n[3] < 0 ? :top : :bottom) : (right > 0 ? :left : :right, :center)
     text!(ax, p; text=_label(loc), fontsize=13, font=:bold, color=col, align, overdraw=true)
@@ -257,7 +265,7 @@ Draw `body` with each named attachment surface in its own colour, labelled, with
 """
 function surface_diagram!(ax, body::Body)
     sh = body.shape
-    surfaces = _surface_tiles(sh, body)
+    surfaces = [loc => map(BG.tile_matrices, tiles) for (loc, tiles) in _surface_tiles(sh, body)]
     lo, hi = _extent(surfaces)
     offset = 0.3 * maximum(hi .- lo)
     colour(i) = SURFACE_COLOURS[mod1(i, length(SURFACE_COLOURS))]
@@ -272,19 +280,18 @@ end
 # An ellipsoid's surfaces are two poles and a ring, not faces.
 function surface_diagram!(ax, body::Body{<:Ellipsoid})
     sh = body.shape
-    l = body.geometry.length
-    a, b = _cm(l.a_semi_major_skin), _cm(l.b_semi_minor_skin)
+    a, b, c = _cm.(BG.skin_semiaxes(body.geometry.length))
     grey = RGBf(0.85, 0.87, 0.89)
     x_ratio = 1 - sh.pole_a_truncation
     if sh.pole_a_truncation == 0
-        _draw_tiles!(ax, [(BG._ellipsoid_mesh(a, b)..., grey)])
+        _draw_tiles!(ax, [(BG.tile_matrices(BG.ellipsoid_mesh(a, b, c))..., grey)])
     else
-        _draw_tiles!(ax, [(BG._ellipsoid_mesh_truncated(a, b, b, x_ratio)..., grey),
-                          (BG._ellipsoid_pole_a_cap(a, b, b, x_ratio)..., SURFACE_COLOURS[1])])
+        _draw_tiles!(ax, [(BG.tile_matrices(BG.ellipsoid_mesh_truncated(a, b, c, x_ratio))..., grey),
+                          (BG.tile_matrices(BG.ellipsoid_pole_a_cap(a, b, c, x_ratio))..., SURFACE_COLOURS[1])])
     end
-    _local_axes!(ax, [-a, -b, -b], [a, b, b])
+    _local_axes!(ax, [-a, -b, -c], [a, b, c])
     ts = range(0, 2π; length=100)
-    lines!(ax, [Point3f(0, b * cos(t), b * sin(t)) for t in ts]; color=SURFACE_COLOURS[3], linewidth=3, overdraw=true)
+    lines!(ax, [Point3f(0, b * cos(t), c * sin(t)) for t in ts]; color=SURFACE_COLOURS[3], linewidth=3, overdraw=true)
     scatter!(ax, [Point3f(a * x_ratio, 0, 0)]; color=SURFACE_COLOURS[1], markersize=13, overdraw=true)
     scatter!(ax, [Point3f(-a, 0, 0)]; color=SURFACE_COLOURS[2], markersize=13, overdraw=true)
     offset = 0.3 * 2a
@@ -323,8 +330,8 @@ The transverse section of `body`, with its layers and the flesh, skin and insula
 function layer_diagram!(ax, body::Body; labels=true)
     flesh, skin, ins = _cm(flesh_radius(body)), _cm(skin_radius(body)), _cm(insulation_radius(body))
     has_fat = skin > flesh * (1 + 1e-9); has_fur = ins > skin * (1 + 1e-9)
-    has_fur && poly!(ax, _ring(ins); color=LAYER_COLOURS.fur, strokecolor=:grey30, strokewidth=1)
-    has_fat && poly!(ax, _ring(skin); color=LAYER_COLOURS.fat)
+    has_fur && poly!(ax, _ring(ins); color=LAYER_COLOURS.fibrous_layer, strokecolor=:grey30, strokewidth=1)
+    has_fat && poly!(ax, _ring(skin); color=LAYER_COLOURS.fat_layer)
     poly!(ax, _ring(flesh); color=LAYER_COLOURS.flesh)
     lines!(ax, _ring(skin); color=:black, linewidth=2)
     if labels
@@ -378,16 +385,16 @@ _ellipse(a, b; n=200) = [Point2f(a * cos(t), b * sin(t)) for t in range(0, 2π; 
 
 # Outline of each layer in a section along the long axis, which is drawn left to right.
 function _long_outlines(body::Body{<:Union{Cylinder,Cone}})
-    (; L, pad, taper, rf, rs, ri) = EXT._axial_layers(body, 100.0)
+    (; L, pad, taper, rf, rs, ri) = EXT.axial_layers(body, 100.0)
     box(r, z0, z1) = [Point2f(z0, -r * taper(z0)), Point2f(z1, -r * taper(z1)), Point2f(z1, r * taper(z1)),
                       Point2f(z0, r * taper(z0)), Point2f(z0, -r * taper(z0))]
-    (flesh = box(rf, 0.0, L), skin = box(rs, 0.0, L), fur = box(ri, -pad, L + pad))
+    (flesh = box(rf, 0.0, L), skin = box(rs, 0.0, L), ins = box(ri, -pad, L + pad))
 end
+# Length (across the page) by height of each layer; a cut ellipsoid stops at its cut plane.
 function _long_outlines(body::Body{<:Union{Sphere,Ellipsoid}})
-    ratio = body.shape isa Ellipsoid ? Float64(body.shape.axis_ratio_b) : 1.0
-    bf, bs, bi = _cm(flesh_radius(body)), _cm(skin_radius(body)), _cm(insulation_radius(body))
-    af = ratio * bf; as = af + (bs - bf); ai = as + (bi - bs)
-    (flesh = _ellipse(af, bf), skin = _ellipse(as, bs), fur = _ellipse(ai, bi))
+    x_ratio = EXT.cut_position(body.shape)
+    outline((a, b, c)) = x_ratio < 1 ? filter(p -> p[1] <= x_ratio * a, _ellipse(a, c)) : _ellipse(a, c)
+    map(outline, map(l -> _cm.(l), EXT.domed_layers(body.shape, body)))
 end
 
 """
@@ -399,8 +406,8 @@ function long_section!(ax, body::Body)
     outlines = _long_outlines(body)
     has_fat = skin_radius(body) > flesh_radius(body) * (1 + 1e-9)
     has_fur = insulation_radius(body) > skin_radius(body) * (1 + 1e-9)
-    has_fur && poly!(ax, outlines.fur; color=LAYER_COLOURS.fur, strokecolor=:grey30, strokewidth=1)
-    has_fat && poly!(ax, outlines.skin; color=LAYER_COLOURS.fat)
+    has_fur && poly!(ax, outlines.ins; color=LAYER_COLOURS.fibrous_layer, strokecolor=:grey30, strokewidth=1)
+    has_fat && poly!(ax, outlines.skin; color=LAYER_COLOURS.fat_layer)
     poly!(ax, outlines.flesh; color=LAYER_COLOURS.flesh)
     lines!(ax, outlines.skin; color=:black, linewidth=2)
     hidedecorations!(ax); hidespines!(ax)
@@ -424,8 +431,8 @@ function layer_sections(items::Pair...; size=(250 * length(items) + 60, 420))
         along = Axis(fig[2, i]; aspect=DataAspect())
         long_section!(along, body)
     end
-    Legend(fig[3, 1:length(items)], [PolyElement(color=LAYER_COLOURS.flesh), PolyElement(color=LAYER_COLOURS.fat),
-        LineElement(color=:black, linewidth=2), PolyElement(color=LAYER_COLOURS.fur)],
+    Legend(fig[3, 1:length(items)], [PolyElement(color=LAYER_COLOURS.flesh), PolyElement(color=LAYER_COLOURS.fat_layer),
+        LineElement(color=:black, linewidth=2), PolyElement(color=LAYER_COLOURS.fibrous_layer)],
         ["flesh", "fat", "skin", "fibres"]; orientation=:horizontal, framevisible=false, labelsize=12)
     return fig
 end
@@ -517,7 +524,7 @@ function silhouette_panel!(ax, body, direction; resolution=300, color=RGBf(0.2, 
     result = silhouette_rasterized(single(body), direction; resolution, return_image=true)
     xs = range(result.x_range[1] * 100, result.x_range[2] * 100; length=resolution)
     ys = range(result.y_range[1] * 100, result.y_range[2] * 100; length=resolution)
-    heatmap!(ax, xs, ys, Float32.(result.bitmap); colormap=[RGBAf(1, 1, 1, 0), color], colorrange=(0, 1))
+    heatmap!(ax, xs, ys, Float32.(result.shadow); colormap=[RGBAf(1, 1, 1, 0), color], colorrange=(0, 1))
     ax.aspect = DataAspect()
     return result.area
 end

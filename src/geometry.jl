@@ -1,19 +1,14 @@
-# TODO: remove AbstractGeometryModel
-abstract type AbstractGeometryModel end
-
 """
     AbstractShape
 
 Abstract supertype for the shape of the organism being modelled.
 """
-abstract type AbstractShape <: AbstractGeometryModel end
+abstract type AbstractShape end
 
 # Physics-relevant family intermediates between `AbstractShape` and the
 # concrete shapes. Thermal consumers (HeatExchange) dispatch on these —
 # one method per family covers every concrete shape in it, and a new
 # concrete shape joins its family with no new physics methods.
-# Shapes with no family (the animal shapes) get a missing-method dispatch
-# on a thermal solve rather than silently using the wrong correlation.
 
 """
     AbstractCylindrical <: AbstractShape
@@ -74,25 +69,28 @@ mass(h::Half) = mass(h.parent) / 2
 """
     AbstractInsulationLayer
 
-Abstract supertype for the insulation of the organism being modelled.
+Abstract supertype for all insulation layers of an organism being modelled.
 """
-abstract type AbstractInsulationLayer <: AbstractGeometryModel end
-
-"""
-    AbstractPorousLayer <: AbstractInsulationLayer
-
-Family of fibrous insulations (fur, feathers, hair) sharing radiative /
-conductive fibre-bed physics.
-"""
-abstract type AbstractPorousLayer <: AbstractInsulationLayer end
+abstract type AbstractInsulationLayer end
 
 """
     AbstractSolidLayer <: AbstractInsulationLayer
 
-Family of solid insulating layers (fat, muscle, skin) sharing
-lumped-conductive-shell physics.
+Abstract supertype for solid (non-porous) insulation layers such as subcutaneous fat,
+chitin (arthropod cuticle), or keratin (scales, scutes), sharing lumped-conductive-shell
+physics. Users may define additional solid layers by subtyping this.
 """
 abstract type AbstractSolidLayer <: AbstractInsulationLayer end
+
+"""
+    AbstractPorousLayer <: AbstractInsulationLayer
+
+Abstract supertype for porous (fibre/air-filled) insulation layers such as fur, feathers,
+or hair, sharing radiative / conductive fibre-bed physics. The porous structure is
+characterised by fibre geometry rather than bulk fraction. Users may define additional
+porous layers by subtyping this.
+"""
+abstract type AbstractPorousLayer <: AbstractInsulationLayer end
 
 """
     Naked <: AbstractInsulationLayer
@@ -120,20 +118,6 @@ struct FibrousLayer{T,D,R} <: AbstractPorousLayer
     fibre_density::R
 end
 
-# TODO
-# """
-#     Feathers <: AbstractInsulationLayer
-
-#     Feathers(thickness)
-
-# Insulation trait for an organism with feathers.
-# """
-# struct Feathers{T,D,R} <: AbstractPorousLayer
-#     thickness::T
-#     fibre_diameter::D
-#     fibre_density::R
-# end
-
 """
     FatLayer <: AbstractSolidLayer
 
@@ -154,7 +138,7 @@ end
 
     CompositeInsulation(fibrous, fat)
 
-A [`FibrousLayer`](@ref) and a [`FatLayer`](@ref) together, in that order.
+A [`FibrousLayer`](@ref) and a [`FatLayer`](@ref) together, in either order.
 """
 struct CompositeInsulation{T<:Tuple} <: AbstractInsulationLayer
     layers::T
@@ -162,7 +146,11 @@ end
 CompositeInsulation(i::AbstractInsulationLayer) = CompositeInsulation((i,))
 CompositeInsulation(is::AbstractInsulationLayer...) = CompositeInsulation((is...,))
 
-geometry(shape, ins::CompositeInsulation) = geometry(shape, ins.layers...)
+# Shapes define geometry for (fibrous, fat) in that order; accept the layers of
+# a composite in either order by putting the porous (outer) layers first.
+geometry(shape, ins::CompositeInsulation) =
+    geometry(shape, filter(l -> l isa AbstractPorousLayer, ins.layers)...,
+             filter(l -> !(l isa AbstractPorousLayer), ins.layers)...)
 
 abstract type AbstractGeometryPars end
 
@@ -190,53 +178,54 @@ end
 """
     SolarOrientation
 
-Supertype for the orientation of the long axis of a body to the sun, used by [`silhouette`](@ref).
+Abstract supertype for solar orientation traits used to select how silhouette area is computed.
+
+Concrete subtypes: [`NormalToSun`](@ref), [`ParallelToSun`](@ref), [`Intermediate`](@ref), [`ZenithAngleVarying`](@ref).
 """
 abstract type SolarOrientation <: AbstractGeometryPars end
 
 """
-    NormalToSun()
+    NormalToSun <: SolarOrientation
 
-Long axis at right angles to the sun: the largest silhouette.
+Orientation trait: body axis perpendicular to the sun, maximising silhouette area.
 """
 struct NormalToSun <: SolarOrientation end
 
 """
-    ParallelToSun()
+    ParallelToSun <: SolarOrientation
 
-Long axis pointing at the sun: the smallest silhouette.
+Orientation trait: body axis parallel to the sun, minimising silhouette area.
 """
 struct ParallelToSun <: SolarOrientation end
 
 """
-    Intermediate()
+    Intermediate <: SolarOrientation
 
-The mean of [`NormalToSun`](@ref) and [`ParallelToSun`](@ref).
+Orientation trait: silhouette area is the average of [`NormalToSun`](@ref) and [`ParallelToSun`](@ref).
 """
 struct Intermediate <: SolarOrientation end
 
 """
-    ZenithAngleVarying()
+    ZenithAngleVarying <: SolarOrientation
 
-Silhouette computed from the zenith angle of the sun, where the shape allows.
+Orientation trait: silhouette area computed from the solar zenith angle via shape-specific dispatch.
+Falls back to [`Intermediate`](@ref) for shapes that do not implement zenith-angle silhouette area.
 """
 struct ZenithAngleVarying <: SolarOrientation end
 
 """
     Geometry
 
-    Geometry(volume, characteristic_dimension, length, area)
+    Geometry(volume, length, area)
 
 The computed geometry of a [`Body`](@ref).
 
 - `volume`: mass over density
-- `characteristic_dimension`: cube root of the volume, plus the depth of any fibrous layer
 - `length`: `NamedTuple` of dimensions, with names that depend on the shape and layers
 - `area`: [`SurfaceAreas`](@ref)
 """
-struct Geometry{V,C,L,A<:SurfaceAreas} <: AbstractGeometryPars
+struct Geometry{V,L,A<:SurfaceAreas} <: AbstractGeometryPars
     volume::V
-    characteristic_dimension::C
     length::L
     area::A
 end
@@ -254,54 +243,48 @@ end
 #   _fibrous_level(shape, skin_dims, t)    -> (; dims, area)   fur NamedTuple + outer area
 #   _fat_thickness(shape, skin_dims, flesh_volume, fat_volume) -> Length
 #
-# `Half` and the animal shapes are not in `_StandardShape`; they keep their
-# own `geometry` methods.
+# `Half` is not in `StandardShape`; it keeps its own `geometry` methods.
 
-const _StandardShape = Union{AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab}
+const StandardShape = Union{AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab}
 
-_body_volume(shape::AbstractShape) = shape.mass / shape.density
-_flesh_volume(shape::AbstractShape, fat::FatLayer) =
-    _body_volume(shape) - shape.mass * fat.fraction / fat.density
-_characteristic_length(volume) = volume^(1 / 3)
-_convective_area(fur::FibrousLayer, skin_area) =
-    skin_area - insulation_area(fur.fibre_diameter, fur.fibre_density, skin_area)
+_flesh_volume(shape::AbstractShape, fat_layer::FatLayer) =
+    body_volume(shape) - fat_volume(shape, fat_layer)
+_convective_area(fibrous_layer::FibrousLayer, skin_area) =
+    skin_area - insulation_area(fibrous_layer.fibre_diameter, fibrous_layer.fibre_density, skin_area)
 
 # Equivalent-sphere radius enclosing `volume`; the ellipsoid reuses it on the
 # volume scaled by its axis ratio, so the cube-root formula lives in one place.
-_sphere_radius(volume) = ((3 / 4) * volume / π)^(1 / 3)
+_sphere_radius(volume) = cbrt((3 / 4) * volume / π)
 
-function geometry(shape::_StandardShape, ::Naked)
-    volume = _body_volume(shape)
+function geometry(shape::StandardShape, ::Naked)
+    volume = body_volume(shape)
     skin = _skin_level(shape, volume)
-    Geometry(volume, _characteristic_length(volume), skin.dims, SurfaceAreas(; total = skin.area))
+    Geometry(volume, skin.dims, SurfaceAreas(; total = skin.area))
 end
-function geometry(shape::_StandardShape, fur::FibrousLayer)
-    volume = _body_volume(shape)
+function geometry(shape::StandardShape, fibrous_layer::FibrousLayer)
+    volume = body_volume(shape)
     skin = _skin_level(shape, volume)
-    fibrous = _fibrous_level(shape, skin.dims, fur.thickness)
-    Geometry(volume, _characteristic_length(volume) + fur.thickness,
-             merge(skin.dims, fibrous.dims),
+    fibrous = _fibrous_level(shape, skin.dims, fibrous_layer.thickness)
+    Geometry(volume, merge(skin.dims, fibrous.dims),
              SurfaceAreas(; total = fibrous.area, skin = skin.area,
-                          convection = _convective_area(fur, skin.area)))
+                          convection = _convective_area(fibrous_layer, skin.area)))
 end
-function geometry(shape::_StandardShape, fat::FatLayer)
-    volume = _body_volume(shape)
-    flesh_volume = _flesh_volume(shape, fat)
+function geometry(shape::StandardShape, fat_layer::FatLayer)
+    volume = body_volume(shape)
+    flesh_volume = _flesh_volume(shape, fat_layer)
     skin = _skin_level(shape, volume)
     fat = _fat_thickness(shape, skin.dims, flesh_volume, volume - flesh_volume)
-    Geometry(volume, _characteristic_length(volume),
-             merge(skin.dims, (; fat)), SurfaceAreas(; total = skin.area))
+    Geometry(volume, merge(skin.dims, (; fat)), SurfaceAreas(; total = skin.area))
 end
-function geometry(shape::_StandardShape, fur::FibrousLayer, fat::FatLayer)
-    volume = _body_volume(shape)
-    flesh_volume = _flesh_volume(shape, fat)
+function geometry(shape::StandardShape, fibrous_layer::FibrousLayer, fat_layer::FatLayer)
+    volume = body_volume(shape)
+    flesh_volume = _flesh_volume(shape, fat_layer)
     skin = _skin_level(shape, volume)
-    fibrous = _fibrous_level(shape, skin.dims, fur.thickness)
+    fibrous = _fibrous_level(shape, skin.dims, fibrous_layer.thickness)
     fat = _fat_thickness(shape, skin.dims, flesh_volume, volume - flesh_volume)
-    Geometry(volume, _characteristic_length(volume) + fur.thickness,
-             merge(skin.dims, fibrous.dims, (; fat)),
+    Geometry(volume, merge(skin.dims, fibrous.dims, (; fat)),
              SurfaceAreas(; total = fibrous.area, skin = skin.area,
-                          convection = _convective_area(fur, skin.area)))
+                          convection = _convective_area(fibrous_layer, skin.area)))
 end
 
 """
@@ -312,35 +295,12 @@ Abstract supertype for organism bodies.
 abstract type AbstractBody <: AbstractGeometryPars end
 
 """
-    shape(body)
-
-The shape of a body; of the root part for a [`CompositeBody`](@ref).
-"""
-shape(body::AbstractBody) = body.shape
-
-"""
-    insulation(body)
-
-The insulation of a body; of the root part for a [`CompositeBody`](@ref).
-"""
-insulation(body::AbstractBody) = body.insulation
-
-"""
-    geometry(body)
-    geometry(shape, insulation)
-
-The [`Geometry`](@ref) of a body, or of a shape with the given insulation.
-"""
-geometry(body::AbstractBody) = body.geometry
-surface_area(body::AbstractBody) = surface_area(shape(body), body)
-
-"""
     Body <: AbstractBody
 
     Body(shape::AbstractShape, insulation::AbstractInsulationLayer)
     Body(shape::AbstractShape, insulation::AbstractInsulationLayer, geometry::AbstractGeometryPars)
 
-A shape with its insulation and the geometry computed from them.
+Physical dimensions of a body or body part that may or may not be insulated.
 """
 struct Body{S<:AbstractShape, I<:AbstractInsulationLayer, G<:AbstractGeometryPars} <: AbstractBody
     shape::S
@@ -351,30 +311,58 @@ end
 Body(shape::AbstractShape, insulation::AbstractInsulationLayer) =
     Body(shape, insulation, geometry(shape, insulation))
 
+"""
+    shape(body::AbstractBody) -> AbstractShape
+
+Return the shape of `body`.
+"""
+shape(body::AbstractBody) = body.shape
+
+"""
+    insulation(body::AbstractBody) -> AbstractInsulationLayer
+
+Return the insulation of `body`.
+"""
+insulation(body::AbstractBody) = body.insulation
+
+"""
+    geometry(body::AbstractBody) -> AbstractGeometryPars
+
+Return the geometry of `body`.
+"""
+geometry(body::AbstractBody) = body.geometry
+
+"""
+    surface_area(body::AbstractBody)
+
+Return the outer surface area of `body` — the same as [`total_area`](@ref).
+"""
+surface_area(body::AbstractBody) = total_area(body)
+
 # Surface areas
 
 """
-    total_area(body)
+    total_area(body::AbstractBody)
 
-Outer surface area, over any fibrous layer. For a [`CompositeBody`](@ref), summed over parts less joined patches.
+Return the total outer surface area of `body` (including insulation if present).
 """
 total_area(body::AbstractBody) = total_area(shape(body), insulation(body), body)
 
 """
-    skin_area(body)
+    skin_area(body::AbstractBody)
 
-Surface area of the skin. For a [`CompositeBody`](@ref), summed over parts less joined patches.
+Return the skin surface area of `body` (beneath any insulation).
 """
 skin_area(body::AbstractBody) = skin_area(shape(body), insulation(body), body)
 
 """
-    evaporation_area(body)
+    evaporation_area(body::AbstractBody)
 
-Skin area not covered by the bases of fibres. For a [`CompositeBody`](@ref), summed over parts less joined patches.
+Return the area available for evaporative water loss from `body`.
 """
 evaporation_area(body::AbstractBody) = evaporation_area(shape(body), insulation(body), body)
 
-# Fallbacks - mostly these are the same for all shapes
+# Fallbacks — mostly the same for all shapes
 total_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.total
 skin_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.skin
 evaporation_area(shape::AbstractShape, insulation::AbstractInsulationLayer, body::AbstractBody) = body.geometry.area.convection
@@ -391,26 +379,31 @@ evaporation_area(shape::AbstractShape, ins::CompositeInsulation, body::AbstractB
 
 """
     silhouette(body::AbstractBody, θ)
+    silhouette(body::AbstractBody) -> NamedTuple
     silhouette(body::AbstractBody, orientation::SolarOrientation)
+    silhouette(body::AbstractBody, orientation::SolarOrientation, zenith_angle)
 
-Calculates the silhouette (projected) area of an object given a
-solar zenith angle `θ` or a fixed [`SolarOrientation`](@ref) such as
-[`NormalToSun`](@ref), [`ParallelToSun`](@ref), or [`Intermediate`](@ref).
+Return the silhouette (projected) area of `body` at solar zenith angle `θ`, or for a
+fixed [`SolarOrientation`](@ref). With no second argument, returns a named tuple
+`(normal=..., parallel=...)` of the two bounding orientations.
+
+- [`NormalToSun`](@ref): body perpendicular to sun (maximum silhouette area)
+- [`ParallelToSun`](@ref): body parallel to sun (minimum silhouette area)
+- [`Intermediate`](@ref): mean of normal and parallel areas
+- [`ZenithAngleVarying`](@ref): computed from `zenith_angle` via shape-specific dispatch;
+  falls back to [`Intermediate`](@ref) if the shape does not implement zenith-angle silhouette area
 """
 silhouette(body::AbstractBody, θ) = silhouette(shape(body), insulation(body), body, θ)
 silhouette(body::AbstractBody) = silhouette(shape(body), insulation(body), body)
 
-# Orientation-specific implementations
 silhouette(body::AbstractBody, ::NormalToSun) = silhouette(body).normal
 silhouette(body::AbstractBody, ::ParallelToSun) = silhouette(body).parallel
 silhouette(body::AbstractBody, ::Intermediate) =
     (silhouette(body).normal + silhouette(body).parallel) * 0.5
 
 # Generic 3-arg fallback: zenith angle ignored for fixed orientations
-silhouette(body::AbstractBody, o::SolarOrientation, zenith_angle) = silhouette(body, o)
+silhouette(body::AbstractBody, o::SolarOrientation, ::Any) = silhouette(body, o)
 
-# ZenithAngleVarying: compute from zenith angle using shape-specific 4-arg dispatch;
-# falls back to Intermediate() for shapes that don't implement silhouette(shape, ins, body, θ)
 function silhouette(body::AbstractBody, ::ZenithAngleVarying, zenith_angle)
     sh = shape(body)
     ins = insulation(body)
@@ -423,27 +416,46 @@ end
 
 # Insulation area
 
-function insulation_area(fibre_diameter, fibre_density, skin)
-    π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)
-end
+"""
+    insulation_area(fibre_diameter, fibre_density, skin)
 
-# TODO make this 'insulation_area'
-function hair_area(fibre_diameter, fibre_density, skin)
+Return the total cross-sectional area of insulation fibres (fur, feathers, etc.) covering `skin` area,
+given `fibre_diameter` and `fibre_density` (fibres per unit area).
+"""
+function insulation_area(fibre_diameter, fibre_density, skin)
     π * (fibre_diameter / 2) ^ 2 * (fibre_density * skin)
 end
 
 # Volume
 
 """
-    flesh_volume(body)
+    body_volume(shape::AbstractShape)
 
-Volume inside the fat layer. For a [`CompositeBody`](@ref), summed over parts.
+Return the body volume `mass / density` for `shape`, in m³ when unitful — so
+mixing units (grams with kg/m³) doesn't leave odd units in every length.
+"""
+body_volume(shape::AbstractShape) = _in_m³(shape.mass / shape.density)
+_in_m³(v::Unitful.Volume) = uconvert(u"m^3", v)
+_in_m³(v) = v
+
+"""
+    fat_volume(shape::AbstractShape, fat_layer::FatLayer)
+
+Return the fat volume implied by a [`FatLayer`](@ref): `mass * fraction / density`.
+"""
+fat_volume(shape::AbstractShape, fat_layer::FatLayer) =
+    shape.mass * fat_layer.fraction / fat_layer.density
+
+"""
+    flesh_volume(body::AbstractBody)
+
+Return the volume of the flesh (non-fat) component of `body`.
 """
 flesh_volume(body::AbstractBody) = flesh_volume(insulation(body), body)
 function flesh_volume(ins::Union{FatLayer, CompositeInsulation}, body)
-    fat = inner_insulation(body.insulation)
+    fat_layer = inner_insulation(body.insulation)
     if body.geometry.length.fat > zero(body.geometry.length.fat)
-        body.geometry.volume - mass(body.shape) * fat.fraction / fat.density
+        body.geometry.volume - mass(body.shape) * fat_layer.fraction / fat_layer.density
     else
         body.geometry.volume
     end
@@ -454,49 +466,75 @@ flesh_volume(ins::Naked, body) = body.geometry.volume
 # Radius
 
 """
-    skin_radius(body)
+    skin_radius(body::AbstractBody)
 
-Radius at the skin: cylinder or sphere radius, short semi-axis of an ellipsoid, half-width of a plate.
+Return the radius at the skin surface of `body`.
 """
 skin_radius(body::AbstractBody) = skin_radius(shape(body), insulation(body), body)
 
 """
-    insulation_radius(body)
+    insulation_radius(body::AbstractBody)
 
-Radius at the outside of the fibrous layer; the [`skin_radius`](@ref) if there is none.
+Return the outer radius of the insulation layer of `body`.
 """
 insulation_radius(body::AbstractBody) = insulation_radius(shape(body), insulation(body), body)
 
 """
-    flesh_radius(body)
+    flesh_radius(body::AbstractBody)
 
-Radius at the inside of the fat layer; the [`skin_radius`](@ref) if there is none.
+Return the radius of the flesh (inner) cylinder of `body`.
 """
 flesh_radius(body::AbstractBody) = flesh_radius(shape(body), insulation(body), body)
 
+# Generic radius dispatch. Each concrete shape only needs to define
+# `_skin_radius(shape, length)` and (where insulation is supported)
+# `_fibrous_radius(shape, length)` accessors over its `body.geometry.length` NamedTuple.
+
+skin_radius(s::AbstractShape, ::AbstractInsulationLayer, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length)
+
+insulation_radius(s::AbstractShape, ::Union{Naked,FatLayer}, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length)
+insulation_radius(s::AbstractShape, ::Union{FibrousLayer,CompositeInsulation}, b::AbstractBody) =
+    _fibrous_radius(s, b.geometry.length)
+
+flesh_radius(s::AbstractShape, ::Union{Naked,FibrousLayer}, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length)
+flesh_radius(s::AbstractShape, ::Union{FatLayer,CompositeInsulation}, b::AbstractBody) =
+    _skin_radius(s, b.geometry.length) - b.geometry.length.fat
+
 # Helpers for handling CompositeInsulation
 
-# for composite insulation cases (fat and fur/feathers)
+"""
+    outer_insulation(ins::AbstractInsulationLayer) -> AbstractInsulationLayer
+
+Return the outermost insulation layer. For [`CompositeInsulation`](@ref), returns the
+porous layer (e.g. [`FibrousLayer`](@ref)) if one is present, otherwise the last layer.
+For other types, returns `ins` itself.
+"""
 outer_insulation(ins::AbstractInsulationLayer) = ins
 function outer_insulation(ins::CompositeInsulation)
-    # find fur layer if present
-    fur_layer = findlast(i -> i isa FibrousLayer, ins.layers)
-    if fur_layer !== nothing
-        ins.layers[fur_layer]
+    idx = findlast(i -> i isa AbstractPorousLayer, ins.layers)
+    if idx !== nothing
+        ins.layers[idx]
     else
-        # otherwise the last layer
         ins.layers[end]
     end
 end
 
+"""
+    inner_insulation(ins::AbstractInsulationLayer) -> AbstractInsulationLayer
+
+Return the innermost insulation layer. For [`CompositeInsulation`](@ref), returns the
+solid layer (e.g. [`FatLayer`](@ref)) if one is present, otherwise the last layer.
+For other types, returns `ins` itself.
+"""
 inner_insulation(ins::AbstractInsulationLayer) = ins
 function inner_insulation(ins::CompositeInsulation)
-    # find fur layer if present
-    fat_layer = findfirst(i -> i isa FatLayer, ins.layers)
-    if fat_layer !== nothing
-        ins.layers[fat_layer]
+    idx = findfirst(i -> i isa AbstractSolidLayer, ins.layers)
+    if idx !== nothing
+        ins.layers[idx]
     else
-        # otherwise the last layer
         ins.layers[end]
     end
 end

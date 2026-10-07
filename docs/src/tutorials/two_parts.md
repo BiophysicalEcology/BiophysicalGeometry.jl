@@ -29,8 +29,8 @@ density = 1000.0u"kg/m^3"
 back_fur = FibrousLayer(10.0u"mm", 20.0u"μm", 8000u"cm^-2")
 belly_fur = FibrousLayer(3.0u"mm", 20.0u"μm", 8000u"cm^-2")
 
-dorsal = Body(HalfEllipsoid(mass / 2, density, 3.0, 1.0), back_fur)
-ventral = Body(HalfEllipsoid(mass / 2, density, 3.0, 1.0), belly_fur)
+dorsal = Body(HalfEllipsoid(; mass = mass / 2, density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), back_fur)
+ventral = Body(HalfEllipsoid(; mass = mass / 2, density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), belly_fur)
 nothing # hide
 ```
 
@@ -87,7 +87,7 @@ Other parts are joined to either half. Here a sphere is joined to the front of t
 A point on the dome is given by two angles, from the long axis and around it:
 
 ```@example two
-head = Body(Sphere(60.0u"g", density), back_fur)
+head = Body(Sphere(; mass = 60.0u"g", density), back_fur)
 patch = Disc(1.0u"cm")
 with_head = CompositeBody(;
     parts = (; dorsal, ventral, head),
@@ -108,17 +108,14 @@ map(x -> uconvert(u"cm^2", x), silhouette(with_head, Beam(1.0, 0.0, 1.0)))
 
 ## Half cylinders
 
-A [`HalfCylinder`](@ref) is split in the same way. A cylinder stands along ``z`` with its flat face to the side,
-so the body is laid down with a `root_pose`, and the ventral half is turned to lie along the dorsal one with a
-`twist`, see [Joins and poses](../manual/joins.md):
+A [`HalfCylinder`](@ref) is split in the same way. Like every shape it lies along ``x`` with its flat face down,
+so the two halves meet as they are, see [Joins and poses](../manual/joins.md):
 
 ```@example two
-lying = Pose((0.0u"m", 0.0u"m", 0.0u"m"), [0.0 0.0 1.0; 1.0 0.0 0.0; 0.0 1.0 0.0])
 torso = CompositeBody(;
-    parts = (; dorsal = Body(HalfCylinder(mass / 2, density, 3.0), back_fur),
-               ventral = Body(HalfCylinder(mass / 2, density, 3.0), belly_fur)),
-    joins = (Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover()); twist = -π / 2),),
-    root_pose = lying,
+    parts = (; dorsal = Body(HalfCylinder(; mass = mass / 2, density, axis_ratio_b = 3.0), back_fur),
+               ventral = Body(HalfCylinder(; mass = mass / 2, density, axis_ratio_b = 3.0), belly_fur)),
+    joins = (Join(dorsal = Attachment(Flat(), FullCover()), ventral = Attachment(Flat(), FullCover())),),
 )
 composite_views(torso; views = (:oblique, :side, :front)) # hide
 ```
