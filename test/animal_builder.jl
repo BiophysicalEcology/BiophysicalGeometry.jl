@@ -53,6 +53,14 @@ end
     along(body, part) = BiophysicalGeometry.apply_rotation(getfield(body.poses, part).rotation, (1.0, 0.0, 0.0))
     @test along(giraffe, :neck)[3] ≈ sind(70) atol = 1e-6
     @test along(giraffe, :head)[3] ≈ 0 atol = 1e-6
+    # Legs swing forward, toward the head at +x, and tails rise.
+    dog = AB.build(AB.Dog(), merge(AB.settings("Dog"), (; legAngle = 30.0, tailAngle = 30.0)))
+    @test along(dog, :leg_fl)[1] ≈ 0.5 atol = 1e-6
+    @test along(dog, :leg_bl)[1] ≈ 0.5 atol = 1e-6
+    @test along(dog, :tail)[3] ≈ 0.5 atol = 1e-6
+    # A human faces -y.
+    human = AB.build(AB.Human(), merge(AB.settings("Human"), (; legAngle = 30.0)))
+    @test along(human, :leg_l)[2] ≈ -0.5 atol = 1e-6
     # Joint angles move parts, so they change the silhouette and not the areas.
     up = AB.build(AB.Giraffe(), merge(AB.settings("Giraffe"), (; neckAngle = 0.0)))
     @test total_area(up) ≈ total_area(giraffe)

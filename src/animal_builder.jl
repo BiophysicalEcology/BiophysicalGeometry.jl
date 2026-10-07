@@ -23,10 +23,10 @@ const DEFAULTS = (;
     neckFraction = 0.04, neckRatio = 1.0, neckAngle = 0.0,
     noseFraction = 0.005,
     earFraction = 0.002, earRatio = 1.5, earFlatness = 10.0, earAngle = 0.0,
-    legFraction = 0.03, legRatio = 5.0, legTop = 0.5, hindFraction = 0.06, hindRatio = 6.0,
+    legFraction = 0.03, legRatio = 5.0, legTop = 0.5, legAngle = 0.0, hindFraction = 0.06, hindRatio = 6.0,
     armFraction = 0.05, armRatio = 12.0,
     wingFraction = 0.04, wingFold = 0.0,
-    tailFraction = 0.01, tailRatio = 6.0,
+    tailFraction = 0.01, tailRatio = 6.0, tailAngle = 0.0,
 )
 
 # The settings of the page's controls, in the order the page passes them.

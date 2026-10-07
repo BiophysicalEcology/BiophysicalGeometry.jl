@@ -277,31 +277,38 @@ add_legs(a, an, s, masses, ::Nothing) = a
 function add_legs(a, an, s, masses, ::FourLegs)
     leg = axial_body(s, masses.leg, s.legRatio, s.legTop)
     hind = _hind_leg(s, masses, leg, hind_kind(an))
-    a = _add_leg(a, an, Val(:leg_fl), leg, 0.85, 1)
-    a = _add_leg(a, an, Val(:leg_fr), leg, 0.85, -1)
-    a = _add_leg(a, an, Val(:leg_bl), hind, 0.15, 1)
-    _add_leg(a, an, Val(:leg_br), hind, 0.15, -1)
+    a = _add_leg(a, an, s, Val(:leg_fl), leg, 0.85, 1)
+    a = _add_leg(a, an, s, Val(:leg_fr), leg, 0.85, -1)
+    a = _add_leg(a, an, s, Val(:leg_bl), hind, 0.15, 1)
+    _add_leg(a, an, s, Val(:leg_br), hind, 0.15, -1)
 end
 function add_legs(a, an, s, masses, ::TwoLegs)
     leg = axial_body(s, masses.leg, s.legRatio, s.legTop)
-    a = _add_leg(a, an, Val(:leg_l), leg, 0.5, 1)
-    _add_leg(a, an, Val(:leg_r), leg, 0.5, -1)
+    a = _add_leg(a, an, s, Val(:leg_l), leg, 0.5, 1)
+    _add_leg(a, an, s, Val(:leg_r), leg, 0.5, -1)
 end
 # Standing: under the trunk, side by side.
 function add_legs(a, an, s, masses, ::UprightLegs)
     leg = axial_body(s, masses.leg, s.legRatio, s.legTop)
     r = dims(leg).r
     p = patch(r)
-    a = attach(a, Val(:dorsal), Val(:leg_l), leg, Attachment(EndA(m(1.1 * r), 0.0), p), Attachment(EndA(ZERO, 0.0), p))
-    attach(a, Val(:dorsal), Val(:leg_r), leg, Attachment(EndA(m(1.1 * r), π), p), Attachment(EndA(ZERO, 0.0), p))
+    swing = _leg_swing(s)
+    a = attach(a, Val(:dorsal), Val(:leg_l), leg, Attachment(EndA(m(1.1 * r), 0.0), p), Attachment(EndA(ZERO, 0.0), p);
+               bend = swing, hinge = (0.0, 1.0, 0.0))
+    attach(a, Val(:dorsal), Val(:leg_r), leg, Attachment(EndA(m(1.1 * r), π), p), Attachment(EndA(ZERO, 0.0), p);
+           bend = swing, hinge = (0.0, 1.0, 0.0))
 end
 _hind_leg(s, masses, leg, ::Nothing) = leg
 _hind_leg(s, masses, leg, ::OwnHind) = axial_body(s, masses.hind, s.hindRatio, s.legTop)
-function _add_leg(a, an, name, leg, along, side_)
+function _add_leg(a, an, s, name, leg, along, side_)
     p = patch(dims(leg).r)
     on = side(torso_kind(an), dims(a.parts.ventral), along, side_)
-    attach(a, Val(:ventral), name, leg, Attachment(on, p), Attachment(EndA(ZERO, 0.0), p))
+    attach(a, Val(:ventral), name, leg, Attachment(on, p), Attachment(EndA(ZERO, 0.0), p);
+           bend = -_leg_swing(s), hinge = (0.0, 1.0, 0.0))
 end
+# Legs swing forward by `legAngle`, about the torso's y axis: the ventral half is the dorsal half turned over, so its
+# y axis, and the sign of the swing, are the other way.
+_leg_swing(s) = -deg2rad(s.legAngle)
 
 # Arms hang from the shoulders by their sides, turned to point down.
 add_arms(a, an, s, masses, ::Nothing) = a
@@ -341,5 +348,7 @@ function add_tail(a, an, s, masses, ::Tail)
     tail = axial_body(s, masses.tail, s.tailRatio, 0.3)
     D = dims(a.parts.dorsal)
     p = patch(min(dims(tail).r, 0.45 * D.r))
-    attach(a, Val(:dorsal), Val(:tail), tail, Attachment(back(torso_kind(an), D), p), Attachment(EndA(ZERO, 0.0), p))
+    # It rises by `tailAngle`, about the torso's y axis.
+    attach(a, Val(:dorsal), Val(:tail), tail, Attachment(back(torso_kind(an), D), p), Attachment(EndA(ZERO, 0.0), p);
+           bend = deg2rad(s.tailAngle), hinge = (0.0, 1.0, 0.0))
 end

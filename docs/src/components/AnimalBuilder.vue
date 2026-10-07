@@ -241,6 +241,8 @@ watch(animal, drawShadow, { flush: 'post' })
           <input type="range" min="1" max="12" step="0.1" v-model.number="p.legRatio" /></label>
         <label>Taper, foot / top <output>{{ p.legTop >= 1 ? 'cylinder' : p.legTop }}</output>
           <input type="range" min="0.1" max="1" step="0.05" v-model.number="p.legTop" /></label>
+        <label>Swung forward <output>{{ p.legAngle }}°</output>
+          <input type="range" min="-60" max="60" step="1" v-model.number="p.legAngle" /></label>
         <template v-if="hindLegs">
           <label>Hind leg, fraction of mass, each <output>{{ p.hindFraction }}</output>
             <input type="range" min="0.005" max="0.2" step="0.005" v-model.number="p.hindFraction" /></label>
@@ -271,6 +273,8 @@ watch(animal, drawShadow, { flush: 'post' })
           <input type="range" min="0.001" max="0.25" step="0.001" v-model.number="p.tailFraction" /></label>
         <label>Length / width <output>{{ p.tailRatio }}</output>
           <input type="range" min="1" max="20" step="0.5" v-model.number="p.tailRatio" /></label>
+        <label>Tail angle, up <output>{{ p.tailAngle }}°</output>
+          <input type="range" min="-60" max="90" step="1" v-model.number="p.tailAngle" /></label>
       </template>
 
       <h4>Sun</h4>
