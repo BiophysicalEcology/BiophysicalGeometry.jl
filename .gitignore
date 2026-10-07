@@ -9,6 +9,3 @@ docs/build/
 docs/node_modules/
 docs/package-lock.json
 docs/Manifest.toml
-# made by docs/builder/build.jl
-docs/src/public/animal_builder.wasm
-docs/src/components/animals.json

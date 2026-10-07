@@ -11,11 +11,6 @@ CairoMakie.activate!(type = "png")
 # Helpers for the figures, loaded in the examples with `using Main.FigureHelpers`
 include("figure_helpers.jl")
 
-# The "Build an animal" page runs the package in the browser: compile it to wasm, in its own module.
-module BuilderWasm
-include(joinpath(@__DIR__, "builder", "build.jl"))
-end
-
 makedocs(
     modules = [BiophysicalGeometry, Base.get_extension(BiophysicalGeometry, :BiophysicalGeometryMakieExt)],
     sitename = "BiophysicalGeometry.jl",

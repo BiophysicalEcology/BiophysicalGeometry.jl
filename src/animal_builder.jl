@@ -12,7 +12,7 @@ module AnimalBuilder
 
 using Unitful
 using ..BiophysicalGeometry
-using ..BiophysicalGeometry: Pose, child_pose, rotation_align, @SMatrix
+using ..BiophysicalGeometry: Pose
 
 const DEFAULTS = (;
     mass = 20.0, density = 1000.0, fatDensity = 901.0,
@@ -465,7 +465,5 @@ function build_animal(code::AbstractString)
     Core.eval(mod, Meta.parseall(code))
     return Core.eval(mod, :animal)
 end
-
-include("animals.jl")
 
 end

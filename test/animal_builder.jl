@@ -69,26 +69,3 @@ end
     animal = AB.build_animal(AB.animal_code((; mass = 1e-4, neck = true, nose = "Beak", ears = "Plate", tail = true)))
     @test total_area(animal) > 0u"m^2"
 end
-
-# The builder page's animals, built at machine level, are the recipe's: areas don't depend on the poses, so they
-# agree to the digits the recipe writes. The bird's wings join on their edge, not on their face.
-@testset "machine-level animals" begin
-    for name in AB.ANIMAL_NAMES
-        s = AB.settings(name)
-        machine = AB.build(AB.animal(name), s)
-        recipe = AB.build_animal(AB.animal_code(last(AB.PRESETS[findfirst(p -> first(p) == name, AB.PRESETS)])))
-        @test length(machine.parts) == length(recipe.parts)
-        @test flesh_volume(machine) ≈ flesh_volume(recipe)
-        @test total_area(machine) ≈ total_area(recipe) rtol = name == "Bird" ? 0.02 : 1e-5
-        @test skin_area(machine) ≈ skin_area(recipe) rtol = name == "Bird" ? 0.02 : 1e-5
-    end
-    s = AB.settings("Dog")
-    build_dog(s) = AB.build(AB.Dog(), s)
-    build_dog(s)
-    @test @allocated(build_dog(s)) == 0
-    # A giraffe's neck rises, and its head stays level.
-    giraffe = AB.build(AB.Giraffe(), AB.settings("Giraffe"))
-    along(part) = BiophysicalGeometry.apply_rotation(getfield(giraffe.poses, part).rotation, (1.0, 0.0, 0.0))
-    @test along(:neck)[3] ≈ sind(70) atol = 1e-6
-    @test along(:head)[3] ≈ 0 atol = 1e-6
-end
