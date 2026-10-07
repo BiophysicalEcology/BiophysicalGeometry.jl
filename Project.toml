@@ -12,10 +12,15 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 Bonito = "824d6782-a2ef-11e9-3a09-e5662e0c26f8"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
+Whisk = "5b8e3c11-c6c3-4a7d-9b5d-6f1d2c8e7a01"
+
+[sources]
+Whisk = {rev = "9fb8815593512af8329f25cb314bdef756bbaec5", url = "https://github.com/SimonDanisch/Whisk.jl"}
 
 [extensions]
 BiophysicalGeometryAppExt = ["Bonito", "WGLMakie"]
 BiophysicalGeometryMakieExt = "Makie"
+BiophysicalGeometryWhiskExt = "Whisk"
 
 [compat]
 Aqua = "0.8"
@@ -31,6 +36,7 @@ StaticArrays = "1"
 Test = "1"
 Unitful = "1"
 WGLMakie = "0.13"
+Whisk = "0.0.1"
 julia = "1"
 
 [extras]
@@ -41,6 +47,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Whisk = "5b8e3c11-c6c3-4a7d-9b5d-6f1d2c8e7a01"
 
 [targets]
-test = ["Aqua", "Random", "Roots", "SafeTestsets", "Test"]
+test = ["Aqua", "Random", "Roots", "SafeTestsets", "Test", "Whisk"]
