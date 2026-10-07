@@ -28,3 +28,27 @@ using BiophysicalGeometry.AnimalBuilder: build, animal, settings
 dog = build(animal("Dog"), merge(settings("Dog"), (; mass = 30.0, neckAngle = 20.0)))
 total_area(dog), silhouette(dog, Beam(0.0, 0.0, 1.0))
 ```
+
+## Your own models in a web page
+
+Any model can run in a page like this one. Write it as a function from its settings, all numbers, to a
+`CompositeBody`, built with `Unchecked()` constructors so that nothing can throw, and compile it with
+[`compile_wasm`](@ref):
+
+```julia
+using BiophysicalGeometry, Whisk
+
+compile_wasm("site/model", my_model, (; mass = 20.0, ratio = 3.0))
+```
+
+This writes `model.wasm`, `model.json` and `biophysical.mjs` into `site/model`. The JavaScript needs no framework,
+so the model can go in a Vue component, as here, a Bonito app or plain HTML:
+
+```js
+import { load } from './model/biophysical.mjs'
+const spec = await (await fetch('model/model.json')).json()
+const model = await load('model/model.wasm', spec)
+const { triangles, parts, total, shadow } = model.run(0, { mass: 30 }, [0, 0, 1])
+```
+
+This page compiles its ten animals into one module in the same way, in `docs/make.jl`.

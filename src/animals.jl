@@ -76,6 +76,9 @@ struct Upright end
 stance(::Animal) = Level()
 stance(::Human) = Upright()
 
+# An animal is a model for `compile_wasm`: settings in, body out.
+(a::Animal)(settings) = build(a, settings)
+
 """
     animal(name) -> Animal
 

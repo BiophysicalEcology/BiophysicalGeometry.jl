@@ -1,12 +1,15 @@
 <script setup>
-// Build an animal: the page's controls, and BiophysicalGeometry.jl itself, compiled to wasm, building the animal
-// and computing its areas and shadow. See docs/builder.
+// Build an animal: the page's controls, and BiophysicalGeometry.jl itself, compiled to wasm by `compile_wasm` in
+// docs/make.jl, building the animal and computing its areas and shadow.
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
-import { withBase } from 'vitepress'
-import { loadBuilder, spec } from './builderWasm.mjs'
+import { load } from './builder/biophysical.mjs'
+import spec from './builder/animals.json'
+import wasm from './builder/animals.wasm?url'
 
-const animals = spec.animals
-const index = ref(0)                               // the animal, in spec.animals
+// Each animal's settings, as an object keyed by name.
+const animals = spec.models.map((m) => ({
+  name: m.name, parts: m.parts, settings: Object.fromEntries(m.settings.map((name, i) => [name, m.defaults[i]])) }))
+const index = ref(0)                               // the animal, in spec.models
 const p = reactive({ ...animals[0].settings })     // its settings
 const logMass = ref(Math.log10(p.mass))
 const sun = reactive({ zenith: 30, azimuth: 90 })
@@ -29,7 +32,10 @@ const plateEars = computed(() => ['Elephant', 'Kangaroo', 'Giraffe'].includes(an
 const sphereHead = computed(() => ['Bird', 'Seal'].includes(animals[index.value].name))
 
 function update() {
-  if (builder.value) animal.value = builder.value.run(index.value, p, sun.zenith, sun.azimuth)
+  if (!builder.value) return
+  const z = (sun.zenith * Math.PI) / 180, a = (sun.azimuth * Math.PI) / 180
+  const result = builder.value.run(index.value, p, [Math.sin(z) * Math.cos(a), Math.sin(z) * Math.sin(a), Math.cos(z)])
+  animal.value = { ...result, meeh: result.total / Math.pow(p.mass, 2 / 3) }
 }
 
 const colours = { dorsal: [76, 140, 191], ventral: [230, 158, 51], head: [89, 173, 115], neck: [148, 115, 184],
@@ -162,7 +168,7 @@ onMounted(async () => {
   if (wanted >= 0) { index.value = wanted; useAnimal() }
   for (const [key, value] of query) if (key in p) p[key] = Number(value)
   logMass.value = Math.log10(p.mass)
-  builder.value = await loadBuilder(withBase('/animal_builder.wasm'))
+  builder.value = await load(wasm, spec)
   update()
 })
 watch([p, sun, index], update, { deep: true })

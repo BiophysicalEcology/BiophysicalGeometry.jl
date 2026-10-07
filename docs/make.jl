@@ -11,10 +11,12 @@ CairoMakie.activate!(type = "png")
 # Helpers for the figures, loaded in the examples with `using Main.FigureHelpers`
 include("figure_helpers.jl")
 
-# The "Build an animal" page runs the package in the browser: compile it to wasm, in its own module.
-module BuilderWasm
-include(joinpath(@__DIR__, "builder", "build.jl"))
-end
+# The "Build an animal" page runs the package in the browser: its animals, compiled to wasm.
+using Whisk
+const AB = BiophysicalGeometry.AnimalBuilder
+compile_wasm(joinpath(@__DIR__, "src", "components", "builder"),
+             NamedTuple{Symbol.(AB.ANIMAL_NAMES)}(map(name -> (AB.animal(name), AB.settings(name)), AB.ANIMAL_NAMES));
+             name = "animals")
 
 makedocs(
     modules = [BiophysicalGeometry, Base.get_extension(BiophysicalGeometry, :BiophysicalGeometryMakieExt)],
