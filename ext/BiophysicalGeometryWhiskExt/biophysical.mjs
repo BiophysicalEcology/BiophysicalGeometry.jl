@@ -1,18 +1,18 @@
 // Loads models compiled by BiophysicalGeometry.jl's `compile_wasm`. No framework: use it from Vue, Bonito or plain
 // HTML.
 //
-//     import { load } from './biophysical.mjs'
-//     const model = await load('model.wasm', spec)    // spec: the contents of model.json
+//     import { loadBiophysicalModel } from './biophysical.mjs'
+//     const model = await loadBiophysicalModel('model.wasm', spec)    // spec: the contents of model.json
 //     const result = model.run(0, { mass: 20 }, [0, 0.5, 1])
 //
-// `load` takes the module as a URL, an ArrayBuffer, a typed array or a fetch Response. `run(model, settings, sun)`
+// `loadBiophysicalModel` takes the module as a URL, an ArrayBuffer, a typed array or a fetch Response. `run(model, settings, sun)`
 // builds model `model` (its number from 0, or its name) from `settings`, keyed by name, missing ones taken from its
 // defaults, with the sun in the direction `sun`, [x, y, z]. It returns the body's triangles to draw (Float32Array,
 // `spec.triangle_floats` each: three corners in metres, then the part's number), each part's exposed area (m²) and
 // mass (kg), the totals, and the shadow: an n × n grid of 0 and 1, row j from the bottom and column i from the left
 // at index j * n + i, over `width` × `height` metres.
 
-export async function load(source, spec, { capacity = 80000, shadow = 160 } = {}) {
+export async function loadBiophysicalModel(source, spec, { capacity = 80000, shadow = 160 } = {}) {
   const bytes = await asBytes(source)
   let memory
   const N = (b) => (typeof b === 'bigint' ? Number(b) : b)

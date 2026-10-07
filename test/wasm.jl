@@ -49,9 +49,9 @@ js(settings) = "{" * join(("$k: $v" for (k, v) in pairs(settings)), ", ") * "}"
 cases = join(("[$(i - 1), $(js(s)), [$(join(d, ", "))]]" for (i, s, d) in CASES), ", ")
 script = """
 import fs from 'node:fs';
-import { load } from '$(joinpath(path, "biophysical.mjs"))';
+import { loadBiophysicalModel } from '$(joinpath(path, "biophysical.mjs"))';
 const spec = JSON.parse(fs.readFileSync('$(joinpath(path, "model.json"))'));
-const model = await load(fs.readFileSync('$(joinpath(path, "model.wasm"))'), spec, { capacity: $CAPACITY, shadow: $SHADOW });
+const model = await loadBiophysicalModel(fs.readFileSync('$(joinpath(path, "model.wasm"))'), spec, { capacity: $CAPACITY, shadow: $SHADOW });
 for (const [index, settings, sun] of [$cases]) {
   const r = model.run(index, settings, sun);
   const covered = r.shadow.covered.reduce((a, b) => a + b, 0);

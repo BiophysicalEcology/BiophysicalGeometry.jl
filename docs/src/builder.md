@@ -45,9 +45,9 @@ This writes `model.wasm`, `model.json` and `biophysical.mjs` into `site/model`. 
 so the model can go in a Vue component, as here, a Bonito app or plain HTML:
 
 ```js
-import { load } from './model/biophysical.mjs'
+import { loadBiophysicalModel } from './model/biophysical.mjs'
 const spec = await (await fetch('model/model.json')).json()
-const model = await load('model/model.wasm', spec)
+const model = await loadBiophysicalModel('model/model.wasm', spec)
 const { triangles, parts, total, shadow } = model.run(0, { mass: 30 }, [0, 0, 1])
 ```
 

@@ -60,7 +60,7 @@ The first two return the module's bytes, `wasm`, and `spec`, which describes it:
 and parts, and the layout of what it writes. With a `path`, they write `name.wasm`, `name.json` and the JavaScript
 that loads them, `biophysical.mjs`, into the folder `path`.
 
-In the page, `load` from `biophysical.mjs` takes the module (a URL, an `ArrayBuffer` or a `Response`) and its spec,
+In the page, `loadBiophysicalModel` from `biophysical.mjs` takes the module (a URL, an `ArrayBuffer` or a `Response`) and its spec,
 and gives `run(model, settings, sun)`: the body posed in triangles to draw, each part's exposed area and mass, the
 totals, and the shadow toward the sun. It needs no framework, so it works in Vue, Bonito or plain HTML.
 

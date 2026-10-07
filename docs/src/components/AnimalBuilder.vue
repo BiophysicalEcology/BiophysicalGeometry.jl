@@ -2,7 +2,7 @@
 // Build an animal: the page's controls, and BiophysicalGeometry.jl itself, compiled to wasm by `compile_wasm` in
 // docs/make.jl, building the animal and computing its areas and shadow.
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
-import { load } from './builder/biophysical.mjs'
+import { loadBiophysicalModel } from './builder/biophysical.mjs'
 import spec from './builder/animals.json'
 import wasm from './builder/animals.wasm?url'
 
@@ -168,7 +168,7 @@ onMounted(async () => {
   if (wanted >= 0) { index.value = wanted; useAnimal() }
   for (const [key, value] of query) if (key in p) p[key] = Number(value)
   logMass.value = Math.log10(p.mass)
-  builder.value = await load(wasm, spec)
+  builder.value = await loadBiophysicalModel(wasm, spec)
   update()
 })
 watch([p, sun, index], update, { deep: true })
