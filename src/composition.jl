@@ -289,11 +289,11 @@ end
 
 function _make_join(nt::NamedTuple{Names, Vals}, twist) where {Names, Vals}
     length(Names) == 2 ||
-        error("Join needs exactly two named attachments (parent then child); got $(length(Names)): $Names")
+        error("Join needs exactly two named attachments, parent then child")
     Vals <: NTuple{2, Attachment} ||
-        error("Join arguments must be `Attachment`s (got $(Vals.parameters[1]) and $(Vals.parameters[2]))")
+        error("Join arguments must be `Attachment`s")
     P = Names[1]; C = Names[2]
-    P === C && error("Join cannot connect a part to itself (`$P`)")
+    P === C && error("Join cannot connect a part to itself")
     Join{P, C, Vals.parameters[1], Vals.parameters[2], typeof(twist)}(nt[1], nt[2], twist)
 end
 
@@ -401,27 +401,21 @@ Area of the named surface alone (one face / one side of `shape`).
 The `location`'s parametric fields (if any) are ignored — only its type
 matters.
 """
-function surface_area(shape::AbstractShape, body::AbstractBody, loc::AbstractSurface)
-    error("surface_area not defined for $(typeof(shape)) surface $(typeof(loc))")
-end
+function surface_area end
 
 """
     surface_point(shape, body, location) -> NTuple{3,Length}
 
 Local 3D point on the named surface at the given located `location`.
 """
-function surface_point(shape::AbstractShape, body::AbstractBody, loc::AbstractSurface)
-    error("surface_point not defined for $(typeof(shape)) surface $(typeof(loc))")
-end
+function surface_point end
 
 """
     surface_normal(shape, body, location) -> NTuple{3,Float64}
 
 Local outward unit normal at the located `location`.
 """
-function surface_normal(shape::AbstractShape, body::AbstractBody, loc::AbstractSurface)
-    error("surface_normal not defined for $(typeof(shape)) surface $(typeof(loc))")
-end
+function surface_normal end
 
 """
     validate_range(shape, body, location)
@@ -438,9 +432,7 @@ validate_range(::AbstractShape, ::AbstractBody, ::AbstractSurface) = nothing
 Local 3D centroid of the surface `S`. Used by `FullCover` attachments,
 which have no parametric point.
 """
-function surface_centroid(shape::AbstractShape, body::AbstractBody, loc::AbstractSurface)
-    error("surface_centroid not defined for $(typeof(shape)) surface $(typeof(loc))")
-end
+function surface_centroid end
 
 """
     surface_centroid_normal(shape, body, ::S) where {S<:AbstractSurface} -> NTuple{3,Float64}
@@ -448,9 +440,7 @@ end
 Local outward unit normal at the surface centroid. Used by `FullCover`
 attachments.
 """
-function surface_centroid_normal(shape::AbstractShape, body::AbstractBody, loc::AbstractSurface)
-    error("surface_centroid_normal not defined for $(typeof(shape)) surface $(typeof(loc))")
-end
+function surface_centroid_normal end
 
 # ── Patch area dispatch ───────────────────────────────────────────────────
 
@@ -474,9 +464,9 @@ function validate_attachment(body::AbstractBody, att::Attachment)
     sh = shape(body)
     surfaces = attachment_surfaces(sh)
     isempty(surfaces) &&
-        error("$(typeof(sh)) does not support being joined (attachment_surfaces is empty)")
+        error("this shape does not support being joined")
     _supports_surface(surfaces, att.location) ||
-        error("$(typeof(sh)) has no surface $(typeof(att.location)); valid: $surfaces")
+        error("the shape has no such surface; see `attachment_surfaces`")
     # FullCover has no parametric point; skip range validation.
     if !(att.shape isa FullCover)
         validate_range(sh, body, att.location)
@@ -484,8 +474,7 @@ function validate_attachment(body::AbstractBody, att::Attachment)
     Asurface = surface_area(sh, body, att.location)
     Apatch = patch_area(body, att)
     if Apatch > Asurface * (1 + 1e-9)
-        error("attachment patch area ($Apatch) exceeds surface area of " *
-              "$(typeof(att.location)) on $(typeof(sh)) ($Asurface)")
+        error("attachment patch area exceeds the area of its surface")
     end
     return nothing
 end
@@ -500,20 +489,10 @@ end
 # Lookups are plain `getfield(nt, P)` where `P` comes from a
 # `where`-bound type parameter — Julia constant-folds those.
 
-function validate_parts(parts::NamedTuple)
-    isempty(parts) && error("CompositeBody must have at least one part")
-    for (name, body) in pairs(parts)
-        body isa AbstractBody ||
-            error("part `$name` must be an AbstractBody; got $(typeof(body))")
-        body isa CompositeBody &&
-            error("part `$name` is a nested CompositeBody, which is not supported")
-    end
-    return nothing
-end
+validate_parts(::NamedTuple{<:Any,<:Tuple{Body,Vararg{Body}}}) = nothing
+validate_parts(parts) = error("CompositeBody parts must be a non-empty NamedTuple of `Body`s")
 
 function validate_join(parts::NamedTuple, j::Join{P, C}) where {P, C}
-    haskey(parts, P) || error("CompositeBody has no part named `$P`")
-    haskey(parts, C) || error("CompositeBody has no part named `$C`")
     pb = getfield(parts, P); cb = getfield(parts, C)
     validate_attachment(pb, j.parent_attachment)
     validate_attachment(cb, j.child_attachment)
@@ -523,13 +502,11 @@ function validate_join(parts::NamedTuple, j::Join{P, C}) where {P, C}
     if rel > 1e-6
         ps, cs = j.parent_attachment.shape, j.child_attachment.shape
         if ps isa Disc && cs isa Disc
-            error("Join Disc radii must match: parent r=$(ps.radius), child r=$(cs.radius)")
+            error("Join Disc radii must match")
         elseif ps isa FullCover && cs isa FullCover
-            error("Join FullCover surfaces have unequal area: " *
-                  "$(typeof(j.parent_attachment.location))=$Ap vs " *
-                  "$(typeof(j.child_attachment.location))=$Ac")
+            error("Join FullCover surfaces must have equal areas")
         else
-            error("Join patch areas differ: parent $(typeof(ps))=$Ap vs child $(typeof(cs))=$Ac")
+            error("Join patch areas must match")
         end
     end
     return nothing
@@ -602,43 +579,35 @@ function child_pose(parent_body, parent_pose::Pose, child_body, j::Join)
     return Pose(t, R)
 end
 
-# Apply one join, given the current `poses` NamedTuple accumulator.
-# Requires exactly one endpoint of `j` to already be in `poses`.
-function _apply_join(parts::NamedTuple, j::Join{P, C}, poses::NamedTuple) where {P, C}
-    parent_known = haskey(poses, P)
-    child_known = haskey(poses, C)
-    if parent_known && !child_known
-        cp = child_pose(getfield(parts, P), getfield(poses, P),
-                         getfield(parts, C), j)
-        return merge(poses, NamedTuple{(C,)}((cp,)))
-    elseif child_known && !parent_known
-        rj = _reverse_join(j)
-        pp = child_pose(getfield(parts, C), getfield(poses, C),
-                         getfield(parts, P), rj)
-        return merge(poses, NamedTuple{(P,)}((pp,)))
-    elseif parent_known && child_known
-        # Cycle — extra join carries a constraint we don't validate here.
-        return poses
-    else
-        error("Join `$P` ↔ `$C` has neither endpoint reachable from root " *
-              "yet — reorder joins so a connected endpoint comes first.")
-    end
+# Apply one join to the poses found so far, where a part not yet placed has pose
+# `nothing`. Which ends are placed is known from the types.
+_apply_join(parts, j::Join{P,C}, poses) where {P,C} =
+    _apply_join(parts, j, poses, getfield(poses, P), getfield(poses, C))
+function _apply_join(parts, j::Join{P,C}, poses, parent::Pose, ::Nothing) where {P,C}
+    pose = child_pose(getfield(parts, P), parent, getfield(parts, C), j)
+    merge(poses, NamedTuple{(C,)}((pose,)))
 end
+function _apply_join(parts, j::Join{P,C}, poses, ::Nothing, child::Pose) where {P,C}
+    pose = child_pose(getfield(parts, C), child, getfield(parts, P), _reverse_join(j))
+    merge(poses, NamedTuple{(P,)}((pose,)))
+end
+# Both placed: a cycle, whose extra join carries a constraint not checked here.
+_apply_join(parts, j, poses, ::Pose, ::Pose) = poses
+_apply_join(parts, j, poses, ::Nothing, ::Nothing) =
+    error("a Join has neither end joined to the root yet; put a join to one of them first")
 
-# Tuple-recursive fold of joins into a growing poses NamedTuple.
+# Tuple-recursive fold of joins into the poses.
 _fold_joins(parts, ::Tuple{}, poses) = poses
 _fold_joins(parts, joins::Tuple, poses) =
     _fold_joins(parts, Base.tail(joins), _apply_join(parts, joins[1], poses))
 
-function solve_poses(parts::NamedTuple, joins::Tuple, root::Symbol, root_pose::Pose)
-    poses = NamedTuple{(root,)}((root_pose,))
-    poses = _fold_joins(parts, joins, poses)
-    if length(poses) != length(parts)
-        missing_names = filter(n -> !(n in propertynames(poses)), propertynames(parts))
-        error("parts not reachable from root `$root` via joins: $missing_names")
-    end
-    return poses
+# The root is the first part.
+function solve_poses(parts::NamedTuple{K}, joins::Tuple, root_pose::Pose) where {K}
+    unplaced = map(_ -> nothing, Base.tail(values(parts)))
+    _placed(_fold_joins(parts, joins, NamedTuple{K}((root_pose, unplaced...))))
 end
+_placed(poses::NamedTuple{<:Any,<:Tuple{Vararg{Pose}}}) = poses
+_placed(poses) = error("some parts are not joined to the root")
 
 # Pull a length zero out of a part for the pose translation type.
 _length_unit(b::AbstractBody) = zero(cbrt(b.geometry.volume))
@@ -666,30 +635,30 @@ at least one endpoint of each join has already been reached from `root`
 
 The constructor validates each `Join` (surface types, coordinate ranges,
 patch sizes) and derives world-frame `poses` for every part.
+`CompositeBody(Unchecked(); parts, joins)` only derives the poses: `joins` must
+then be a `Tuple`, and nothing is validated.
 """
-struct CompositeBody{Root, P<:NamedTuple, J<:Tuple, RP<:NamedTuple} <: AbstractBody
+struct CompositeBody{P<:NamedTuple, J<:Tuple, RP<:NamedTuple} <: AbstractBody
     parts::P
     joins::J
     poses::RP
 end
 
-function CompositeBody(; parts::NamedTuple, joins,
-                         root_pose::Union{Pose,Nothing} = nothing)
+function CompositeBody(; parts::NamedTuple, joins, root_pose::Union{Pose,Nothing} = nothing)
     validate_parts(parts)
     joins_t = joins isa Tuple ? joins : Tuple(joins)
-    for j in joins_t
-        validate_join(parts, j)
-    end
-    root = first(propertynames(parts))
-    root_body = getfield(parts, root)
-    rp = root_pose === nothing ? identity_pose(typeof(_length_unit(root_body))) : root_pose
-    poses = solve_poses(parts, joins_t, root, rp)
-    CompositeBody{root, typeof(parts), typeof(joins_t), typeof(poses)}(parts, joins_t, poses)
+    map(j -> validate_join(parts, j), joins_t)
+    CompositeBody(Unchecked(); parts, joins = joins_t, root_pose)
+end
+function CompositeBody(::Unchecked; parts::NamedTuple, joins::Tuple, root_pose = nothing)
+    rp = root_pose === nothing ? identity_pose(typeof(_length_unit(first(parts)))) : root_pose
+    poses = solve_poses(parts, joins, rp)
+    CompositeBody{typeof(parts), typeof(joins), typeof(poses)}(parts, joins, poses)
 end
 
 # ── Accessors that delegate to root ───────────────────────────────────────
 
-_root_part(b::CompositeBody{Root}) where {Root} = getfield(b.parts, Root)
+_root_part(b::CompositeBody) = first(b.parts)
 
 shape(b::CompositeBody) = shape(_root_part(b))
 insulation(b::CompositeBody) = insulation(_root_part(b))

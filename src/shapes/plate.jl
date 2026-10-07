@@ -6,23 +6,25 @@ along `y`, `height` along `z`. `axis_ratio_b` is length / width and
 `axis_ratio_c` length / height. Give any sufficient set of keywords — e.g.
 `mass`, `density` and both ratios, or all three dimensions and one of `mass` /
 `density` — and the rest is solved for. Dimensions are at skin level.
+`Plate(Unchecked(); ...)` does the same without checking the keywords.
 """
 struct Plate{M,D,B,C} <: AbstractSlab
     mass::M
     density::D
     axis_ratio_b::B
     axis_ratio_c::C
-    Plate(::Resolved, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
+    Plate(::Unchecked, mass::M, density::D, axis_ratio_b::B, axis_ratio_c::C) where {M,D,B,C} =
         new{M,D,B,C}(mass, density, axis_ratio_b, axis_ratio_c)
 end
 
 # volume = length·width·height; axis_ratio_b = length/width, axis_ratio_c = length/height
-const BOX_SPEC = ShapeSpec((:length, :width, :height), (1, 1, 1), 0.0,
-                             (:axis_ratio_b => (1, 2, 1.0), :axis_ratio_c => (1, 3, 1.0)))
+ShapeSpec(::Type{Plate}) = ShapeSpec{Plate}((; length = 1, width = 1, height = 1), 0.0,
+    (; axis_ratio_b = (1, 2, 1.0), axis_ratio_c = (1, 3, 1.0)))
 
-function Plate(; kw...)
-    s = _resolve_shape("Plate", BOX_SPEC, NamedTuple(kw))
-    Plate(RESOLVED, s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c)
+Plate(; kw...) = (check_shape(ShapeSpec(Plate), NamedTuple(kw)); Plate(Unchecked(); kw...))
+function Plate(::Unchecked; kw...)
+    s = _resolve_shape(ShapeSpec(Plate), NamedTuple(kw))
+    Plate(Unchecked(), s.mass, s.density, s.axis_ratio_b, s.axis_ratio_c)
 end
 
 function _skin_level(shape::Plate, volume)
@@ -125,18 +127,18 @@ surface_area(sh::Plate, body::AbstractBody, ::SideD) = surface_area(sh, body, Si
 
 function validate_range(::Plate, body::AbstractBody, loc::Union{Top,Bottom})
     L, W, _ = _plate_skin(body)
-    abs(loc.x) ≤ L/2 || error("$(typeof(loc)) x out of range ±$(L/2): $(loc.x)")
-    abs(loc.y) ≤ W/2 || error("$(typeof(loc)) y out of range ±$(W/2): $(loc.y)")
+    abs(loc.x) ≤ L/2 || error("x is out of range")
+    abs(loc.y) ≤ W/2 || error("y is out of range")
 end
 function validate_range(::Plate, body::AbstractBody, loc::Union{SideA,SideB})
     _, W, H = _plate_skin(body)
-    abs(loc.y) ≤ W/2 || error("$(typeof(loc)) y out of range ±$(W/2): $(loc.y)")
-    abs(loc.z) ≤ H/2 || error("$(typeof(loc)) z out of range ±$(H/2): $(loc.z)")
+    abs(loc.y) ≤ W/2 || error("y is out of range")
+    abs(loc.z) ≤ H/2 || error("z is out of range")
 end
 function validate_range(::Plate, body::AbstractBody, loc::Union{SideC,SideD})
     L, _, H = _plate_skin(body)
-    abs(loc.x) ≤ L/2 || error("$(typeof(loc)) x out of range ±$(L/2): $(loc.x)")
-    abs(loc.z) ≤ H/2 || error("$(typeof(loc)) z out of range ±$(H/2): $(loc.z)")
+    abs(loc.x) ≤ L/2 || error("x is out of range")
+    abs(loc.z) ≤ H/2 || error("z is out of range")
 end
 
 function surface_point(::Plate, body::AbstractBody, loc::Top)

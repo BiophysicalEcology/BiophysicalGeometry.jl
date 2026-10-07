@@ -7,24 +7,31 @@ base disc (radius `radius`) at `x = 0` and its top disc at `x = length`.
 `0` makes a sharp cone, values in `(0, 1)` a frustum. Give any sufficient set
 of the other keywords, as for [`Cylinder`](@ref). Insulation expands radii and
 length as for `Cylinder`; attachment positions stay at flesh level.
+`Cone(Unchecked(); ...)` does the same without checking the keywords.
 """
 struct Cone{M,D,B,T} <: AbstractCylindrical
     mass::M
     density::D
     axis_ratio_b::B
     top_ratio::T
-    Cone(::Resolved, mass::M, density::D, axis_ratio_b::B, top_ratio::T) where {M,D,B,T} =
+    Cone(::Unchecked, mass::M, density::D, axis_ratio_b::B, top_ratio::T) where {M,D,B,T} =
         new{M,D,B,T}(mass, density, axis_ratio_b, top_ratio)
 end
 
 # volume = (π/3)(1 + t + t²)·radius²·length; axis_ratio_b = length / (2·radius)
-_cone_spec(t) = ShapeSpec((:length, :radius), (1, 2), log(π / 3 * _cone_volume_factor(t)),
-                           (:axis_ratio_b => (1, 2, 2.0),))
+ShapeSpec(::Type{Cone}, t) = ShapeSpec{Cone}((; length = 1, radius = 2), log(π / 3 * _cone_volume_factor(t)),
+    (; axis_ratio_b = (1, 2, 2.0)))
+
+_check_top_ratio(t) = 0 <= t <= 1 || throw(ArgumentError("Cone `top_ratio` must be in [0, 1], got $t"))
 
 function Cone(; top_ratio = 0.0, kw...)
-    0 <= top_ratio <= 1 || throw(ArgumentError("Cone `top_ratio` must be in [0, 1], got $top_ratio"))
-    s = _resolve_shape("Cone", _cone_spec(top_ratio), NamedTuple(kw))
-    Cone(RESOLVED, s.mass, s.density, s.axis_ratio_b, top_ratio)
+    _check_top_ratio(top_ratio)
+    check_shape(ShapeSpec(Cone, top_ratio), NamedTuple(kw))
+    Cone(Unchecked(); top_ratio, kw...)
+end
+function Cone(::Unchecked; top_ratio = 0.0, kw...)
+    s = _resolve_shape(ShapeSpec(Cone, top_ratio), NamedTuple(kw))
+    Cone(Unchecked(), s.mass, s.density, s.axis_ratio_b, top_ratio)
 end
 
 # Volume of a frustum = (π/3) · L · (R² + R·r + r²) with r = top_ratio·R.
@@ -124,18 +131,18 @@ end
 function validate_range(::Cone, body::AbstractBody, loc::EndA)
     R = body.geometry.length.radius_skin
     loc.radius ≥ zero(loc.radius) && loc.radius ≤ R ||
-        error("EndA radius out of range [0, $R]: $(loc.radius)")
+        error("EndA radius is out of range")
 end
 function validate_range(shape::Cone, body::AbstractBody, loc::EndB)
     Rt = shape.top_ratio * body.geometry.length.radius_skin
     Rt > zero(Rt) || error("EndB has zero radius (top_ratio=0); use a Disc(0) only")
     loc.radius ≥ zero(loc.radius) && loc.radius ≤ Rt ||
-        error("EndB radius out of range [0, $Rt]: $(loc.radius)")
+        error("EndB radius is out of range")
 end
 function validate_range(::Cone, body::AbstractBody, loc::Lateral)
     L = body.geometry.length.length_skin
     loc.position ≥ zero(loc.position) && loc.position ≤ L ||
-        error("Lateral position out of range [0, $L]: $(loc.position)")
+        error("Lateral position is out of range")
 end
 
 # Attachment positions at flesh (skin) level.

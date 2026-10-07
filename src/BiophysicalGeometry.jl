@@ -1,11 +1,11 @@
 module BiophysicalGeometry
 
-using LinearAlgebra: det
+using LinearAlgebra: det, lu
 using StaticArrays: SVector, SMatrix, @SMatrix
 using Unitful
 
 export AbstractGeometryPars, AbstractBody, Body
-export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, TriangularPlate, Cone
+export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, TriangularPlate, Cone, Unchecked
 export Half, HalfCylinder, HalfCone, HalfEllipsoid, HalfSphere
 export AbstractCylindrical, AbstractSpherical, AbstractEllipsoidal, AbstractSlab
 export AbstractInsulationLayer, AbstractSolidLayer, AbstractPorousLayer
@@ -23,8 +23,8 @@ export attachment_surfaces
 export join_area, join_position, join_partners, internal_distance, flesh_centroid
 export geometry, shape, mass, insulation, outer_dims
 export total_area, skin_area, evaporation_area, skin_radius, insulation_radius, flesh_radius, flesh_volume
-export surface_area, silhouette, silhouette_factors
-export silhouette_rasterized
+export surface_area, silhouette, silhouette!, silhouette_factors, silhouette_factors!
+export silhouette_rasterized, silhouette_rasterized!
 export outer_insulation
 export plot_body, draw_cutaway!, plot_cross_sections, draw_cross_sections!
 export plot_body_silhouette

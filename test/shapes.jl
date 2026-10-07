@@ -199,8 +199,8 @@ end
         @test alt.axis_ratio_b ≈ ref.axis_ratio_b
     end
     # Given values pass through unchanged, units included.
-    p = Plate(; mass = 500u"g", density, axis_ratio_b = 3.0, axis_ratio_c = 4.0)
-    @test p.mass === 500u"g"
+    p = Plate(; mass = 500.0u"g", density, axis_ratio_b = 3.0, axis_ratio_c = 4.0)
+    @test p.mass === 500.0u"g"
     # Dimensions round-trip for every shape.
     e = Ellipsoid(; length = 0.6u"m", width = 0.2u"m", height = 0.1u"m", density)
     g = Body(e, Naked()).geometry.length
@@ -218,29 +218,34 @@ end
     @test BG.mass(HalfCylinder(; mass = 5u"kg", density, axis_ratio_b = 3.0)) == 5u"kg"
     # Positional construction is gone; bad keyword sets say what's wrong.
     @test_throws MethodError Cylinder(10u"kg", density, 3.0)
-    @test_throws ArgumentError Cylinder(; mass = 10u"kg") # under-determined
-    @test_throws ArgumentError Cylinder(; mass = 10u"kg", density, volume = 1u"m^3", axis_ratio_b = 3.0)
-    @test_throws ArgumentError Cylinder(; mass = 10u"kg", density, axis_ratio = 3.0) # unknown keyword
-    @test_throws ArgumentError Sphere(; mass = -1u"kg", density)
-    @test_throws ArgumentError Cone(; mass = 1u"kg", density, axis_ratio_b = 2.0, top_ratio = 1.5)
+    @test_throws "needs more keywords" Cylinder(; mass = 10u"kg")
+    @test_throws "contradict" Cylinder(; mass = 10u"kg", density, volume = 1u"m^3", axis_ratio_b = 3.0)
+    @test_throws "takes any sufficient set" Cylinder(; mass = 10u"kg", density, axis_ratio = 3.0)
+    @test_throws "`mass` must be positive" Sphere(; mass = -1u"kg", density)
+    @test_throws "`top_ratio` must be in [0, 1], got 1.5" Cone(; mass = 1u"kg", density, axis_ratio_b = 2.0, top_ratio = 1.5)
+    @test_throws "needs more keywords" HalfEllipsoid(; mass = 1u"kg", density, axis_ratio_b = 2.0)
+    # The machine-level constructors give the same shapes, and check nothing.
+    @test Cylinder(Unchecked(); mass = 10.0u"kg", density, axis_ratio_b = 3.0) ==
+          Cylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0)
+    @test Cylinder(Unchecked(); mass = 10.0u"kg") isa Cylinder
     # Quantities need their units; ratios are plain numbers.
-    @test_throws ArgumentError Cylinder(; mass = 10.0, density, axis_ratio_b = 3.0)
-    @test_throws ArgumentError Cylinder(; length = 0.5u"kg", radius = 0.05u"m", density)
-    @test_throws ArgumentError Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0u"m")
+    @test_throws "`mass` must be a quantity like 1.0 kg" Cylinder(; mass = 10.0, density, axis_ratio_b = 3.0)
+    @test_throws "`length` must be a quantity like 1.0 m" Cylinder(; length = 0.5u"kg", radius = 0.05u"m", density)
+    @test_throws "`axis_ratio_b` must be a plain number" Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0u"m")
 end
 
 # Measured in a function, so that nothing is a non-constant global.
 allocations(f) = (f(); @allocated f())
 
-@testset "Keyword construction allocates nothing" begin
-    @test allocations(() -> Cylinder(; mass = 10.0u"kg", density, axis_ratio_b = 3.0)) == 0
-    @test allocations(() -> Cylinder(; length = 0.5u"m", radius = 0.05u"m", density)) == 0
-    @test allocations(() -> Sphere(; radius = 0.1u"m", mass = 10.0u"kg")) == 0
-    @test allocations(() -> Plate(; mass = 500.0u"g", density, length = 0.3u"m", width = 0.1u"m")) == 0
-    @test allocations(() -> Ellipsoid(; length = 0.6u"m", width = 0.2u"m", height = 0.1u"m", density)) == 0
-    @test allocations(() -> Cone(; mass = 1.0u"kg", density, axis_ratio_b = 2.0, top_ratio = 0.4)) == 0
-    @test allocations(() -> HalfEllipsoid(; mass = 5.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0)) == 0
-    @test allocations(() -> TriangularPlate(; length = 0.3u"m", width = 0.2u"m", height = 0.01u"m", density)) == 0
+@testset "Machine-level construction allocates nothing" begin
+    @test allocations(() -> Cylinder(Unchecked(); mass = 10.0u"kg", density, axis_ratio_b = 3.0)) == 0
+    @test allocations(() -> Cylinder(Unchecked(); length = 0.5u"m", radius = 0.05u"m", density)) == 0
+    @test allocations(() -> Sphere(Unchecked(); radius = 0.1u"m", mass = 10.0u"kg")) == 0
+    @test allocations(() -> Plate(Unchecked(); mass = 500.0u"g", density, length = 0.3u"m", width = 0.1u"m")) == 0
+    @test allocations(() -> Ellipsoid(Unchecked(); length = 0.6u"m", width = 0.2u"m", height = 0.1u"m", density)) == 0
+    @test allocations(() -> Cone(Unchecked(); mass = 1.0u"kg", density, axis_ratio_b = 2.0, top_ratio = 0.4)) == 0
+    @test allocations(() -> HalfEllipsoid(Unchecked(); mass = 5.0u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0)) == 0
+    @test allocations(() -> TriangularPlate(Unchecked(); length = 0.3u"m", width = 0.2u"m", height = 0.01u"m", density)) == 0
 end
 
 @testset "Triaxial ellipsoid" begin
@@ -301,17 +306,28 @@ end
     lit = silhouette(stack, Beam(0.0, 0.0, 1.0))
     @test lit.a > 0u"m^2"
     @test lit.b == lit.c == 0u"m^2"
+
+    # With buffers passed in, the results are the same and nothing is allocated.
+    depth = Array{Float64}(undef, 256, 256, 3)
+    shares = Matrix{Float64}(undef, 3, 5)
+    shadow = Matrix{Bool}(undef, 256, 256)
+    beam = Beam(0.3, 0.2, 1.0)
+    @test silhouette!(depth, stack, beam) == silhouette(stack, beam)
+    @test silhouette_rasterized!(shadow, stack, beam.direction) == silhouette_rasterized(stack, beam.direction)
+    @test silhouette_factors!(depth[1:64, 1:64, :], shares, stack, Sky(0.5); ndirections = 200) == f
+    @test allocations(() -> silhouette!(depth, stack, beam)) == 0
+    @test allocations(() -> silhouette_rasterized!(shadow, stack, beam.direction)) == 0
+    @test allocations(() -> silhouette_factors!(depth, shares, stack, Sky(0.5); ndirections = 8)) == 0
 end
 
 @testset "Argument checks" begin
-    cb = single(Body(Sphere(; radius = 0.1u"m", density), Naked()))
     @test_throws ArgumentError Beam(0.0, 0.0, 0.0)
+    @test_throws ArgumentError Beam((0.0, 0.0, 0.0))
     @test_throws ArgumentError Beam(NaN, 0.0, 1.0)
     @test_throws ArgumentError Sky(1.5)
+    @test_throws ArgumentError Sky(0.5, (0.0, 0.0, 0.0))
     @test_throws ArgumentError Ground(-0.1)
     @test_throws ArgumentError Horizon(Float64[])
-    @test_throws ArgumentError silhouette_factors(cb, Sky(0.5); ndirections = 0)
-    @test_throws ArgumentError silhouette_rasterized(cb, (0.0, 0.0, 1.0); resolution = 0)
 end
 
 @testset "Truncated ellipsoid" begin

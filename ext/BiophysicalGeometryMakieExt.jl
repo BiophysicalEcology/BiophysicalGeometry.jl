@@ -11,7 +11,7 @@ import BiophysicalGeometry: AbstractCylindrical, AbstractEllipsoidal, AbstractSp
 import BiophysicalGeometry: cylinder_tube, cylinder_cap, ellipsoid_mesh, cone_tube,
     half_cylinder_flat, half_ellipsoid_flat_mesh,
     box_face_x, box_face_y, box_face_z,
-    part_outer_meshes, transform_mesh, outer_dims, top_ratio, HalfDomed,
+    part_outer_meshes, transform_mesh, tile_matrices, Tile, outer_dims, top_ratio, HalfDomed,
     triangle_face, prism_side, inradius, ellipsoid_mesh_truncated, ellipsoid_pole_a_cap
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -46,7 +46,6 @@ function _domed_layers(::Union{Ellipsoid,Half{<:AbstractEllipsoidal}}, body)
 end
 
 _colors(p) = (flesh=p[:flesh_col][], fat_layer=p[:fat_layer_col][], fibrous_layer=p[:fibrous_layer_col][])
-_root_name(::CompositeBody{Root}) where {Root} = Root
 # Title name; a Half reads as its constructor (`HalfCone`, `HalfCylinder`, …).
 _shape_name(s) = string(nameof(typeof(s)))
 _shape_name(h::Half) = "Half" * _shape_name(h.parent)
@@ -66,6 +65,7 @@ end
 # 3-D DRAW PRIMITIVES
 # ══════════════════════════════════════════════════════════════════════════════
 
+_draw_surface!(target, tile::Tile, color) = _draw_surface!(target, tile_matrices(tile), color)
 function _draw_surface!(target, (X, Y, Z), color)
     surface!(target, X, Y, Z; color=fill(color, size(X)...), shading=true, backlight=0.4f0)
 end
@@ -253,7 +253,7 @@ function _draw_composite!(p, b::CompositeBody, sc, cols)
         pose = getfield(b.poses, name)
         col = _part_color(part, cols)
         for mesh in part_outer_meshes(part.shape, part, sc)
-            _draw_surface!(p, transform_mesh(mesh..., pose, sc), col)
+            _draw_surface!(p, transform_mesh(mesh, pose, sc), col)
         end
     end
 end
@@ -267,7 +267,7 @@ function _composite_bbox(b::CompositeBody, sc)
         part = getfield(b.parts, name)
         pose = getfield(b.poses, name)
         for grid in part_outer_meshes(part.shape, part, sc)
-            X, Y, Z = transform_mesh(grid..., pose, sc)
+            X, Y, Z = tile_matrices(transform_mesh(grid, pose, sc))
             xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
             ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
             zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -287,7 +287,7 @@ function _part_bbox(shape, body, pose::Pose, sc)
     ymin, ymax = Inf, -Inf
     zmin, zmax = Inf, -Inf
     for grid in part_outer_meshes(shape, body, sc)
-        X, Y, Z = transform_mesh(grid..., pose, sc)
+        X, Y, Z = tile_matrices(transform_mesh(grid, pose, sc))
         xmin = min(xmin, minimum(X)); xmax = max(xmax, maximum(X))
         ymin = min(ymin, minimum(Y)); ymax = max(ymax, maximum(Y))
         zmin = min(zmin, minimum(Z)); zmax = max(zmax, maximum(Z))
@@ -568,7 +568,7 @@ Interactive Makie figure: 3-D cutaway of `body` on the left, rasterised
 silhouette projection on the right, with `zenith θ` and `azimuth φ`
 sliders below. The silhouette area updates live as you drag the sliders.
 
-The `resolution` kwarg controls the silhouette bitmap (≈ accuracy /
+The `resolution` kwarg controls the shadow image (≈ accuracy /
 performance trade-off). `sc` scales metres to plot units (default 100 → cm).
 """
 function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
@@ -611,14 +611,14 @@ function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
         silhouette_rasterized(body, d; resolution=resolution, return_image=true)
     end
 
-    # Display bitmap as a heatmap in cm-coords on ax2.
+    # Display the shadow as a heatmap in cm-coords on ax2.
     img_x = lift(result) do r
-        LinRange(r.x_range[1] * sc, r.x_range[2] * sc, size(r.bitmap, 1))
+        LinRange(r.x_range[1] * sc, r.x_range[2] * sc, size(r.shadow, 1))
     end
     img_y = lift(result) do r
-        LinRange(r.y_range[1] * sc, r.y_range[2] * sc, size(r.bitmap, 2))
+        LinRange(r.y_range[1] * sc, r.y_range[2] * sc, size(r.shadow, 2))
     end
-    img = lift(r -> Float32.(r.bitmap), result)
+    img = lift(r -> Float32.(r.shadow), result)
     heatmap!(ax2, img_x, img_y, img; colormap=[:white, RGBAf(0.2, 0.2, 0.25, 1.0)],
              colorrange=(0.0f0, 1.0f0))
     # Refit ax2 limits to the projected bbox each time the sun direction
@@ -633,7 +633,7 @@ function BiophysicalGeometry.plot_body_silhouette(body::CompositeBody;
     # centre (so the target stays at the main body, not pulled around by
     # legs/head when the bbox centre moves).
     root_part = BiophysicalGeometry._root_part(body)
-    root_pose = getfield(body.poses, _root_name(body))
+    root_pose = first(body.poses)
     (rb_min, rb_max) = _part_bbox(root_part.shape, root_part, root_pose, sc)
     body_centre = Point3f((rb_min[1] + rb_max[1]) / 2,
                           (rb_min[2] + rb_max[2]) / 2,
