@@ -158,15 +158,12 @@ end
 end
 
 @testset "Plate silhouette" begin
-    # Mesh axes: length along x, width along y, height along z. The sun moves
-    # from the smallest face's normal (θ = 0) to the largest face's (θ = π/2).
-    unit(i) = ntuple(j -> j == i ? 1.0 : 0.0, 3)
+    # Length along x, width along y, height along z, and the sun in the x–z plane
+    # as for every shape, whichever dimension is longest.
     for (axis_ratio_b, axis_ratio_c) in ((3.0, 4.0), (0.5, 2.0), (2.0, 0.7)), ins in (Naked(), fur)
         b = Body(Plate(; mass = 10u"kg", density, axis_ratio_b, axis_ratio_c), ins)
-        dims = values(outer_dims(b.shape, b))
-        long, short = argmax(dims), argmin(dims)
         for θ in (0.0, 0.4, 1.0, π / 2, 2.5)
-            d = cos(θ) .* unit(long) .+ sin(θ) .* unit(short)
+            d = (cos(θ), 0.0, sin(θ))
             @test silhouette(b, θ) ≈ silhouette_rasterized(single(b), d; resolution = 400) rtol = 0.01
         end
         s = silhouette(b)
@@ -174,6 +171,14 @@ end
         @test s.parallel ≈ silhouette(b, 0.0)
         @test silhouette(b, ZenithAngleVarying(), 90u"°") ≈ s.normal
     end
+end
+
+@testset "A plate's radius is half its thinnest dimension" begin
+    tall = Body(Plate(; length = 0.3u"m", width = 0.02u"m", height = 0.2u"m", density), fur)
+    @test skin_radius(tall) ≈ 0.01u"m"
+    @test insulation_radius(tall) ≈ 0.01u"m" + 10u"mm"
+    wing = Body(TriangularPlate(; length = 0.03u"m", width = 0.04u"m", height = 0.2u"m", density), Naked())
+    @test skin_radius(wing) ≈ 0.01u"m"
 end
 
 @testset "A half plate is a plate" begin
@@ -260,12 +265,12 @@ end
         S += sin(θ) * sqrt((b * c * sin(θ) * cos(φ))^2 + (a * c * sin(θ) * sin(φ))^2 + (a * b * cos(θ))^2)
     end
     @test ustrip(u"m^2", total_area(e)) ≈ S * (π / n)^2 rtol = 1e-6
-    # The uniform fat shell keeps the body's volume.
+    # Fat lies inside the skin; the flesh is the skin's shape at the flesh volume.
     f = Body(Ellipsoid(; length = 0.6u"m", width = 0.3u"m", height = 0.1u"m", density), fat)
     gl = f.geometry.length
     @test 4π / 3 * gl.length_skin * gl.width_skin * gl.height_skin / 8 ≈ f.geometry.volume
-    flesh = (gl.length_skin, gl.width_skin, gl.height_skin) ./ 2 .- gl.fat
-    @test 4π / 3 * prod(flesh) ≈ flesh_volume(f)
+    scale = cbrt(flesh_volume(f) / f.geometry.volume)
+    @test flesh_radius(f) ≈ gl.width_skin / 2 * scale
 end
 
 @testset "Insulation layer order" begin
@@ -367,13 +372,13 @@ end
     @test b.geometry.volume ≈ 0.3u"m" * 0.2u"m" * 0.02u"m" / 2
     D = sqrt(0.3^2 + 0.2^2) * u"m"
     @test total_area(b) ≈ 0.3u"m" * 0.2u"m" + (0.3u"m" + 0.2u"m" + D) * 0.02u"m"
-    @test skin_radius(b) ≈ 0.3u"m" * 0.2u"m" / (0.5u"m" + D)
+    @test skin_radius(b) ≈ 0.01u"m"
     @test all(flesh_centroid(t, b) .≈ (0.1u"m", 0.2u"m" / 3, 0.0u"m"))
     @test_throws ErrorException Half(t)
     # Fur offsets every face outward: the outer prism encloses skin + a shell of the fur's thickness.
     f = Body(t, fur)
     o = f.geometry.length
-    @test BG.inradius(o.length_fibrous, o.width_fibrous) ≈ skin_radius(b) + 10u"mm"
+    @test BG.inradius(o.length_fibrous, o.width_fibrous) ≈ 0.3u"m" * 0.2u"m" / (0.5u"m" + D) + 10u"mm"
     @test o.height_fibrous ≈ 0.02u"m" + 2 * 10u"mm"
     # Silhouette in any direction matches the mesh.
     for ins in (Naked(), fur), d in ((0.3, 0.2, 1.0), (1.0, -0.4, 0.2), (-0.2, 1.0, 0.5), (0.0, 0.0, 1.0))

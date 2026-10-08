@@ -55,12 +55,9 @@ function _fibrous_level(shape::TriangularPlate, skin, thickness)
     (; dims = (; length_fibrous, width_fibrous, height_fibrous),
        area = surface_area(shape, length_fibrous, width_fibrous, height_fibrous))
 end
-# As for `Plate`, the flesh is the same prism scaled to the flesh volume, and the
-# fat thickness is the difference in equivalent (in)radius.
-function _fat_thickness(shape::TriangularPlate, skin, flesh_volume, fat_volume)
-    flesh = _skin_level(shape, flesh_volume).dims
-    inradius(skin.length_skin, skin.width_skin) - inradius(flesh.length_skin, flesh.width_skin)
-end
+# As for `Plate`, the flesh is the same prism scaled to the flesh volume.
+_fat_thickness(shape::TriangularPlate, skin, flesh_volume, fat_volume) =
+    _skin_radius(shape, skin) - _skin_radius(shape, _skin_level(shape, flesh_volume).dims)
 
 # Silhouette. A convex polytope's shadow along a unit direction d is half the sum
 # of |n·d|·area over its faces. For the prism that is
@@ -80,9 +77,10 @@ function silhouette(sh::TriangularPlate, ins::AbstractInsulationLayer, body::Abs
     (; normal = silhouette(sh, ins, body, π / 2), parallel = silhouette(sh, ins, body, 0.0))
 end
 
-# Radius accessors — the equivalent radius is the triangle's inradius.
-_skin_radius(::TriangularPlate, l) = inradius(l.length_skin, l.width_skin)
-_fibrous_radius(::TriangularPlate, l) = inradius(l.length_fibrous, l.width_fibrous)
+# Heat crosses the prism through its thinnest part: half the height, or the
+# triangle's inradius when that is smaller.
+_skin_radius(::TriangularPlate, l) = min(inradius(l.length_skin, l.width_skin), l.height_skin / 2)
+_fibrous_radius(::TriangularPlate, l) = min(inradius(l.length_fibrous, l.width_fibrous), l.height_fibrous / 2)
 
 # Composition: the two triangular faces, the two leg faces and the diagonal.
 

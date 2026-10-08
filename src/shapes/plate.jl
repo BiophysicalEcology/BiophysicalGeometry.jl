@@ -41,10 +41,8 @@ function _fibrous_level(shape::Plate, skin, thickness)
     (; dims = (; length_fibrous, width_fibrous, height_fibrous),
        area = surface_area(shape, length_fibrous, width_fibrous, height_fibrous))
 end
-function _fat_thickness(shape::Plate, skin, flesh_volume, fat_volume)
-    width_flesh = cbrt(flesh_volume * shape.axis_ratio_b * shape.axis_ratio_c) / shape.axis_ratio_b
-    (skin.width_skin - width_flesh) / 2
-end
+_fat_thickness(shape::Plate, skin, flesh_volume, fat_volume) =
+    _skin_radius(shape, skin) - _skin_radius(shape, _skin_level(shape, flesh_volume).dims)
 
 # Surface area
 
@@ -54,22 +52,21 @@ surface_area(shape::Plate, length, width, height) =
 # Silhouette area
 
 # A box's shadow along a unit direction d is |d_x|·A_yz + |d_y|·A_xz + |d_z|·A_xy.
-# As for the other shapes θ runs from the long axis: the sun moves in the plane
-# of the smallest face's normal (θ = 0, `parallel`) and the largest face's
-# normal (θ = π/2, `normal`), so only those two faces cast shadow.
+# As for the other shapes the sun moves in the x–z plane, d = (cos θ, 0, sin θ):
+# θ = 0 looks along the length at the front face (`parallel`) and θ = π/2 down on
+# the top (`normal`).
 function _plate_faces(ins, body)
     (length, width, height) = _plate_outer_dims(ins, body)
-    sides = (length * width, length * height, height * width)
-    (min(sides...), max(sides...))
+    (; top = length * width, front = width * height)
 end
 
 function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody, θ)
-    (smallest, largest) = _plate_faces(ins, body)
-    abs(cos(θ)) * smallest + abs(sin(θ)) * largest
+    faces = _plate_faces(ins, body)
+    abs(cos(θ)) * faces.front + abs(sin(θ)) * faces.top
 end
 function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
-    (smallest, largest) = _plate_faces(ins, body)
-    return (; normal=largest, parallel=smallest)
+    faces = _plate_faces(ins, body)
+    (; normal = faces.top, parallel = faces.front)
 end
 
 _plate_outer_dims(::Union{Naked,FatLayer}, body) = _plate_skin_outer_lengths(body.geometry.length)
@@ -85,10 +82,10 @@ shortest_outer_dim(::Plate, ::Union{Naked,FatLayer}, geom) =
 shortest_outer_dim(::Plate, ::Union{FibrousLayer,CompositeInsulation}, geom) =
     min(_plate_fibrous_outer_lengths(geom.length)...)
 
-# Radius accessors — Plate uses width/2 as the equivalent radius
+# Heat crosses a plate through its thinnest dimension, so its radius is half of it.
 
-_skin_radius(::Plate, length) = length.width_skin / 2
-_fibrous_radius(::Plate, length) = length.width_fibrous / 2
+_skin_radius(::Plate, l) = min(l.length_skin, l.width_skin, l.height_skin) / 2
+_fibrous_radius(::Plate, l) = min(l.length_fibrous, l.width_fibrous, l.height_fibrous) / 2
 
 # Composition
 

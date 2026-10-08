@@ -63,9 +63,10 @@ _truncated_volume_factor(s::Ellipsoid) = _truncated_volume_factor(s.pole_a_trunc
 # work in semi-axes a ≥ b, c along x, y, z.
 _semiaxes(d) = (d.length / 2, d.width / 2, d.height / 2)
 skin_semiaxes(l) = (l.length_skin / 2, l.width_skin / 2, l.height_skin / 2)
-_extents(level, (a, b, c)) = level === :skin ?
-    (; length_skin = 2a, width_skin = 2b, height_skin = 2c) :
-    (; length_fibrous = 2a, width_fibrous = 2b, height_fibrous = 2c)
+# The flesh is the skin's shape scaled down by the fat, measured on the width.
+flesh_semiaxes(l) = skin_semiaxes(l) .* (1 - 2 * l.fat / l.width_skin)
+skin_extents((a, b, c)) = (; length_skin = 2a, width_skin = 2b, height_skin = 2c)
+fibrous_extents((a, b, c)) = (; length_fibrous = 2a, width_fibrous = 2b, height_fibrous = 2c)
 
 # ── Surface area ───────────────────────────────────────────────────────────
 #
@@ -173,12 +174,6 @@ const CAP_ANGLES = 64
 
 # ── Geometry ───────────────────────────────────────────────────────────────
 
-# Canonicalise to m^3 to avoid weird unit ratios from mass/density (e.g. g/(kg/m^3))
-# that propagate into cbrt() and trip up Enzyme's typeunstablerules path.
-_ellipsoid_volume(shape::Ellipsoid) = uconvert(u"m^3", body_volume(shape))
-_ellipsoid_fat_volume(shape::Ellipsoid, fat_layer::FatLayer) =
-    uconvert(u"m^3", fat_volume(shape, fat_layer))
-
 # Semi-axes enclosing `volume` at the shape's proportions and truncation: with
 # a = r_b·b and a = r_c·c, volume = π·k·a·b·c = π·k·a³/(r_b·r_c).
 function _ellipsoid_semiaxes(shape::Ellipsoid, volume)
@@ -191,67 +186,14 @@ _shape_area(shape::Ellipsoid, axes) = _ellipsoid_area(axes..., shape.pole_a_trun
 
 function _skin_level(shape::Ellipsoid, volume)
     axes = _ellipsoid_semiaxes(shape, volume)
-    (; dims = _extents(:skin, axes), area = _shape_area(shape, axes))
+    (; dims = skin_extents(axes), area = _shape_area(shape, axes))
 end
 function _fibrous_level(shape::Ellipsoid, skin, thickness)
     axes = skin_semiaxes(skin) .+ thickness
-    (; dims = _extents(:fibrous, axes), area = _shape_area(shape, axes))
+    (; dims = fibrous_extents(axes), area = _shape_area(shape, axes))
 end
-
-# Smooth Heaviside on a length: ≈ 1 for fat ≫ ε, ≈ 0 for fat ≪ -ε, smooth
-# everywhere. Used to blend the "no fat" and "with fat" geometry branches.
-@inline _smooth_step_meters(fat) = 0.5 * (1 + fat / sqrt(fat*fat + (1e-9u"m")^2))
-
-# Ellipsoid fat is a *uniform* shell: each skin semi-axis is the flesh semi-axis
-# plus one fat thickness (so the skin is not a scaled flesh ellipsoid). Skin dims
-# are therefore coupled to the fat solve, so the fat paths override the
-# generic orchestrator rather than compute skin from volume independently.
-#
-# The "not enough fat" fallback (full-volume axes, fat = 0) and the flesh + fat
-# axes are smooth-blended rather than switched with an if/else, which would be
-# a value discontinuity at raw_fat = 0 — bad for reverse-mode AD. A single
-# smooth Heaviside drives both the axes blend and the effective fat value, so
-# they stay consistent at every raw_fat.
-function _ellipsoid_fat_skin(shape::Ellipsoid, fat_layer::FatLayer)
-    volume = _ellipsoid_volume(shape)
-    fat_v = _ellipsoid_fat_volume(shape, fat_layer)
-    flesh = _ellipsoid_semiaxes(shape, volume - fat_v)
-    raw_fat = _uniform_shell_thickness(flesh, volume, _truncated_volume_factor(shape))
-    full = _ellipsoid_semiaxes(shape, volume)
-    w = _smooth_step_meters(raw_fat)
-    fat = w * raw_fat # smooth-clamped to ≥ 0
-    axes = w .* (flesh .+ raw_fat) .+ (1 - w) .* full
-    (; volume, dims = _extents(:skin, axes), fat, area = _shape_area(shape, axes))
-end
-
-function geometry(shape::Ellipsoid, fat_layer::FatLayer)
-    s = _ellipsoid_fat_skin(shape, fat_layer)
-    Geometry(s.volume, merge(s.dims, (; fat = s.fat)), SurfaceAreas(; total = s.area))
-end
-function geometry(shape::Ellipsoid, fibrous_layer::FibrousLayer, fat_layer::FatLayer)
-    s = _ellipsoid_fat_skin(shape, fat_layer)
-    fibrous = _fibrous_level(shape, s.dims, fibrous_layer.thickness)
-    Geometry(s.volume, merge(s.dims, fibrous.dims, (; fat = s.fat)),
-             SurfaceAreas(; total = fibrous.area, skin = s.area,
-                          convection = _convective_area(fibrous_layer, s.area)))
-end
-
-# Fat thickness: the uniform X with π·k·(a+X)(b+X)(c+X) = volume, given the
-# flesh semi-axes (k as in `_truncated_volume_factor`; a cut body keeps its cut
-# fraction). The left side is strictly increasing for X > -min(a, b, c), so
-# there is exactly one root; Newton from X = 0 with a fixed 10 steps reaches
-# machine precision without branching (AD-friendly). The solve is unitless:
-# lengths are stripped to metres once here and the result re-wrapped.
-function _uniform_shell_thickness(flesh, volume, k)
-    a, b, c = ustrip.(u"m", flesh)
-    target = ustrip(u"m^3", volume) / (π * k)
-    X = 0.0
-    for _ in 1:10
-        aX, bX, cX = a + X, b + X, c + X
-        X -= (aX * bX * cX - target) / (bX * cX + aX * cX + aX * bX)
-    end
-    return max(0.0, X) * u"m"
-end
+_fat_thickness(shape::Ellipsoid, skin, flesh_volume, fat_volume) =
+    skin.width_skin / 2 - _ellipsoid_semiaxes(shape, flesh_volume)[2]
 
 # ── Silhouette ─────────────────────────────────────────────────────────────
 

@@ -169,15 +169,34 @@ end
 
 @testset "Ellipsoid / FatLayer" begin
     body = Body(Ellipsoid(; mass, density, axis_ratio_b, axis_ratio_c), fat_layer)
-    # Newton fat solve; the Cardano solve these were first pinned against
-    # returned the wrong root and clamped the fat layer to zero.
     @test flesh_radius(body) ≈ 0.14025579774517113u"m"
     @test flesh_volume(body) ≈ 0.057785793562708104u"m^3"
 end
 
 @testset "Ellipsoid / CompositeInsulation" begin
+    # Fat lies inside the skin, so it leaves the outer surface as fur alone has it.
     body = Body(Ellipsoid(; mass, density, axis_ratio_b, axis_ratio_c), composite)
-    @test total_area(body) ≈ 1.143581562260096u"m^2"
-    @test insulation_radius(body) ≈ 0.15794460094666143u"m"
+    furred = Body(Ellipsoid(; mass, density, axis_ratio_b, axis_ratio_c), fibrous_layer)
+    @test total_area(body) ≈ total_area(furred)
+    @test insulation_radius(body) ≈ insulation_radius(furred)
+end
+
+@testset "Fat lies inside the skin for every shape" begin
+    shapes = (
+        Cylinder(; mass, density, axis_ratio_b = 3.0),
+        Sphere(; mass, density),
+        Cone(; mass, density, axis_ratio_b = 3.0, top_ratio = 0.5),
+        Plate(; mass, density, axis_ratio_b = 2.0, axis_ratio_c = 8.0),
+        TriangularPlate(; mass, density, axis_ratio_b = 2.0, axis_ratio_c = 8.0),
+        Ellipsoid(; mass, density, axis_ratio_b = 3.0, axis_ratio_c = 2.0),
+    )
+    for shape in shapes
+        lean = Body(shape, Naked())
+        fat = Body(shape, fat_layer)
+        @test total_area(fat) ≈ total_area(lean)
+        @test skin_radius(fat) ≈ skin_radius(lean)
+        # The flesh is the skin's shape at the flesh volume.
+        @test flesh_radius(fat) ≈ skin_radius(lean) * cbrt(flesh_volume(fat) / flesh_volume(lean))
+    end
 end
 
