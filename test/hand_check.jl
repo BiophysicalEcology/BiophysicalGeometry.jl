@@ -105,20 +105,6 @@ sil_ell_normal(a, b)       = π * a * b                        # n̂ = (0,0,1) �
 sil_ell_parallel(b, c)     = π * b * c                        # n̂ = (1,0,0) → πbc
 sil_ell_zenith(a, b, c, θ) = π * a * b * c * sqrt((sin(θ)/a)^2 + (cos(θ)/c)^2)
 
-# === Desert iguana / Leopard frog: allometric in mass (g) ===
-
-mg = ustrip(u"g", uconvert(u"g", mass))
-
-di_total    = uconvert(u"m^2", 10.4713 * mg^0.688 * u"cm^2")
-di_ventral  = uconvert(u"m^2",  0.425  * mg^0.85  * u"cm^2")
-di_normal   = uconvert(u"m^2",  3.798  * mg^0.683 * u"cm^2")
-di_parallel = uconvert(u"m^2",  0.694  * mg^0.743 * u"cm^2")
-di_intermed = (di_normal + di_parallel) / 2
-# Body radius from cylinder approx with L = 4R: V = 4π R³
-di_r = uconvert(u"m", cbrt(V / (4π)))
-
-lf_total = uconvert(u"m^2", 12.79 * mg^0.606 * u"cm^2")
-lf_r     = uconvert(u"m", cbrt(V / (4π)))
 
 # === Comparison harness ===
 
@@ -228,16 +214,6 @@ check("Ell/Fibrous insulation_radius",    b_efibrous,                 0.15586516
 check("Ell/Fibrous sil_normal",           sil_ell_normal(a_efibrous, b_efibrous), 0.3620218640142718u"m^2")
 # Ell/Fibrous zenith silhouette: same divergence — see note above.
 
-# --- DesertIguana / Naked ---
-check("DI/Naked total_area",          di_total,               2.144297264544543u"m^2")
-check("DI/Naked skin_radius",         di_r,                   0.1729422736164134u"m")
-check("DI/Naked sil_normal",          di_normal,              0.7358254132114781u"m^2")
-check("DI/Naked sil_parallel",        di_parallel,            0.26142920031318184u"m^2")
-check("DI/Naked sil_intermediate",    di_intermed,            0.49862730676232997u"m^2")
-
-# --- LeopardFrog / Naked ---
-check("LF/Naked total_area",          lf_total,               1.055591874642603u"m^2")
-check("LF/Naked skin_radius",         lf_r,                   0.1729422736164134u"m")
 
 # === Print results ===
 

@@ -196,17 +196,4 @@ end
     @test insulation_radius(body) ≈ 0.15586516277963594u"m"
 end
 
-@testset "DesertIguana / Naked" begin
-    body = Body(DesertIguana(mass, density), Naked())
-    @test total_area(body) ≈ 2.144297264544543u"m^2"
-    @test skin_radius(body) ≈ 0.1729422736164134u"m"
-    @test silhouette_area(body, NormalToSun()) ≈ 0.7358254132114781u"m^2"
-    @test silhouette_area(body, ParallelToSun()) ≈ 0.26142920031318184u"m^2"
-    @test silhouette_area(body, Intermediate()) ≈ 0.49862730676232997u"m^2"
-end
 
-@testset "LeopardFrog / Naked" begin
-    body = Body(LeopardFrog(mass, density), Naked())
-    @test total_area(body) ≈ 1.055591874642603u"m^2"
-    @test skin_radius(body) ≈ 0.1729422736164134u"m"
-end

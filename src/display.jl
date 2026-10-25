@@ -39,18 +39,6 @@ function Base.show(io::IO, ::MIME"text/plain", s::Plate)
     print(io,   rpad("  axis_ratio_c:", _W), s.axis_ratio_c)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", s::LeopardFrog)
-    println(io, "LeopardFrog")
-    println(io, rpad("  mass:", _W), s.mass)
-    print(io,   rpad("  density:", _W), s.density)
-end
-
-function Base.show(io::IO, ::MIME"text/plain", s::DesertIguana)
-    println(io, "DesertIguana")
-    println(io, rpad("  mass:", _W), s.mass)
-    print(io,   rpad("  density:", _W), s.density)
-end
-
 # ── Insulation types ──────────────────────────────────────────────────────────
 
 function Base.show(io::IO, ::MIME"text/plain", f::FibrousLayer)
