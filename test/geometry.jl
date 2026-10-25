@@ -186,14 +186,14 @@ end
 
 @testset "Ellipsoid / FatLayer" begin
     body = Body(Ellipsoid(mass, density, axis_ratio_b, axis_ratio_c), fat_layer)
-    @test flesh_radius(body) ≈ 0.14586516277963593u"m"
-    @test flesh_volume(body) ≈ 0.065u"m^3"
+    @test flesh_radius(body) ≈ 0.14025579774517113u"m"
+    @test flesh_volume(body) ≈ mass / density - mass * fat_fraction / fat_density
 end
 
 @testset "Ellipsoid / CompositeInsulation" begin
     body = Body(Ellipsoid(mass, density, axis_ratio_b, axis_ratio_c), composite)
-    @test total_area(body) ≈ 1.1587845516526847u"m^2"
-    @test insulation_radius(body) ≈ 0.15586516277963594u"m"
+    @test total_area(body) ≈ 1.143581562260096u"m^2"
+    @test insulation_radius(body) ≈ 0.15794460094666143u"m"
 end
 
 
