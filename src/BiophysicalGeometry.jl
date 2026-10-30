@@ -3,7 +3,7 @@ module BiophysicalGeometry
 using Unitful
 
 export AbstractGeometryModel, AbstractGeometryPars, AbstractBody, Body
-export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate, LeopardFrog, DesertIguana
+export AbstractShape, Cylinder, Sphere, Ellipsoid, Plate
 export AbstractInsulationLayer, AbstractSolidLayer, AbstractPorousLayer
 export CompositeInsulation, Naked, FibrousLayer, FatLayer
 export SolarOrientation, Intermediate, ParallelToSun, NormalToSun
@@ -45,8 +45,6 @@ include("shapes/plate.jl")
 include("shapes/cylinder.jl")
 include("shapes/sphere.jl")
 include("shapes/ellipsoid.jl")
-include("shapes/desert_iguana.jl")
-include("shapes/leopard_frog.jl")
 include("display.jl")
 
 end
