@@ -36,7 +36,7 @@ end
 
 A collimated beam from one `direction` — parallel rays from a source at infinity,
 i.e. the direct (beam) component of radiation, as opposed to the diffuse `Sky` /
-`Ground` regions. `silhouette(body, Beam(dir))` gives each part's projected area
+`Ground` regions. `silhouette_area(body, Beam(dir))` gives each part's projected area
 facing the beam. `Beam(Unchecked(), direction)` doesn't check the direction.
 """
 struct Beam
@@ -227,7 +227,7 @@ function _silhouette_rasterized!(shadow, body, sun_direction)
 end
 
 """
-    silhouette(body::CompositeBody, beam::Beam; resolution=256)
+    silhouette_area(body::CompositeBody, beam::Beam; resolution=256)
 
 Per-part lit (unshadowed) silhouette area facing `beam` — a `NamedTuple` keyed
 like `body.parts`, each a `Quantity` (m²). Every part's posed mesh is projected
@@ -235,20 +235,20 @@ along the beam direction and depth-buffered, so at each pixel only the frontmost
 part (nearest the source) is counted. A part occluded by another — a
 ground-facing half under a sky-facing half toward an overhead sun — therefore
 reports (near) zero, and the parts' areas sum to the composite silhouette (no
-double counting), unlike the per-part analytic `silhouette`. [`silhouette!`](@ref)
+double counting), unlike the per-part analytic `silhouette_area`. [`silhouette_area!`](@ref)
 uses a depth buffer you pass in instead.
 """
-silhouette(body::CompositeBody, src::Beam; resolution::Integer = 256) =
-    silhouette!(_depth_buffer(body, resolution), body, src)
+silhouette_area(body::CompositeBody, src::Beam; resolution::Integer = 256) =
+    silhouette_area!(_depth_buffer(body, resolution), body, src)
 
 """
-    silhouette!(depth, body::CompositeBody, beam::Beam)
+    silhouette_area!(depth, body::CompositeBody, beam::Beam)
 
-[`silhouette`](@ref) toward `beam` using `depth`, a `resolution × resolution ×
+[`silhouette_area`](@ref) toward `beam` using `depth`, a `resolution × resolution ×
 nparts` array of `Float64`, as the depth buffer. It is left holding each part's
 depth toward the beam, `-Inf` where the part doesn't cover a pixel.
 """
-function silhouette!(depth::AbstractArray{Float64,3}, body::CompositeBody, src::Beam)
+function silhouette_area!(depth::AbstractArray{Float64,3}, body::CompositeBody, src::Beam)
     resolution = size(depth, 1)
     part_tiles = _part_tiles(body)
     g = _view(part_tiles, src.direction, resolution)

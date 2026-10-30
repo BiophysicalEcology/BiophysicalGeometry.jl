@@ -39,9 +39,9 @@ end
     @test flesh_radius(body) ≈ 0.11756673438603786u"m"
     @test flesh_volume(body) ≈ 0.065u"m^3"
     @test body.geometry.volume ≈ 0.065u"m^3"
-    @test silhouette(body, NormalToSun()) ≈ 0.27643874068394353u"m^2"
-    @test silhouette(body, ParallelToSun()) ≈ 0.05528774813678871u"m^2"
-    @test silhouette(body, Intermediate()) ≈ 0.16586324441036612u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.27643874068394353u"m^2"
+    @test silhouette_area(body, ParallelToSun()) ≈ 0.05528774813678871u"m^2"
+    @test silhouette_area(body, Intermediate()) ≈ 0.16586324441036612u"m^2"
 end
 
 @testset "Plate / FibrousLayer" begin
@@ -53,8 +53,8 @@ end
     @test insulation_radius(body) ≈ 0.12756673438603786u"m"
     @test flesh_radius(body) ≈ 0.11756673438603786u"m"
     @test flesh_volume(body) ≈ 0.065u"m^3"
-    @test silhouette(body, NormalToSun()) ≈ 0.3050547569365926u"m^2"
-    @test silhouette(body, ParallelToSun()) ≈ 0.06509308688767174u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.3050547569365926u"m^2"
+    @test silhouette_area(body, ParallelToSun()) ≈ 0.06509308688767174u"m^2"
 end
 
 @testset "Plate / FatLayer" begin
@@ -84,10 +84,10 @@ end
     @test insulation_radius(body) ≈ 0.12742495668987025u"m"
     @test flesh_radius(body) ≈ 0.12742495668987025u"m"
     @test flesh_volume(body) ≈ 0.065u"m^3"
-    @test silhouette(body, NormalToSun()) ≈ 0.32474239174830616u"m^2"
-    @test silhouette(body, ParallelToSun()) ≈ 0.05101041561128287u"m^2"
-    @test silhouette(body, Intermediate()) ≈ 0.18787640367979452u"m^2"
-    @test silhouette(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.20654751165112634u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.32474239174830616u"m^2"
+    @test silhouette_area(body, ParallelToSun()) ≈ 0.05101041561128287u"m^2"
+    @test silhouette_area(body, Intermediate()) ≈ 0.18787640367979452u"m^2"
+    @test silhouette_area(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.20654751165112634u"m^2"
 end
 
 @testset "Cylinder / FibrousLayer" begin
@@ -97,8 +97,8 @@ end
     @test evaporation_area(body) ≈ 1.098431432327489u"m^2"
     @test insulation_radius(body) ≈ 0.13742495668987026u"m"
     @test flesh_radius(body) ≈ 0.12742495668987025u"m"
-    @test silhouette(body, NormalToSun()) ≈ 0.355724381353875u"m^2"
-    @test silhouette(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.22924427552149568u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.355724381353875u"m^2"
+    @test silhouette_area(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.22924427552149568u"m^2"
 end
 
 @testset "Cylinder / FatLayer" begin
@@ -119,9 +119,9 @@ end
     body = Body(Sphere(; mass, density), Naked())
     @test total_area(body) ≈ 0.7817952526648283u"m^2"
     @test skin_radius(body) ≈ 0.24942591981125847u"m"
-    @test silhouette(body, NormalToSun()) ≈ 0.19544881316620707u"m^2"
-    @test silhouette(body, ParallelToSun()) ≈ 0.19544881316620707u"m^2"
-    @test silhouette(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.19544881316620707u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.19544881316620707u"m^2"
+    @test silhouette_area(body, ParallelToSun()) ≈ 0.19544881316620707u"m^2"
+    @test silhouette_area(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.19544881316620707u"m^2"
 end
 
 @testset "Sphere / FibrousLayer" begin
@@ -130,7 +130,7 @@ end
     @test skin_area(body) ≈ 0.7817952526648283u"m^2"
     @test evaporation_area(body) ≈ 0.7652166976637417u"m^2"
     @test insulation_radius(body) ≈ 0.25942591981125845u"m"
-    @test silhouette(body, NormalToSun()) ≈ 0.21143486517744456u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.21143486517744456u"m^2"
 end
 
 @testset "Sphere / FatLayer" begin
@@ -150,11 +150,11 @@ end
     body = Body(Ellipsoid(; mass, density, axis_ratio_b, axis_ratio_c), Naked())
     @test total_area(body) ≈ 1.0679282565991794u"m^2"
     @test skin_radius(body) ≈ 0.14586516277963593u"m"
-    @test silhouette(body, NormalToSun()) ≈ 0.3342127693207218u"m^2"
-    @test silhouette(body, ParallelToSun()) ≈ 0.06684255386414435u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.3342127693207218u"m^2"
+    @test silhouette_area(body, ParallelToSun()) ≈ 0.06684255386414435u"m^2"
     # Zenith θ is measured from the long (a) axis, as for `Cylinder`:
     # π·c·√(b²cos²θ + a²sin²θ) — see test/hand_check.jl.
-    @test silhouette(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.17684877452096545u"m^2"
+    @test silhouette_area(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.17684877452096545u"m^2"
 end
 
 @testset "Ellipsoid / FibrousLayer" begin
@@ -163,8 +163,8 @@ end
     @test skin_area(body) ≈ 1.0679282565991794u"m^2"
     @test evaporation_area(body) ≈ 1.045282036532102u"m^2"
     @test insulation_radius(body) ≈ 0.15586516277963594u"m"
-    @test silhouette(body, NormalToSun()) ≈ 0.3620218640142718u"m^2"
-    @test silhouette(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.19270108448901746u"m^2"
+    @test silhouette_area(body, NormalToSun()) ≈ 0.3620218640142718u"m^2"
+    @test silhouette_area(body, ZenithAngleVarying(), 30.0u"°") ≈ 0.19270108448901746u"m^2"
 end
 
 @testset "Ellipsoid / FatLayer" begin

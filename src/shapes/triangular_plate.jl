@@ -69,12 +69,12 @@ function _prism_silhouette(length, width, height, d)
     abs(d[3]) * length * width / 2 +
         height * (width * abs(d[1]) + length * abs(d[2]) + abs(width * d[1] + length * d[2])) / 2
 end
-function silhouette(sh::TriangularPlate, ::AbstractInsulationLayer, body::AbstractBody, θ)
+function silhouette_area(sh::TriangularPlate, ::AbstractInsulationLayer, body::AbstractBody, θ)
     o = outer_dims(sh, body)
     _prism_silhouette(o.length, o.width, o.height, (cos(θ), 0.0, sin(θ)))
 end
-function silhouette(sh::TriangularPlate, ins::AbstractInsulationLayer, body::AbstractBody)
-    (; normal = silhouette(sh, ins, body, π / 2), parallel = silhouette(sh, ins, body, 0.0))
+function silhouette_area(sh::TriangularPlate, ins::AbstractInsulationLayer, body::AbstractBody)
+    (; normal = silhouette_area(sh, ins, body, π / 2), parallel = silhouette_area(sh, ins, body, 0.0))
 end
 
 # Heat crosses the prism through its thinnest part: half the height, or the

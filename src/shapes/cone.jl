@@ -83,12 +83,12 @@ function _frustum_silhouette(R1, R2, L, θ)
     c * ((π / 2 + α) * R^2 + (π / 2 - α) * r^2) + (R + r) * sqrt(1 - sinα^2) * Ls
 end
 
-silhouette(sh::Cone, r, L, θ) = _frustum_silhouette(r, sh.top_ratio * r, L, θ)
-function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody, θ)
+silhouette_area(sh::Cone, r, L, θ) = _frustum_silhouette(r, sh.top_ratio * r, L, θ)
+function silhouette_area(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(sh, body)
-    silhouette(sh, d.radius, d.length, θ)
+    silhouette_area(sh, d.radius, d.length, θ)
 end
-function silhouette(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody)
+function silhouette_area(sh::Cone, ::AbstractInsulationLayer, body::AbstractBody)
     d = outer_dims(sh, body)
     (; normal = (1 + sh.top_ratio) * d.radius * d.length, parallel = π * max(1, sh.top_ratio)^2 * d.radius^2)
 end

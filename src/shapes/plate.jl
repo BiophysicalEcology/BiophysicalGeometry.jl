@@ -60,11 +60,11 @@ function _plate_faces(ins, body)
     (; top = length * width, front = width * height)
 end
 
-function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody, θ)
+function silhouette_area(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody, θ)
     faces = _plate_faces(ins, body)
     abs(cos(θ)) * faces.front + abs(sin(θ)) * faces.top
 end
-function silhouette(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
+function silhouette_area(shape::Plate, ins::AbstractInsulationLayer, body::AbstractBody)
     faces = _plate_faces(ins, body)
     (; normal = faces.top, parallel = faces.front)
 end

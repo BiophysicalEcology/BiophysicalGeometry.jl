@@ -202,12 +202,12 @@ _fat_thickness(shape::Ellipsoid, skin, flesh_volume, fat_volume) =
 # other shapes θ runs from the long axis up towards the vertical — the sun in
 # the x–z plane, d = (cos θ, 0, sin θ) — so θ = π/2 looks down on the
 # length × width footprint (`normal`) and θ = 0 looks end-on (`parallel`).
-function silhouette(shape::Ellipsoid, a, b, c, θ)
+function silhouette_area(shape::Ellipsoid, a, b, c, θ)
     shape.pole_a_truncation == 0 && return π * b * sqrt(c^2 * cos(θ)^2 + a^2 * sin(θ)^2)
     _truncated_silhouette(a, b, c, 1 - shape.pole_a_truncation, θ)
 end
-function silhouette(sh::Ellipsoid, ins::AbstractInsulationLayer, body::AbstractBody)
-    (; normal = silhouette(sh, ins, body, π / 2), parallel = silhouette(sh, ins, body, 0.0))
+function silhouette_area(sh::Ellipsoid, ins::AbstractInsulationLayer, body::AbstractBody)
+    (; normal = silhouette_area(sh, ins, body, π / 2), parallel = silhouette_area(sh, ins, body, 0.0))
 end
 
 # A cut ellipsoid is convex, so its shadow is too, and the farthest point of the
@@ -245,8 +245,8 @@ function _truncated_silhouette(a, b, c, x_ratio, θ)
     end
     abs(area) / 2 * u"m^2"
 end
-function silhouette(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody, θ)
-    silhouette(sh, _semiaxes(outer_dims(sh, body))..., θ)
+function silhouette_area(sh::Ellipsoid, ::AbstractInsulationLayer, body::AbstractBody, θ)
+    silhouette_area(sh, _semiaxes(outer_dims(sh, body))..., θ)
 end
 
 # Radius accessors — shared by every ellipsoidal shape (`Ellipsoid`,

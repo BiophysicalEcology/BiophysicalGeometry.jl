@@ -298,7 +298,7 @@ end
     )
     Aalong = silhouette_rasterized(snowman, (0.0, 0.0, 1.0); resolution=256)
     Across = silhouette_rasterized(snowman, (1.0, 0.0, 0.0); resolution=256)
-    summed = silhouette(snowman).normal
+    summed = silhouette_area(snowman).normal
     @test abs(Aalong - expected) / expected < 0.02
     @test abs(Across - 2*expected) / (2*expected) < 0.02
     @test summed ≈ 2 * expected            # summed counts both spheres
@@ -319,14 +319,14 @@ end
     )
 
     # Along +z: the top sphere is nearer the source and fully shadows the bottom.
-    along = silhouette(snowman, Beam(0.0, 0.0, 1.0); resolution=256)
+    along = silhouette_area(snowman, Beam(0.0, 0.0, 1.0); resolution=256)
     @test abs(along.top - expected) / expected < 0.02
     @test along.bottom / expected < 0.02                     # occluded → ~0
     @test abs((along.top + along.bottom) -
               silhouette_rasterized(snowman, (0.0, 0.0, 1.0))) / expected < 0.02  # sums to composite
 
     # Across (+x): side by side, neither shadows the other.
-    across = silhouette(snowman, Beam(1.0, 0.0, 0.0); resolution=256)
+    across = silhouette_area(snowman, Beam(1.0, 0.0, 0.0); resolution=256)
     @test abs(across.top - expected) / expected < 0.02
     @test abs(across.bottom - expected) / expected < 0.02
 

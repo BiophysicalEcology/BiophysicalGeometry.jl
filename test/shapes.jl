@@ -26,7 +26,7 @@ single(b) = CompositeBody(; parts = (; p = b), joins = ())
     hc = Body(HalfCone(; mass = 5u"kg", density, axis_ratio_b = 2.0, top_ratio = 1.0), fur)
     hy = Body(HalfCylinder(; mass = 5u"kg", density, axis_ratio_b = 2.0), fur)
     @test total_area(hc) ≈ total_area(hy)
-    @test silhouette(hc, 0.7) ≈ silhouette(hy, 0.7)
+    @test silhouette_area(hc, 0.7) ≈ silhouette_area(hy, 0.7)
     @test all(flesh_centroid(hc.shape, hc) .≈ flesh_centroid(hy.shape, hy))
 end
 
@@ -109,11 +109,11 @@ end
     for (sh, dir) in shapes, ins in (Naked(), fur)
         b = Body(sh, ins)
         for θ in (0.0, 0.3, 1.0, π / 2, 2.2, 3.0)
-            @test silhouette(b, θ) ≈ silhouette_rasterized(single(b), dir(θ); resolution = 400) rtol = 0.01
+            @test silhouette_area(b, θ) ≈ silhouette_rasterized(single(b), dir(θ); resolution = 400) rtol = 0.01
         end
-        s = silhouette(b)
-        @test s.normal ≈ silhouette(b, π / 2)
-        @test s.parallel ≈ silhouette(b, 0.0)
+        s = silhouette_area(b)
+        @test s.normal ≈ silhouette_area(b, π / 2)
+        @test s.parallel ≈ silhouette_area(b, 0.0)
     end
 end
 
@@ -122,19 +122,19 @@ end
     for (half, full) in ((HalfCylinder(; mass = 5u"kg", density, axis_ratio_b = 3.0), Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0)),
                          (HalfEllipsoid(; mass = 5u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 6.0), Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 3.0, axis_ratio_c = 3.0)),
                          (HalfSphere(; mass = 5u"kg", density), Sphere(; mass = 10u"kg", density)))
-        @test silhouette(Body(half, Naked())).normal ≈ silhouette(Body(full, Naked())).normal
+        @test silhouette_area(Body(half, Naked())).normal ≈ silhouette_area(Body(full, Naked())).normal
     end
     # Hemisphere: (π r²/2)(1 + sin θ).
     h = Body(HalfSphere(; mass = 5u"kg", density), Naked())
     r = h.geometry.length.radius_skin
-    @test silhouette(h, 0.4) ≈ π * r^2 / 2 * (1 + sin(0.4))
+    @test silhouette_area(h, 0.4) ≈ π * r^2 / 2 * (1 + sin(0.4))
     # Frustum side view is a trapezoid.
     c = Body(Cone(; mass = 10u"kg", density, axis_ratio_b = 2.0, top_ratio = 0.4), Naked())
     R, L = c.geometry.length.radius_skin, c.geometry.length.length_skin
-    @test silhouette(c).normal ≈ (1 + 0.4) * R * L
+    @test silhouette_area(c).normal ≈ (1 + 0.4) * R * L
     # A cylinder's shadow is the same from either end.
     y = Body(Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
-    @test silhouette(y, 0.5) ≈ silhouette(y, π - 0.5)
+    @test silhouette_area(y, 0.5) ≈ silhouette_area(y, π - 0.5)
 end
 
 @testset "Accessors across shapes" begin
@@ -164,12 +164,12 @@ end
         b = Body(Plate(; mass = 10u"kg", density, axis_ratio_b, axis_ratio_c), ins)
         for θ in (0.0, 0.4, 1.0, π / 2, 2.5)
             d = (cos(θ), 0.0, sin(θ))
-            @test silhouette(b, θ) ≈ silhouette_rasterized(single(b), d; resolution = 400) rtol = 0.01
+            @test silhouette_area(b, θ) ≈ silhouette_rasterized(single(b), d; resolution = 400) rtol = 0.01
         end
-        s = silhouette(b)
-        @test s.normal ≈ silhouette(b, π / 2)
-        @test s.parallel ≈ silhouette(b, 0.0)
-        @test silhouette(b, ZenithAngleVarying(), 90u"°") ≈ s.normal
+        s = silhouette_area(b)
+        @test s.normal ≈ silhouette_area(b, π / 2)
+        @test s.parallel ≈ silhouette_area(b, 0.0)
+        @test silhouette_area(b, ZenithAngleVarying(), 90u"°") ≈ s.normal
     end
 end
 
@@ -308,7 +308,7 @@ end
         @test p.sky + p.ground + sum(p.neighbours) ≈ 1
     end
     # Overhead beam: only the top sphere is lit.
-    lit = silhouette(stack, Beam(0.0, 0.0, 1.0))
+    lit = silhouette_area(stack, Beam(0.0, 0.0, 1.0))
     @test lit.a > 0u"m^2"
     @test lit.b == lit.c == 0u"m^2"
 
@@ -317,10 +317,10 @@ end
     shares = Matrix{Float64}(undef, 3, 5)
     shadow = Matrix{Bool}(undef, 256, 256)
     beam = Beam(0.3, 0.2, 1.0)
-    @test silhouette!(depth, stack, beam) == silhouette(stack, beam)
+    @test silhouette_area!(depth, stack, beam) == silhouette_area(stack, beam)
     @test silhouette_rasterized!(shadow, stack, beam.direction) == silhouette_rasterized(stack, beam.direction)
     @test silhouette_factors!(depth[1:64, 1:64, :], shares, stack, Sky(0.5); ndirections = 200) == f
-    @test allocations(() -> silhouette!(depth, stack, beam)) == 0
+    @test allocations(() -> silhouette_area!(depth, stack, beam)) == 0
     @test allocations(() -> silhouette_rasterized!(shadow, stack, beam.direction)) == 0
     @test allocations(() -> silhouette_factors!(depth, shares, stack, Sky(0.5); ndirections = 8)) == 0
 end
@@ -361,7 +361,7 @@ end
         b = Body(Ellipsoid(; mass = 10u"kg", density, axis_ratio_b = 2.0, axis_ratio_c = 3.0,
                            pole_a_truncation = truncation), ins)
         for θ in (0.0, 0.5, 1.2, π / 2, 2.3)
-            @test silhouette(b, θ) ≈ silhouette_rasterized(single(b), (cos(θ), 0.0, sin(θ)); resolution = 400) rtol = 0.01
+            @test silhouette_area(b, θ) ≈ silhouette_rasterized(single(b), (cos(θ), 0.0, sin(θ)); resolution = 400) rtol = 0.01
         end
     end
 end
@@ -388,7 +388,7 @@ end
         @test BG._prism_silhouette(o.length, o.width, o.height, d ./ n) ≈
               silhouette_rasterized(single(body), d; resolution = 400) rtol = 0.01
     end
-    @test silhouette(b).normal ≈ 0.3u"m" * 0.2u"m" / 2
+    @test silhouette_area(b).normal ≈ 0.3u"m" * 0.2u"m" / 2
     # A wing joined by its leg face to a cylinder's side.
     torso = Body(Cylinder(; mass = 10u"kg", density, axis_ratio_b = 3.0), Naked())
     wing = Body(TriangularPlate(; mass = 0.2u"kg", density, axis_ratio_b = 1.5, axis_ratio_c = 20.0), Naked())

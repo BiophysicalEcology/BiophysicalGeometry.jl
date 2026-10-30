@@ -37,12 +37,12 @@ surface_area(shape::Sphere, r) = 4 * π * r ^ 2
 
 # Silhouette area
 
-silhouette(shape::Sphere, r) = π * r ^ 2
+silhouette_area(shape::Sphere, r) = π * r ^ 2
 
-silhouette(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
-    silhouette(shape, _sphere_outer_radius(ins, body))
-function silhouette(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody)
-    area = silhouette(shape, _sphere_outer_radius(ins, body))
+silhouette_area(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
+    silhouette_area(shape, _sphere_outer_radius(ins, body))
+function silhouette_area(shape::Sphere, ins::AbstractInsulationLayer, body::AbstractBody)
+    area = silhouette_area(shape, _sphere_outer_radius(ins, body))
     return (; normal=area, parallel=area)
 end
 

@@ -157,8 +157,8 @@ _outer_cut_face_area(h::Half{<:AbstractEllipsoidal}, body) =
 _outer_cut_face_area(h::Half{<:AbstractSpherical}, body) =
     π * insulation_radius(body)^2
 
-silhouette(h::Half, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
-    silhouette(h.parent, ins, body, θ) / 2 + _outer_cut_face_area(h, body) * abs(sin(θ)) / 2
+silhouette_area(h::Half, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
+    silhouette_area(h.parent, ins, body, θ) / 2 + _outer_cut_face_area(h, body) * abs(sin(θ)) / 2
 
 # Half-frustum (base radius R at z = 0, top r = tR at z = L). Project onto the
 # plane ⊥ the sun and stretch by 1/|cos θ| as for the full frustum: the end
@@ -169,7 +169,7 @@ silhouette(h::Half, ins::AbstractInsulationLayer, body::AbstractBody, θ) =
 # Seen from the base end the shadow is the full frustum's hull less the
 # base's far half-disc, π·R²/2. Shrinking back by |cos θ| gives the two
 # branches below; a cylinder (r = R) gives the same value either way.
-function silhouette(h::Half{<:AbstractCylindrical}, ::AbstractInsulationLayer, body::AbstractBody, θ)
+function silhouette_area(h::Half{<:AbstractCylindrical}, ::AbstractInsulationLayer, body::AbstractBody, θ)
     d = outer_dims(h, body)
     s, c = sin(θ), cos(θ)
     if s < 0 # sun on the flat side: same shadow as -d
@@ -181,8 +181,8 @@ function silhouette(h::Half{<:AbstractCylindrical}, ::AbstractInsulationLayer, b
              _frustum_silhouette(R, r, d.length, θ) - half_base
 end
 
-function silhouette(h::Half, ins::AbstractInsulationLayer, body::AbstractBody)
-    (; normal = silhouette(h, ins, body, π / 2), parallel = silhouette(h, ins, body, 0.0))
+function silhouette_area(h::Half, ins::AbstractInsulationLayer, body::AbstractBody)
+    (; normal = silhouette_area(h, ins, body, π / 2), parallel = silhouette_area(h, ins, body, 0.0))
 end
 
 # ── Composition: surfaces are half-specific (extra flat join face) ────────
