@@ -135,3 +135,9 @@ plot_insulation_properties
 draw_insulation_schematic!
 draw_insulation_coverage!
 ```
+
+## WebAssembly
+
+```@docs
+compile_wasm
+```
