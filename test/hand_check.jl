@@ -100,11 +100,11 @@ end
 
 # Ellipsoid silhouette area (shadow on plane perpendicular to view direction n̂):
 #   A = π × abc × √( (n_x/a)² + (n_y/b)² + (n_z/c)² )
-# Body's long axis (a) along x; sun zenith θ from vertical → n̂ = (sin θ, 0, cos θ).
-sil_ell_normal(a, b)       = π * a * b                        # n̂ = (0,0,1) → πab
+# Body's long axis (a) along x; θ measured from the long axis (as for the
+# cylinder, θ = 0 is end-on) → n̂ = (cos θ, 0, sin θ).
+sil_ell_normal(a, b)       = π * a * b                        # n̂ = (0,1,0) → πac = πab
 sil_ell_parallel(b, c)     = π * b * c                        # n̂ = (1,0,0) → πbc
-sil_ell_zenith(a, b, c, θ) = π * a * b * c * sqrt((sin(θ)/a)^2 + (cos(θ)/c)^2)
-
+sil_ell_zenith(a, b, c, θ) = π * a * b * c * sqrt((cos(θ)/a)^2 + (sin(θ)/c)^2)
 
 # === Comparison harness ===
 
@@ -189,19 +189,7 @@ check("Ell/Naked total_area",         S_prolate(a_e, b_e, c_e), 1.06792825659917
 check("Ell/Naked skin_radius",        b_e,                    0.14586516277963593u"m")
 check("Ell/Naked sil_normal",         sil_ell_normal(a_e, b_e),    0.3342127693207218u"m^2")
 check("Ell/Naked sil_parallel",       sil_ell_parallel(b_e, c_e),  0.06684255386414435u"m^2")
-# Ellipsoid zenith silhouette is INTENTIONALLY not checked here: the package
-# implementation uses a 2-angle Euler projection algorithm with the body-
-# orientation angle hardcoded to 90°, and the resulting convention does not
-# correspond to "horizontal prolate ellipsoid, sun zenith θ from vertical".
-# For reference:
-#   - textbook horizontal-ellipsoid projection at θ=30°  ≈ 0.2914 m² (Naked)
-#                                                        ≈ 0.3158 m² (Fibrous)
-#   - package implementation at θ=30°                    ≈ 0.0767 m² (Naked)
-#                                                        ≈ 0.0875 m² (Fibrous)
-# See the comment block on `silhouette_area(::Ellipsoid, a, b, c, θ)` in
-# src/shapes/ellipsoid.jl. Once the orientation convention is clarified
-# (e.g. against the original Fortran/NicheMapR source), reinstate one of
-# these as a real first-principles check.
+check("Ell/Naked sil_zenith30",       sil_ell_zenith(a_e, b_e, c_e, deg2rad(30)), 0.17684877452096545u"m^2")
 
 # --- Ellipsoid / FibrousLayer ---
 S_ell_skin = S_prolate(a_e, b_e, c_e)
@@ -212,8 +200,8 @@ check("Ell/Fibrous evaporation_area",     S_ell_skin - hair_area(S_ell_skin),
                                                               1.045282036532102u"m^2")
 check("Ell/Fibrous insulation_radius",    b_efibrous,                 0.15586516277963594u"m")
 check("Ell/Fibrous sil_normal",           sil_ell_normal(a_efibrous, b_efibrous), 0.3620218640142718u"m^2")
-# Ell/Fibrous zenith silhouette: same divergence — see note above.
-
+check("Ell/Fibrous sil_zenith30",         sil_ell_zenith(a_efibrous, b_efibrous, c_efibrous, deg2rad(30)),
+                                                              0.19270108448901746u"m^2")
 
 # === Print results ===
 
